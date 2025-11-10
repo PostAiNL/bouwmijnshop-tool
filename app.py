@@ -1,4 +1,4 @@
-# app.py — PostAi (TikTok Growth Agent) • PRO-first-impression edition (syntax-fix)
+# app.py — PostAi (TikTok Growth Agent) • PRO-first-impression edition (lang switch removed, single KPI row)
 from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
@@ -136,7 +136,7 @@ I18N = {
         trust3="14-dagen gratis",
         trust4="Made for TikTok",
     ),
-    "en": dict(
+    "en": dict(  # blijft aanwezig voor later, maar UI-toggle is weg
         no_data="No data yet.",
         next_best="Next step",
         review_queue="Review queue",
@@ -479,9 +479,6 @@ with h1c:
         st.markdown(f"<img src='data:image/png;base64,{b64}' style='max-width:84px; border-radius:14px' />", unsafe_allow_html=True)
 with h2c:
     st.markdown(f"### <span class='accent'>PostAi</span> — TikTok Growth Agent — {'PRO' if IS_PRO else 'DEMO'}", unsafe_allow_html=True)
-    lang_sel = st.selectbox("Taal / Language", ["nl","en"], index=["nl","en"].index(SET.get("lang","nl")), key="lang_header", label_visibility="collapsed")
-    if lang_sel != SET.get("lang","nl"):
-        SET["lang"] = lang_sel; _save_settings(SET); st.toast("🌐 Taal aangepast")
 
 st.caption("Slimmer groeien met data. **Dare to know.**")
 
@@ -672,8 +669,7 @@ with tab_assist:
             st.checkbox("Eerste A/B test gepland", value=False, disabled=True)
             st.checkbox("Alerts ingesteld (e-mail)", value=False, disabled=True)
     else:
-        d = add_kpis(base)
-        _kpi_delta_block(d, key_ns="assist")
+        # KPI-rij binnen tabs VERWIJDERD om dubbele 'Periode' te voorkomen
         st.divider()
         q = _read_queue()
         with st.container(border=True):
@@ -697,7 +693,7 @@ with tab_results:
         st.info(tr("no_data"))
     else:
         d = add_kpis(base)
-        _kpi_delta_block(d, key_ns="results")
+        # KPI-rij binnen tabs VERWIJDERD om dubbele 'Periode' te voorkomen
         st.divider()
         qtxt = st.text_input("Filter op hashtag (bevat)…", placeholder="#love, #darkpsychology, …").strip().lower()
         filt = d if not qtxt else d[d["Hashtags"].fillna("").str.lower().str.contains(qtxt, regex=False)]
@@ -726,7 +722,7 @@ with tab_tags:
                            avg_like_rate=("Like rate","mean"),
                            avg_share_rate=("Share rate","mean"),
                            avg_score=("Score","mean"),
-                           avg_virality=("Virality","mean"))
+                           avg_virility=("Virality","mean"))
                       .sort_values(["freq","avg_score"], ascending=[False, False]))
             st.dataframe(agg.head(30), use_container_width=True)
 
