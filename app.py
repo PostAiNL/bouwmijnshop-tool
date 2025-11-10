@@ -1,10 +1,10 @@
-# app.py — PostAi (TikTok Growth Agent) • PRO-first-impression edition (lang switch removed, single KPI row)
+# app.py — PostAi (TikTok Growth Agent) • PRO-first-impression — polished 10/10 edition
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
-import re, io, json, uuid, base64, sys
+from typing import Dict, List, Tuple
+import re, io, json, uuid, base64
 from pathlib import Path
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 
 import numpy as np
 import pandas as pd
@@ -120,42 +120,23 @@ def _save_settings(cfg: dict) -> bool:
 
 SET = _load_settings()
 
-I18N = {
-    "nl": dict(
+def tr(k: str) -> str:
+    # NL-only UI (toggle verwijderd)
+    I18N = dict(
         no_data="Nog geen data.",
-        next_best="Volgende stap",
+        next_best="Jouw groeiaanbeveling",
         review_queue="Review-wachtrij",
         approve_post="Goedkeuren & Posten",
         add_queue="Zet in review-wachtrij",
         playbook="Playbook",
         plan7="Postplan",
         period="Periode",
-        why="Waarom deze aanbeveling",
         trust1="GDPR-proof",
         trust2="CSV/XLSX",
         trust3="14-dagen gratis",
         trust4="Made for TikTok",
-    ),
-    "en": dict(  # blijft aanwezig voor later, maar UI-toggle is weg
-        no_data="No data yet.",
-        next_best="Next step",
-        review_queue="Review queue",
-        approve_post="Approve & Post",
-        add_queue="Add to review queue",
-        playbook="Playbook",
-        plan7="Posting plan",
-        period="Period",
-        why="Why this recommendation",
-        trust1="GDPR-safe",
-        trust2="CSV/XLSX",
-        trust3="14-day trial",
-        trust4="Made for TikTok",
-    ),
-}
-
-def tr(k: str) -> str:
-    lang = (SET.get("lang", "nl") or "nl").lower()
-    return I18N.get(lang, I18N["nl"]).get(k, k)
+    )
+    return I18N.get(k, k)
 
 # ------------------------ CSS --------------------------------------
 def _inject_css(theme_color: str, pro: bool):
@@ -168,8 +149,8 @@ def _inject_css(theme_color: str, pro: bool):
       section[data-testid="stSidebar"] {{ width:260px !important; }}
       .accent {{ color:var(--brand); }}
       h1,h2,h3 {{ letter-spacing:-.01em; }}
-      .hero-card {{ border:1px solid var(--ring); border-radius:16px; padding:18px; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.06); }}
-      .kpi-card {{ border:1px solid var(--ring); border-radius:16px; padding:14px 16px; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.06); }}
+      .hero-card {{ border:1px solid var(--ring); border-radius:16px; padding:18px; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.06); }}
+      .kpi-card {{ border:1px solid var(--ring); border-radius:16px; padding:14px 16px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.05); }}
       .kpi-label {{ color:var(--muted); font-size:.85rem; margin-bottom:4px; }}
       .kpi-value {{ font-size:1.35rem; font-weight:700; }}
       .chip {{ display:inline-block; padding:4px 10px; border:1px solid var(--ring); border-radius:999px; margin-right:6px; margin-bottom:6px; font-size:.8rem; background:#fff; }}
@@ -177,11 +158,15 @@ def _inject_css(theme_color: str, pro: bool):
       .pro-badge {{ position:fixed; top:8px; right:12px; z-index:9999; background:{"#10b981" if pro else "#6b7280"}; color:#fff; padding:6px 12px; border-radius:999px; font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,.1); }}
       .stTabs [data-baseweb="tab-list"] {{ position:sticky; top:0; z-index:5; background:#fff; padding-top:6px; border-bottom:1px solid #eef2f7; }}
       .sidebar-stack .stButton>button {{ height:38px; border-radius:10px !important; font-weight:600; width:100%; }}
-      .hero .stButton>button {{ height:44px; font-weight:700; }}
+      .hero .stButton>button {{ height:48px; font-weight:800; font-size:1.05rem; }}
       .primary-btn>button {{ background:var(--brand); color:#fff; border:1px solid var(--brand); }}
       .soft-btn>button {{ background:#fff; border:1px solid var(--ring); }}
       .trust-row {{ margin-top:8px; }}
       .trust-row .chip {{ background:#f9fafb; }}
+      .nbacard {{ border:1px solid var(--ring); background:#fafafa; border-radius:16px; padding:16px; }}
+      .nbabarshell {{ margin:8px 0;height:6px;background:#e5e7eb;border-radius:4px; }}
+      .nbabar {{ height:100%;background:#22c55e;border-radius:4px; }}
+      .footer-trust {{ color:#6b7280; font-size:.9rem; margin-top:24px; border-top:1px solid #eef2f7; padding-top:12px; }}
     </style>
     """, unsafe_allow_html=True)
     st.markdown(f"<div class='pro-badge'>{'PRO' if pro else 'DEMO'}</div>", unsafe_allow_html=True)
@@ -414,22 +399,20 @@ def approve_and_post(item_id: str) -> bool:
 
 # ------------------------ Sidebar ----------------------------------
 with st.sidebar:
-    st.markdown("### Acties")
+    if IS_PRO:
+        st.markdown("<div class='chip' style='background:#ecfdf5;border-color:#a7f3d0;'>✅ Je draait <b>PRO</b>. Bedankt! 🎉</div>", unsafe_allow_html=True)
+    else:
+        st.info("🔓 Je draait **DEMO**. Een deel is vergrendeld.")
+        st.link_button("✨ Ontgrendel PRO", LEMON_CHECKOUT_URL, use_container_width=True)
+
+    st.markdown("### 📊 Data")
     st.markdown("<div class='sidebar-stack'>", unsafe_allow_html=True)
     if st.button("📥 Haal analytics op", use_container_width=True):
         res = run_manual_fetch(); st.toast(res["msg"] if res["ok"] else f"❌ {res['msg']}")
-    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-
-    def _load_demo():
+    if st.button("🎯 Probeer met voorbeelddata", use_container_width=True):
         rng = pd.date_range(end=pd.Timestamp.today().normalize(), periods=35, freq="D")
-        np.random.seed(42); rows = []
-        tags_pool = [
-            "#darkfacts #psychology #fyp",
-            "#love #lovestory #bf #bestie",
-            "#viral #mindblown #creepy #tiktoknl",
-            "#redthoughts #besties #bff #lovehim",
-            "#deepthought #foryou #real #reels",
-        ]
+        np.random.seed(42); rows=[]
+        tags_pool=["#darkfacts #psychology #fyp","#love #lovestory #bf #bestie","#viral #mindblown #creepy #tiktoknl","#redthoughts #besties #bff #lovehim","#deepthought #foryou #real #reels"]
         for d_ in rng:
             views = np.random.randint(20_000, 500_000)
             likes = int(views * np.random.uniform(0.04, 0.18))
@@ -439,19 +422,17 @@ with st.sidebar:
             rows.append(dict(caption=np.random.choice(tags_pool), views=views, likes=likes, comments=comments, shares=shares, date=d_, videolink=""))
         df_demo = pd.DataFrame(rows); df_demo.to_csv(LATEST_FILE, index=False)
         st.session_state["df"] = df_demo; st.session_state["demo_active"] = True
-        st.toast("✅ Demo-data geladen"); st.toast(f"📊 {len(df_demo):,} rijen", icon="📊")
-
-    if st.button("🧪 Laad demo-data", use_container_width=True): _load_demo()
+        st.toast("✅ Demo-data geladen")
     st.markdown("</div>", unsafe_allow_html=True)
 
+    st.markdown("### 📁 Bestanden")
     try:
         ts = float(SYNC_STATE_FILE.read_text().strip()) if SYNC_STATE_FILE.exists() else 0
         last_sync = datetime.fromtimestamp(ts).strftime("%d-%m %H:%M") if ts else "—"
     except Exception: last_sync = "—"
     bron = "DEMO" if st.session_state.get("demo_active") else ("CSV/XLSX" if LATEST_FILE.exists() else "—")
     st.markdown(f"<span class='chip badge'>⏱️ Laatste sync: {last_sync}</span> <span class='chip badge'>📁 Bron: {bron}</span>", unsafe_allow_html=True)
-
-    st.markdown("#### Upload analytics CSV/XLSX")
+    st.markdown("Upload je TikTok-data (CSV/XLSX)")
     up = st.file_uploader(" ", type=["csv","xlsx"], label_visibility="collapsed")
     if up is not None:
         try:
@@ -464,23 +445,33 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Kon bestand niet verwerken: {e}")
 
-    st.markdown("---")
-    if IS_PRO:
-        st.markdown("<div class='chip'>✅ Je draait <b>PRO</b>. Bedankt! 🎉</div>", unsafe_allow_html=True)
-    else:
-        st.info("🔓 Je draait **DEMO**. Een deel is vergrendeld.")
-        st.link_button("✨ Ontgrendel PRO", LEMON_CHECKOUT_URL, use_container_width=True)
-
 # ------------------------ Header -------------------------------
-h1c, h2c = st.columns([1, 8])
-with h1c:
+hwrap1, hwrap2 = st.columns([1, 8])
+with hwrap1:
     if LOGO_BYTES:
         b64 = base64.b64encode(LOGO_BYTES).decode("ascii")
-        st.markdown(f"<img src='data:image/png;base64,{b64}' style='max-width:84px; border-radius:14px' />", unsafe_allow_html=True)
-with h2c:
-    st.markdown(f"### <span class='accent'>PostAi</span> — TikTok Growth Agent — {'PRO' if IS_PRO else 'DEMO'}", unsafe_allow_html=True)
+        st.markdown(
+            f"<img src='data:image/png;base64,{b64}' style='height:60px;border-radius:12px;' />",
+            unsafe_allow_html=True
+        )
+with hwrap2:
+    st.markdown(
+        "<h1 style='margin:0;font-size:1.6rem;'>"
+        "<span class='accent'>PostAi</span> — TikTok Growth Agent — "
+        f"{'PRO' if IS_PRO else 'DEMO'}</h1>",
+        unsafe_allow_html=True
+    )
+    st.caption("Slimmer groeien met data. **Dare to know.**")
 
-st.caption("Slimmer groeien met data. **Dare to know.**")
+# ------------------------ Uitleg -----------------------
+with st.expander("Uitleg in het kort (altijd zichtbaar)", expanded=False):
+    st.markdown("""
+**Stap 1.** Upload je **CSV/XLSX** of klik **🎯 Probeer met voorbeelddata**.  
+**Stap 2.** **Slimme assistent** — zie wat nú werkt en wat je opnieuw moet posten.  
+**Stap 3.** **A/B-planner** — test 2 hooks, 2 hashtag-mixen en 2 tijden.  
+**Stap 4.** **Playbook & Plan** — jouw weekplan met beste tijden.  
+**Stap 5.** *(PRO)* **PDF/e-mail**, **alerts** en **auto-post (review)**.  
+""")
 
 # ------------------------ Data load -------------------------------
 if "df" not in st.session_state:
@@ -501,54 +492,53 @@ def _fmt_delta(curr, prev):
         return f"{diff:+.1f}%", arrow
     except Exception: return "—", None
 
-def _sparkline(series: pd.Series, width=110, height=28):
+def _sparkline(series: pd.Series, width=120, height=28):
     if not HAS_ALTAIR: return None
     df_s = pd.DataFrame({"x": np.arange(len(series)), "y": pd.to_numeric(series, errors="coerce").fillna(method="ffill").fillna(0.0)})
     return alt.Chart(df_s).mark_line().encode(x="x:Q", y="y:Q").properties(width=width, height=height).configure_axis(disable=True)
 
-def _kpi_delta_block(d: pd.DataFrame, key_ns: str = "global"):
+def _kpi_row(d: pd.DataFrame, key_ns: str = "top"):
     if d is None or d.empty: return
-    range_days = st.selectbox(tr("period"), [7,14,28], index=0, key=f"kpi_range_{key_ns}")
-    dt = pd.to_datetime(d["Datum"], errors="coerce"); now = pd.Timestamp.today().normalize()
-    cur_mask = (dt >= (now - pd.Timedelta(days=range_days))) & (dt <= now + pd.Timedelta(days=1))
-    prev_mask = (dt >= (now - pd.Timedelta(days=2*range_days))) & (dt < (now - pd.Timedelta(days=range_days)))
-    def _sum(df, col): return int(pd.to_numeric(df[col], errors="coerce").sum(skipna=True))
-    def _mean(df, col): return float(pd.to_numeric(df[col], errors="coerce").mean(skipna=True))
-    cur = d.loc[cur_mask]; prev = d.loc[prev_mask]
-    total_views_cur  = _sum(cur, "Views") if not cur.empty else 0
-    total_views_prev = _sum(prev, "Views") if not prev.empty else 0
-    avg_eng_cur  = (_mean(cur, "Engagement %") * 100) if not cur.empty else 0.0
-    avg_eng_prev = (_mean(prev, "Engagement %") * 100) if not prev.empty else 0.0
-    vir_cur  = _mean(cur, "Virality") if not cur.empty else 0.0
-    vir_prev = _mean(prev, "Virality") if not prev.empty else 0.0
-    d1, a1 = _fmt_delta(total_views_cur, total_views_prev)
-    d2, a2 = _fmt_delta(avg_eng_cur, avg_eng_prev)
-    d3, a3 = _fmt_delta(vir_cur, vir_prev)
+    kpi_left, kpi_right = st.columns([4,1])
+    with kpi_right:
+        range_days = st.selectbox("Periode", [7,14,28], index=0, key=f"kpi_range_{key_ns}")
+    with kpi_left:
+        dt = pd.to_datetime(d["Datum"], errors="coerce"); now = pd.Timestamp.today().normalize()
+        cur_mask = (dt >= (now - pd.Timedelta(days=range_days))) & (dt <= now + pd.Timedelta(days=1))
+        prev_mask = (dt >= (now - pd.Timedelta(days=2*range_days))) & (dt < (now - pd.Timedelta(days=range_days)))
+        def _sum(df, col): return int(pd.to_numeric(df[col], errors="coerce").sum(skipna=True))
+        def _mean(df, col): return float(pd.to_numeric(df[col], errors="coerce").mean(skipna=True))
+        cur = d.loc[cur_mask]; prev = d.loc[prev_mask]
+        total_views_cur  = _sum(cur, "Views") if not cur.empty else 0
+        total_views_prev = _sum(prev, "Views") if not prev.empty else 0
+        avg_eng_cur  = (_mean(cur, "Engagement %") * 100) if not cur.empty else 0.0
+        avg_eng_prev = (_mean(prev, "Engagement %") * 100) if not prev.empty else 0.0
+        vir_cur  = _mean(cur, "Virality") if not cur.empty else 0.0
+        vir_prev = _mean(prev, "Virality") if not prev.empty else 0.0
+        d1, a1 = _fmt_delta(total_views_cur, total_views_prev)
+        d2, a2 = _fmt_delta(avg_eng_cur, avg_eng_prev)
+        d3, a3 = _fmt_delta(vir_cur, vir_prev)
+        c1, c2, c3 = st.columns(3)
 
-    c1, c2, c3 = st.columns(3)
-    lbl1 = f"<span title='Som van views in geselecteerde periode'>{'Totaal views'} ({range_days}d)</span>"
-    lbl2 = f"<span title='(likes+comments+shares)/views × 100'>{'Gem. engagement'} ({range_days}d)</span>"
-    lbl3 = f"<span title='Samengestelde score (0–100) op basis van views, engagement, shares, snelheid en recency'>Virality ({range_days}d)</span>"
+        def _kpi_html(title, value, delta_str, arrow, icon):
+            color = "#16a34a" if arrow == "↑" else ("#dc2626" if arrow == "↓" else "#6b7280")
+            html = f"<div class='kpi-card'><div class='kpi-label'>{title}</div><div class='kpi-value'>{icon} {value} "
+            html += f"<span style='color:{color}'>({delta_str if delta_str!='—' else '—'})</span></div></div>"
+            return html
 
-    def _kpi_html(label, value_str, delta_str, arrow):
-        html = f"<div class='kpi-card'><div class='kpi-label'>{label}</div><div class='kpi-value'>{value_str} "
-        if arrow: html += f"<span style='color:{'#16a34a' if arrow=='↑' else '#dc2626'}'>({delta_str} {arrow})</span>"
-        else: html += f"<span>({delta_str})</span>"
-        html += "</div></div>"; return html
+        c1.markdown(_kpi_html(f"Totaal views ({range_days}d)", f"{total_views_cur:,}".replace(",", "."), d1, a1, "👁️"), unsafe_allow_html=True)
+        c2.markdown(_kpi_html(f"Gem. engagement ({range_days}d)", f"{avg_eng_cur:.2f}%", d2, a2, "📈"), unsafe_allow_html=True)
+        c3.markdown(_kpi_html(f"Virality ({range_days}d)", f"{vir_cur:.0f}/100", d3, a3, "🔥"), unsafe_allow_html=True)
 
-    c1.markdown(_kpi_html(lbl1, f"👁️ {total_views_cur:,}".replace(",", "."), d1, a1), unsafe_allow_html=True)
-    c2.markdown(_kpi_html(lbl2, f"📈 {avg_eng_cur:.2f}%", d2, a2), unsafe_allow_html=True)
-    c3.markdown(_kpi_html(lbl3, f"🔥 {vir_cur:.0f}/100", d3, a3), unsafe_allow_html=True)
+        if HAS_ALTAIR and not cur.empty:
+            s1 = _sparkline(pd.to_numeric(cur["Views"], errors="coerce"))
+            s2 = _sparkline(pd.to_numeric(cur["Engagement %"], errors="coerce") * 100)
+            s3 = _sparkline(pd.to_numeric(cur["Virality"], errors="coerce"))
+            if s1: c1.altair_chart(s1, use_container_width=False)
+            if s2: c2.altair_chart(s2, use_container_width=False)
+            if s3: c3.altair_chart(s3, use_container_width=False)
 
-    if HAS_ALTAIR and not cur.empty:
-        s1 = _sparkline(pd.to_numeric(cur["Views"], errors="coerce"))
-        s2 = _sparkline(pd.to_numeric(cur["Engagement %"], errors="coerce") * 100)
-        s3 = _sparkline(pd.to_numeric(cur["Virality"], errors="coerce"))
-        if s1: c1.altair_chart(s1, use_container_width=False)
-        if s2: c2.altair_chart(s2, use_container_width=False)
-        if s3: c3.altair_chart(s3, use_container_width=False)
-
-# ------------------------ Hero + Next Best Action -------------------
+# ------------------------ Hero + Jouw groeiaanbeveling -------------
 def _confidence_from_data(d: pd.DataFrame) -> int:
     if d is None or d.empty: return 60
     dt = pd.to_datetime(d["Datum"], errors="coerce"); now = pd.Timestamp.today().normalize()
@@ -559,40 +549,37 @@ def _confidence_from_data(d: pd.DataFrame) -> int:
 
 def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
     with st.container(border=True):
-        colH1, colH2 = st.columns([3,2])
-        with colH1:
-            st.markdown("## PostAi — TikTok Growth Agent")
-            st.caption("Slimmer groeien met data. **Dare to know.**")
-            st.write(f"⏱️ Laatste sync: **{last_sync}** · 📁 Bron: **{bron}**")
+        # Kop
+        st.markdown(
+            "<div style='display:flex;align-items:center;gap:12px;'>"
+            "<div>"
+            "<h2 style='margin:0;'>PostAi — TikTok Growth Agent</h2>"
+            "<p style='margin:0;color:#6b7280;'>Slimmer groeien met data. <i>Dare to know.</i></p>"
+            f"<p style='margin:6px 0 0 0;color:#6b7280;'>⏱️ Laatste sync: <b>{last_sync}</b> · 📁 Bron: <b>{bron}</b></p>"
+            "</div></div>",
+            unsafe_allow_html=True
+        )
 
+        left, right = st.columns([3,2])
+        with left:
             st.markdown("<div class='hero'>", unsafe_allow_html=True)
-            ctaA, ctaB = st.columns([1,1])
-            with ctaA:
-                st.button("✨ Analyseer", key="hero_analyse", use_container_width=True, type="primary", help="Update inzichten en KPI's", disabled=False)
-            with ctaB:
-                up2 = st.file_uploader("Sleep je CSV/XLSX hierheen", type=["csv","xlsx"], label_visibility="collapsed", key="hero_upl")
-                if up2 is not None:
-                    try:
-                        df_up = _smart_read_any(up2)
-                        try: up2.seek(0)
-                        except Exception: pass
-                        df_up.to_csv(LATEST_FILE, index=False)
-                        st.session_state["df"] = df_up; st.session_state["demo_active"] = False
-                        st.success(f"✅ Bestand opgeslagen ({up2.name}) — {len(df_up):,} rijen")
-                    except Exception as e:
-                        st.error(f"Kon bestand niet verwerken: {e}")
+            st.button("🚀 Start analyse", key="hero_analyse", use_container_width=True, type="primary", help="Update inzichten en KPI's")
+            st.caption("Analyseren van je laatste TikTok-prestaties en genereren van aanbevelingen.")
+            st.file_uploader("Sleep je CSV/XLSX hierheen", type=["csv","xlsx"], label_visibility="collapsed", key="hero_upl")
             st.markdown("</div>", unsafe_allow_html=True)
 
-            cc1, cc2, cc3 = st.columns([1,1,1])
-            with cc1:
+            # Quick actions
+            c1, c2 = st.columns(2)
+            with c1:
+                # voorbeeld CSV
                 tpl = pd.DataFrame([dict(caption="Voorbeeld caption #hashtag",
                                          views=12345, likes=678, comments=12, shares=34,
                                          date=pd.Timestamp.today().normalize(), videolink="",
                                          author="@account", videoid="1234567890")])
                 st.download_button("⬇️ Voorbeeld-CSV", data=tpl.to_csv(index=False).encode("utf-8"),
                                    file_name="postai_template.csv", mime="text/csv", use_container_width=True)
-            with cc2:
-                if st.button("🧪 Laad demo-set", use_container_width=True):
+            with c2:
+                if st.button("🎯 Laad demo-set", use_container_width=True, key="demo_btn_hero"):
                     rng = pd.date_range(end=pd.Timestamp.today().normalize(), periods=35, freq="D")
                     np.random.seed(42); rows=[]
                     tags_pool=["#darkfacts #psychology #fyp","#love #lovestory #bf #bestie","#viral #mindblown #creepy #tiktoknl","#redthoughts #besties #bff #lovehim","#deepthought #foryou #real #reels"]
@@ -606,32 +593,23 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     df_demo = pd.DataFrame(rows); df_demo.to_csv(LATEST_FILE, index=False)
                     st.session_state["df"] = df_demo; st.session_state["demo_active"] = True
                     st.toast("✅ Demo-data geladen")
-            with cc3:
-                pass
 
-            st.markdown(f"<div class='trust-row'><span class='chip'>🛡️ {tr('trust1')}</span><span class='chip'>📄 {tr('trust2')}</span><span class='chip'>🎁 {tr('trust3')}</span><span class='chip'>🎯 {tr('trust4')}</span></div>", unsafe_allow_html=True)
-
-        with colH2:
+        with right:
             st.markdown(f"**{tr('next_best')}**")
             if d is None or d.empty:
                 st.write("Upload data of laad demo om advies te krijgen.")
-                st.button("🧪 Start met demo", use_container_width=True, key="start_demo_disabled")
             else:
                 best_time = _best_hours(d, n=1)[0]
                 conf = _confidence_from_data(d)
-                st.write(f"Aanbeveling (**{conf}% zeker**). Post vandaag om **{best_time:02d}:00**. Herpost je best scorende video en test variant A.")
+                st.markdown(
+                    f"<div class='nbacard'>"
+                    f"<p>🔥 <b>Post om {best_time:02d}:00</b>. Herpost je best scorende video. Test variant A.</p>"
+                    f"<div class='nbabarshell'><div class='nbabar' style='width:{conf}%;'></div></div>"
+                    f"<p style='font-size:.85rem;color:#6b7280;'>Betrouwbaarheid: {conf}%</p>"
+                    f"</div>", unsafe_allow_html=True
+                )
                 st.button("🔥 Voer aanbeveling uit", use_container_width=True)
                 st.caption("🧠 Waarom: recente posts op dit uur scoren hoger op mediane views en share rate.")
-
-# ------------------------ Uitleg -----------------------
-with st.expander("Uitleg in het kort (altijd zichtbaar)", expanded=False):
-    st.markdown("""
-**Stap 1.** Upload je **CSV/XLSX** of klik **🧪 Laad demo-set**.  
-**Stap 2.** **Slimme assistent** — zie wat nú werkt en wat je opnieuw moet posten.  
-**Stap 3.** **A/B-planner** — test 2 hooks, 2 hashtag-mixen en 2 tijden.  
-**Stap 4.** **Playbook & Plan** — jouw weekplan met beste tijden.  
-**Stap 5.** *(PRO)* **PDF/e-mail**, **alerts** en **auto-post (review)**.  
-""")
 
 # ------------------------ Build data for hero/KPI -------------------
 base_for_hero = normalize_per_post(df_raw)
@@ -646,9 +624,9 @@ bron = "DEMO" if st.session_state.get("demo_active") else ("CSV/XLSX" if LATEST_
 # ------------------------ HERO ------------------------
 _hero_and_nba(d_for_hero, last_sync, bron)
 
-# ------------------------ KPI-rij BOVEN tabs ------------------------
+# ------------------------ KPI-rij boven tabs ------------------------
 if not d_for_hero.empty:
-    _kpi_delta_block(d_for_hero, key_ns="top")
+    _kpi_row(d_for_hero, key_ns="top")
     st.divider()
 
 # ------------------------ Tabs ------------------------
@@ -658,7 +636,7 @@ tab_assist, tab_results, tab_tags, tab_trend, tab_compare, tab_arch, tab_ab, tab
 
 # ------------------------ Slimme assistent -------------------------
 with tab_assist:
-    st.subheader("Slimme assistent")
+    st.subheader("🧠 Slimme assistent – jouw persoonlijke contentcoach")
     base = normalize_per_post(df_raw)
     if base.empty:
         st.info(tr("no_data"))
@@ -669,8 +647,13 @@ with tab_assist:
             st.checkbox("Eerste A/B test gepland", value=False, disabled=True)
             st.checkbox("Alerts ingesteld (e-mail)", value=False, disabled=True)
     else:
-        # KPI-rij binnen tabs VERWIJDERD om dubbele 'Periode' te voorkomen
+        st.markdown("""
+        <div style='background:#f8fafc;padding:16px;border-radius:12px;border:1px solid #e5e7eb;'>
+        🧠 <b>Wat doet dit?</b> Analyseert je 30 laatste video's en voorspelt <b>wat</b> en <b>wanneer</b> je moet posten om sneller te groeien.
+        </div>
+        """, unsafe_allow_html=True)
         st.divider()
+        # Review-wachtrij
         q = _read_queue()
         with st.container(border=True):
             st.markdown(f"### ⏳ {tr('review_queue')}")
@@ -693,7 +676,6 @@ with tab_results:
         st.info(tr("no_data"))
     else:
         d = add_kpis(base)
-        # KPI-rij binnen tabs VERWIJDERD om dubbele 'Periode' te voorkomen
         st.divider()
         qtxt = st.text_input("Filter op hashtag (bevat)…", placeholder="#love, #darkpsychology, …").strip().lower()
         filt = d if not qtxt else d[d["Hashtags"].fillna("").str.lower().str.contains(qtxt, regex=False)]
@@ -722,7 +704,7 @@ with tab_tags:
                            avg_like_rate=("Like rate","mean"),
                            avg_share_rate=("Share rate","mean"),
                            avg_score=("Score","mean"),
-                           avg_virility=("Virality","mean"))
+                           avg_virality=("Virality","mean"))
                       .sort_values(["freq","avg_score"], ascending=[False, False]))
             st.dataframe(agg.head(30), use_container_width=True)
 
@@ -930,3 +912,9 @@ with tab_settings:
             else: st.warning("Voer een geldige key in.")
         st.caption("Heb je nog geen licentie? Koop ‘m hieronder.")
         st.link_button("✨ Koop PRO", LEMON_CHECKOUT_URL, use_container_width=True)
+
+# ------------------------ Footer trust badges ----------------------
+st.markdown(
+    f"<div class='footer-trust'>🛡️ {tr('trust1')} · 📄 {tr('trust2')} · 🎁 {tr('trust3')} · 🎯 {tr('trust4')}</div>",
+    unsafe_allow_html=True
+)
