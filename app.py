@@ -16,6 +16,42 @@ try:
     HAS_ALTAIR = True
 except Exception:
     HAS_ALTAIR = False
+# === TikTok OAuth (Login Kit) – minimal review version ======================
+# Vereist env vars op Render:
+# - TIKTOK_CLIENT_KEY  (Client Key uit TikTok Developer Portal)
+# - TIKTOK_SCOPES      (optioneel, bv: user.info.basic,video.list)
+# - APP_PUBLIC_URL     (je base URL, bv: https://postai.bouwmijnshop.nl)
+
+import os, urllib.parse, uuid
+
+def _get_public_base_url() -> str:
+    # Gebruik env zodat dit ook op custom domain werkt
+    url = os.getenv("APP_PUBLIC_URL", "").strip().rstrip("/")
+    return url
+
+def build_tiktok_auth_url() -> str:
+    client_key = os.getenv("TIKTOK_CLIENT_KEY", "").strip()
+    scopes     = os.getenv("TIKTOK_SCOPES", "user.info.basic,video.list").strip()
+    base_url   = _get_public_base_url()
+    if not client_key or not base_url:
+        return ""  # laat UI tonen dat env ontbreekt
+
+    # We gebruiken de homepage als redirect (Streamlit leest query params)
+    redirect_uri = f"{base_url}/"
+
+    # state voor CSRF bescherming
+    state = st.session_state.get("_tiktok_state") or uuid.uuid4().hex
+    st.session_state["_tiktok_state"] = state
+
+    params = {
+        "client_key": client_key,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": scopes,
+        "state": state,
+    }
+    return "https://www.tiktok.com/v2/auth/authorize/?" + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+# ============================================================================
 
 # ------------------------ Paden & metadata -------------------------
 APP_NAME  = "PostAi — TikTok Growth Agent"
@@ -76,6 +112,19 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+# === OAuth callback handling (leest query params van TikTok) ===============
+# TikTok stuurt terug naar je base URL met ?code=&state=&scopes=
+qp = st.query_params
+if "code" in qp:
+    # Toon status voor je review video
+    code  = qp.get("code")
+    state = qp.get("state", "")
+    ok_state = (state == st.session_state.get("_tiktok_state"))
+    st.success(f"✅ TikTok OAuth code ontvangen (state ok: {ok_state}). Je kunt dit scherm tonen in je reviewvideo.")
+    # Bewaar kort in session (we wisselen hier nog GEEN token om; voor review is dit genoeg)
+    st.session_state["tik_code"] = code
+    st.session_state["tik_state_ok"] = ok_state
+# ============================================================================
 
 # ------------------------ Branding utils --------------------------
 def _load_branding():
@@ -442,6 +491,20 @@ with st.sidebar:
     else:
         st.info("🔓 Je draait **DEMO**. Een deel is vergrendeld.")
         st.link_button("✨ Ontgrendel PRO", LEMON_CHECKOUT_URL, use_container_width=True)
+# --- TikTok koppeling (review) ---
+st.markdown("### 🔗 TikTok koppelen")
+_login_url = build_tiktok_auth_url()
+if _login_url:
+    st.link_button("Login with TikTok", _login_url, use_container_width=True)
+else:
+    st.caption("Set env vars on Render → TIKTOK_CLIENT_KEY & APP_PUBLIC_URL")
+
+# Toon minimale debug voor reviewers
+if st.session_state.get("tik_code"):
+    st.caption("Status: OAuth code ontvangen ✅ (alleen login & display; geen auto-posting).")
+else:
+    st.caption("We use TikTok Login for authentication only (no auto-post).")
+st.markdown("---")
 
     st.markdown("### 📊 Data")
     st.markdown("<div class='sidebar-stack'>", unsafe_allow_html=True)
@@ -619,6 +682,9 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
         left, right = st.columns([3,2])
         with left:
             st.markdown("<div class='hero'>", unsafe_allow_html=True)
+_login_url_top = build_tiktok_auth_url()
+if _login_url_top:
+    st.link_button("Login with TikTok", _login_url_top, use_container_width=True)
 
             # CTA met loading state
             if st.button("🚀 Start analyse", key="hero_analyse_btn", use_container_width=True, type="primary", disabled=False):
@@ -994,6 +1060,19 @@ with tab_settings:
             else: st.warning("Voer een geldige key in.")
         st.caption("Heb je nog geen licentie? Koop ‘m hieronder.")
         st.link_button("✨ Koop PRO", LEMON_CHECKOUT_URL, use_container_width=True)
+with st.expander("Legal & TikTok Review Info", expanded=False):
+    base = _get_public_base_url() or "https://postai.bouwmijnshop.nl"
+    st.markdown(
+        f"""
+- **Website (this app):** {base}  
+- **Redirect URI:** {base}/  
+- **Requested scopes:** `user.info.basic, video.list`  
+- **What we do:** authentication + analytics display only. **No auto-posting.**  
+- **Terms:** <https://www.bouwmijnshop.nl/pages/onze-voorwaarden>  
+- **Privacy:** <https://www.bouwmijnshop.nl/pages/privacy>  
+- **Support:** support@bouwmijnshop.nl
+        """
+    )
 
 # ------------------------ Footer trust badges ----------------------
 st.markdown(
