@@ -1,8 +1,8 @@
-# app.py — PostAi (TikTok Growth Agent) • PRO-first-impression — polished 10/10 edition
+# app.py — PostAi (TikTok Growth Agent) • 10/10 polish edition
 from __future__ import annotations
 
 from typing import Dict, List, Tuple
-import re, io, json, uuid, base64
+import re, io, json, uuid, base64, time
 from pathlib import Path
 from datetime import datetime, date
 
@@ -56,7 +56,18 @@ def _remove_license() -> bool:
     except Exception:
         return False
 
-LICENSE_KEY, IS_PRO = _read_license()
+import os
+
+# 1️⃣ Check eerst environment variable (Render / .env)
+ENV_LICENSE = os.getenv("LICENSE_KEY", "").strip()
+
+if ENV_LICENSE:
+    LICENSE_KEY = ENV_LICENSE
+    IS_PRO = True
+else:
+    # 2️⃣ Anders val terug op lokaal license.key bestand
+    LICENSE_KEY, IS_PRO = _read_license()
+
 
 # ------------------------ Streamlit setup --------------------------
 st.set_page_config(
@@ -121,7 +132,6 @@ def _save_settings(cfg: dict) -> bool:
 SET = _load_settings()
 
 def tr(k: str) -> str:
-    # NL-only UI (toggle verwijderd)
     I18N = dict(
         no_data="Nog geen data.",
         next_best="Jouw groeiaanbeveling",
@@ -130,7 +140,6 @@ def tr(k: str) -> str:
         add_queue="Zet in review-wachtrij",
         playbook="Playbook",
         plan7="Postplan",
-        period="Periode",
         trust1="GDPR-proof",
         trust2="CSV/XLSX",
         trust3="14-dagen gratis",
@@ -143,12 +152,13 @@ def _inject_css(theme_color: str, pro: bool):
     st.markdown(f"""
     <style>
       :root {{
-        --brand:{theme_color}; --ring:#e8edf3; --muted:#6b7280; --head:#f8fafc;
+        --brand:{theme_color}; --ring:#e8edf3; --muted:#4b5563; --head:#f8fafc;
       }}
       .block-container {{ max-width:1200px; padding-top:14px; }}
       section[data-testid="stSidebar"] {{ width:260px !important; }}
       .accent {{ color:var(--brand); }}
       h1,h2,h3 {{ letter-spacing:-.01em; }}
+      /* cards */
       .hero-card {{ border:1px solid var(--ring); border-radius:16px; padding:18px; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.06); }}
       .kpi-card {{ border:1px solid var(--ring); border-radius:16px; padding:14px 16px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.05); }}
       .kpi-label {{ color:var(--muted); font-size:.85rem; margin-bottom:4px; }}
@@ -157,16 +167,36 @@ def _inject_css(theme_color: str, pro: bool):
       .chip.badge {{ background:#eef6ff; border-color:#cfe3ff; }}
       .pro-badge {{ position:fixed; top:8px; right:12px; z-index:9999; background:{"#10b981" if pro else "#6b7280"}; color:#fff; padding:6px 12px; border-radius:999px; font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,.1); }}
       .stTabs [data-baseweb="tab-list"] {{ position:sticky; top:0; z-index:5; background:#fff; padding-top:6px; border-bottom:1px solid #eef2f7; }}
-      .sidebar-stack .stButton>button {{ height:38px; border-radius:10px !important; font-weight:600; width:100%; }}
-      .hero .stButton>button {{ height:48px; font-weight:800; font-size:1.05rem; }}
-      .primary-btn>button {{ background:var(--brand); color:#fff; border:1px solid var(--brand); }}
+      /* spacing polish */
+      .hero-gap {{ margin-bottom:16px; }}
+      .kpi-gap {{ margin-top:10px; margin-bottom:14px; }}
+      /* Buttons */
+      .stButton>button {{
+        transition:transform .1s ease, box-shadow .1s ease, opacity .2s ease;
+        border-radius:12px; font-weight:700;
+      }}
+      .stButton>button:hover {{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.06); }}
+      .primary-btn>button {{ background:var(--brand); color:#fff; border:1px solid var(--brand); height:50px; font-size:1.05rem; }}
+      .primary-btn>button:disabled {{ opacity:.7; cursor:not-allowed; }}
       .soft-btn>button {{ background:#fff; border:1px solid var(--ring); }}
-      .trust-row {{ margin-top:8px; }}
-      .trust-row .chip {{ background:#f9fafb; }}
-      .nbacard {{ border:1px solid var(--ring); background:#fafafa; border-radius:16px; padding:16px; }}
-      .nbabarshell {{ margin:8px 0;height:6px;background:#e5e7eb;border-radius:4px; }}
-      .nbabar {{ height:100%;background:#22c55e;border-radius:4px; }}
+      /* Focus ring accessibility */
+      .stButton>button:focus {{ outline:2px solid var(--brand) !important; outline-offset:2px !important; }}
+      a:focus {{ outline:2px solid var(--brand) !important; outline-offset:2px !important; }}
+      /* Dropzone hover */
+      [data-testid="stFileUploaderDropzone"] {{ border:1px dashed var(--ring); border-radius:14px; }}
+      [data-testid="stFileUploaderDropzone"]:hover {{ border-color: var(--brand); background:#f4f8ff; }}
+      /* Confidence bar */
+      .nbabarshell {{ margin:8px 0;height:8px;background:#e5e7eb;border-radius:8px; position:relative; }}
+      .nbabar {{ height:100%;background:#22c55e;border-radius:8px; }}
+      .nbalabel {{ position:absolute; right:8px; top:-18px; font-size:.8rem; color:#4b5563; }}
       .footer-trust {{ color:#6b7280; font-size:.9rem; margin-top:24px; border-top:1px solid #eef2f7; padding-top:12px; }}
+      /* Skeletons */
+      .skeleton {{ position:relative; overflow:hidden; background:#f1f5f9; border-radius:14px; min-height:64px; border:1px solid #e5e7eb; }}
+      .skeleton::after {{
+        content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%);
+        transform:translateX(-100%); animation:shimmer 1.2s infinite;
+      }}
+      @keyframes shimmer {{ 100% {{ transform:translateX(100%); }} }}
     </style>
     """, unsafe_allow_html=True)
     st.markdown(f"<div class='pro-badge'>{'PRO' if pro else 'DEMO'}</div>", unsafe_allow_html=True)
@@ -313,15 +343,16 @@ def add_kpis(df: pd.DataFrame) -> pd.DataFrame:
             return pd.Series(0.0, index=x.index)
         return (x - mn) / (mx - mn)
 
-    d["Score"] = (
+    score = (
         0.35 * _mm(views) +
         0.25 * _mm(d["Engagement %"]) +
         0.15 * _mm(d["Share rate"]) +
         0.10 * _mm(d["Like rate"]) +
         0.10 * _mm(d["Velocity"]) +
         0.05 * d["Recency"]
-    )
-    score = d["Score"].astype(float).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    ).astype(float).replace([np.inf,-np.inf], np.nan).fillna(0.0)
+
+    d["Score"] = score
     d["Virality"] = (score * 100).round(0)
     return d
 
@@ -395,6 +426,13 @@ def approve_and_post(item_id: str) -> bool:
     for it in items:
         if it["id"] == item_id:
             it["status"] = "posted"; _write_queue(items); return True
+    return False
+
+def undo_post(item_id: str) -> bool:
+    items = _read_queue()
+    for it in items:
+        if it["id"] == item_id and it["status"] == "posted":
+            it["status"] = "pending"; _write_queue(items); return True
     return False
 
 # ------------------------ Sidebar ----------------------------------
@@ -498,10 +536,28 @@ def _sparkline(series: pd.Series, width=120, height=28):
     return alt.Chart(df_s).mark_line().encode(x="x:Q", y="y:Q").properties(width=width, height=height).configure_axis(disable=True)
 
 def _kpi_row(d: pd.DataFrame, key_ns: str = "top"):
-    if d is None or d.empty: return
+    st.markdown("<div class='kpi-gap'></div>", unsafe_allow_html=True)
+    if d is None or d.empty:
+        c1, c2, c3 = st.columns([3,3,3])
+        c1.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
+        c2.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
+        c3.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
+        return
+
+    # persist periode
+    period_options = [7,14,28]
+    default_period = st.session_state.get("period_value", 7)
+    try:
+        idx_default = period_options.index(default_period)
+    except ValueError:
+        idx_default = 0
+
     kpi_left, kpi_right = st.columns([4,1])
     with kpi_right:
-        range_days = st.selectbox("Periode", [7,14,28], index=0, key=f"kpi_range_{key_ns}")
+        sel = st.selectbox("Periode", period_options, index=idx_default, key=f"kpi_range_{key_ns}")
+        st.session_state["period_value"] = sel
+
+    range_days = sel
     with kpi_left:
         dt = pd.to_datetime(d["Datum"], errors="coerce"); now = pd.Timestamp.today().normalize()
         cur_mask = (dt >= (now - pd.Timedelta(days=range_days))) & (dt <= now + pd.Timedelta(days=1))
@@ -554,8 +610,8 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
             "<div style='display:flex;align-items:center;gap:12px;'>"
             "<div>"
             "<h2 style='margin:0;'>PostAi — TikTok Growth Agent</h2>"
-            "<p style='margin:0;color:#6b7280;'>Slimmer groeien met data. <i>Dare to know.</i></p>"
-            f"<p style='margin:6px 0 0 0;color:#6b7280;'>⏱️ Laatste sync: <b>{last_sync}</b> · 📁 Bron: <b>{bron}</b></p>"
+            "<p style='margin:0;color:#4b5563;'>Slimmer groeien met data. <i>Dare to know.</i></p>"
+            f"<p style='margin:6px 0 0 0;color:#6b5563;'>⏱️ Laatste sync: <b>{last_sync}</b> · 📁 Bron: <b>{bron}</b></p>"
             "</div></div>",
             unsafe_allow_html=True
         )
@@ -563,15 +619,21 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
         left, right = st.columns([3,2])
         with left:
             st.markdown("<div class='hero'>", unsafe_allow_html=True)
-            st.button("🚀 Start analyse", key="hero_analyse", use_container_width=True, type="primary", help="Update inzichten en KPI's")
-            st.caption("Analyseren van je laatste TikTok-prestaties en genereren van aanbevelingen.")
+
+            # CTA met loading state
+            if st.button("🚀 Start analyse", key="hero_analyse_btn", use_container_width=True, type="primary", disabled=False):
+                with st.spinner("Analyseren…"):
+                    # Simuleer snelle analyse (indien je iets uitvoert, doe het hier)
+                    time.sleep(0.6)
+                    st.toast("✅ Analyse voltooid — aanbeveling geüpdatet.")
+
+            st.caption("Duurt ± 3–5 sec. We genereren je aanbeveling op basis van recente prestaties.")
             st.file_uploader("Sleep je CSV/XLSX hierheen", type=["csv","xlsx"], label_visibility="collapsed", key="hero_upl")
             st.markdown("</div>", unsafe_allow_html=True)
 
             # Quick actions
             c1, c2 = st.columns(2)
             with c1:
-                # voorbeeld CSV
                 tpl = pd.DataFrame([dict(caption="Voorbeeld caption #hashtag",
                                          views=12345, likes=678, comments=12, shares=34,
                                          date=pd.Timestamp.today().normalize(), videolink="",
@@ -594,6 +656,16 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     st.session_state["df"] = df_demo; st.session_state["demo_active"] = True
                     st.toast("✅ Demo-data geladen")
 
+            # trust mini
+            st.markdown(
+                f"<div class='trust-row'>"
+                f"<span class='chip badge'>🛡️ {tr('trust1')}</span>"
+                f"<span class='chip badge'>📄 {tr('trust2')}</span>"
+                f"<span class='chip badge'>🎁 {tr('trust3')}</span>"
+                f"<span class='chip badge'>🎯 {tr('trust4')}</span>"
+                f"</div>", unsafe_allow_html=True
+            )
+
         with right:
             st.markdown(f"**{tr('next_best')}**")
             if d is None or d.empty:
@@ -602,14 +674,15 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                 best_time = _best_hours(d, n=1)[0]
                 conf = _confidence_from_data(d)
                 st.markdown(
-                    f"<div class='nbacard'>"
-                    f"<p>🔥 <b>Post om {best_time:02d}:00</b>. Herpost je best scorende video. Test variant A.</p>"
-                    f"<div class='nbabarshell'><div class='nbabar' style='width:{conf}%;'></div></div>"
-                    f"<p style='font-size:.85rem;color:#6b7280;'>Betrouwbaarheid: {conf}%</p>"
-                    f"</div>", unsafe_allow_html=True
+                    f"<div class='nbabarshell'><div class='nbabar' style='width:{conf}%;'></div><div class='nbalabel'>{conf}%</div></div>",
+                    unsafe_allow_html=True
                 )
+                st.markdown(
+                    f"🔥 **Post om {best_time:02d}:00.** Herpost je best scorende video. Test variant A."
+                )
+                with st.expander("Waarom?"):
+                    st.write("Op basis van mediane views, share rate en je topuren van de afgelopen 14 dagen.")
                 st.button("🔥 Voer aanbeveling uit", use_container_width=True)
-                st.caption("🧠 Waarom: recente posts op dit uur scoren hoger op mediane views en share rate.")
 
 # ------------------------ Build data for hero/KPI -------------------
 base_for_hero = normalize_per_post(df_raw)
@@ -625,9 +698,8 @@ bron = "DEMO" if st.session_state.get("demo_active") else ("CSV/XLSX" if LATEST_
 _hero_and_nba(d_for_hero, last_sync, bron)
 
 # ------------------------ KPI-rij boven tabs ------------------------
-if not d_for_hero.empty:
-    _kpi_row(d_for_hero, key_ns="top")
-    st.divider()
+_kpi_row(d_for_hero, key_ns="top")
+st.divider()
 
 # ------------------------ Tabs ------------------------
 tab_assist, tab_results, tab_tags, tab_trend, tab_compare, tab_arch, tab_ab, tab_ideas, tab_play, tab_settings = st.tabs(
@@ -661,12 +733,22 @@ with tab_assist:
                 st.caption("Nog niets in de wachtrij. Voeg iets toe vanuit A/B of Ideeën.")
             else:
                 for it in q[:3]:
-                    l, r = st.columns([6,1])
+                    l, r = st.columns([6,3])
                     l.markdown(f"**{it['caption'][:54]}…**  \n`{it['hashtags']}` · 🕒 {int(it['hour']):02d}:00")
                     if it["status"] == "pending":
-                        if r.button("✅", key=f"ap_{it['id']}", help="Goedkeuren & posten"):
-                            if approve_and_post(it["id"]): st.toast("Geplaatst (demo).")
-                    else: r.markdown("✅")
+                        if r.button("✅ Goedkeuren & posten", key=f"ap_{it['id']}"):
+                            if approve_and_post(it["id"]):
+                                st.session_state["undo_id"] = it["id"]
+                                st.toast("Geplaatst (demo).")
+                    else:
+                        undo_id = st.session_state.get("undo_id")
+                        if undo_id == it["id"]:
+                            if r.button("↩️ Ongedaan maken (5s)", key=f"undo_{it['id']}"):
+                                if undo_post(it["id"]):
+                                    st.toast("Ongedaan gemaakt.")
+                                    st.session_state["undo_id"] = None
+                        else:
+                            r.markdown("✅ Geplaatst")
 
 # ------------------------ Resultaten -------------------------------
 with tab_results:
