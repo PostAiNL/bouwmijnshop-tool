@@ -176,7 +176,9 @@ DEFAULT_SETTINGS = {
     "alert_channel": "email",
     "lang": "nl",
     "data_retention_days": 180,
+    "theme_mode": "light",
 }
+
 
 def _load_settings() -> dict:
     if SETTINGS_FILE.exists():
@@ -209,29 +211,61 @@ def tr(k: str) -> str:
     return I18N.get(k, k)
 
 # ------------------------ CSS --------------------------------------
-def _inject_css(theme_color: str, pro: bool):
+def _inject_css(theme_color: str, pro: bool, mode: str = "light"):
+    # Basis kleuren per modus
+    if mode == "dark":
+        vars_css = """
+          --brand:{brand};
+          --ring:#263040;
+          --muted:#9aa5b1;
+          --head:#0b1220;
+          --card:#111827;
+          --card-border:#1f2937;
+          --text:#e5e7eb;
+          --bg:#0b1220;
+        """
+        color_scheme = "dark"
+    else:  # LIGHT (default + geforceerd op mobiel)
+        vars_css = """
+          --brand:{brand};
+          --ring:#e8edf3;
+          --muted:#4b5563;
+          --head:#f8fafc;
+          --card:#ffffff;
+          --card-border:#eef2f7;
+          --text:#111827;
+          --bg:#ffffff;
+        """
+        color_scheme = "light"
+
     st.markdown(f"""
     <style>
+      html {{ color-scheme: {color_scheme}; }}
       :root {{
-        --brand:{theme_color}; --ring:#e8edf3; --muted:#4b5563; --head:#f8fafc;
+        {vars_css.format(brand=theme_color)}
+      }}
+      body, [data-testid="stAppViewContainer"] {{
+        background: var(--bg) !important; color: var(--text) !important;
       }}
       .block-container {{ max-width:1200px; padding-top:14px; }}
       section[data-testid="stSidebar"] {{ width:260px !important; }}
       .accent {{ color:var(--brand); }}
-      h1,h2,h3 {{ letter-spacing:-.01em; }}
-      /* cards */
-      .hero-card {{ border:1px solid var(--ring); border-radius:16px; padding:18px; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.06); }}
-      .kpi-card {{ border:1px solid var(--ring); border-radius:16px; padding:14px 16px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.05); }}
+      h1,h2,h3 {{ letter-spacing:-.01em; color: var(--text); }}
+      .hero-card, .kpi-card {{
+        border:1px solid var(--card-border);
+        border-radius:16px;
+        padding:14px 16px;
+        background: var(--card);
+        box-shadow:0 6px 18px rgba(0,0,0,.06);
+      }}
       .kpi-label {{ color:var(--muted); font-size:.85rem; margin-bottom:4px; }}
-      .kpi-value {{ font-size:1.35rem; font-weight:700; }}
-      .chip {{ display:inline-block; padding:4px 10px; border:1px solid var(--ring); border-radius:999px; margin-right:6px; margin-bottom:6px; font-size:.8rem; background:#fff; }}
-      .chip.badge {{ background:#eef6ff; border-color:#cfe3ff; }}
-      .pro-badge {{ position:fixed; top:8px; right:12px; z-index:9999; background:{"#10b981" if pro else "#6b7280"}; color:#fff; padding:6px 12px; border-radius:999px; font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,.1); }}
-      .stTabs [data-baseweb="tab-list"] {{ position:sticky; top:0; z-index:5; background:#fff; padding-top:6px; border-bottom:1px solid #eef2f7; }}
-      /* spacing polish */
-      .hero-gap {{ margin-bottom:16px; }}
+      .kpi-value {{ font-size:1.35rem; font-weight:700; color: var(--text); }}
+      .chip {{
+        display:inline-block; padding:4px 10px; border:1px solid var(--ring);
+        border-radius:999px; margin-right:6px; margin-bottom:6px; font-size:.8rem;
+        background: var(--card); color: var(--text);
+      }}
       .kpi-gap {{ margin-top:10px; margin-bottom:14px; }}
-      /* Buttons */
       .stButton>button {{
         transition:transform .1s ease, box-shadow .1s ease, opacity .2s ease;
         border-radius:12px; font-weight:700;
@@ -239,22 +273,19 @@ def _inject_css(theme_color: str, pro: bool):
       .stButton>button:hover {{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.06); }}
       .primary-btn>button {{ background:var(--brand); color:#fff; border:1px solid var(--brand); height:50px; font-size:1.05rem; }}
       .primary-btn>button:disabled {{ opacity:.7; cursor:not-allowed; }}
-      .soft-btn>button {{ background:#fff; border:1px solid var(--ring); }}
-      /* Focus ring accessibility */
+      .soft-btn>button {{ background:var(--card); border:1px solid var(--ring); color: var(--text); }}
       .stButton>button:focus {{ outline:2px solid var(--brand) !important; outline-offset:2px !important; }}
       a:focus {{ outline:2px solid var(--brand) !important; outline-offset:2px !important; }}
-      /* Dropzone hover */
       [data-testid="stFileUploaderDropzone"] {{ border:1px dashed var(--ring); border-radius:14px; }}
-      [data-testid="stFileUploaderDropzone"]:hover {{ border-color: var(--brand); background:#f4f8ff; }}
-      /* Confidence bar */
-      .nbabarshell {{ margin:8px 0;height:8px;background:#e5e7eb;border-radius:8px; position:relative; }}
+      [data-testid="stFileUploaderDropzone"]:hover {{ border-color: var(--brand); background:{'#0f172a' if False else '#f4f8ff'}; }}
+      .nbabarshell {{ margin:8px 0;height:8px;background:{'#1f2937' if False else '#e5e7eb'};border-radius:8px; position:relative; }}
       .nbabar {{ height:100%;background:#22c55e;border-radius:8px; }}
-      .nbalabel {{ position:absolute; right:8px; top:-18px; font-size:.8rem; color:#4b5563; }}
-      .footer-trust {{ color:#6b7280; font-size:.9rem; margin-top:24px; border-top:1px solid #eef2f7; padding-top:12px; }}
-      /* Skeletons */
-      .skeleton {{ position:relative; overflow:hidden; background:#f1f5f9; border-radius:14px; min-height:64px; border:1px solid #e5e7eb; }}
+      .nbalabel {{ position:absolute; right:8px; top:-18px; font-size:.8rem; color:var(--muted); }}
+      .footer-trust {{ color:var(--muted); font-size:.9rem; margin-top:24px; border-top:1px solid var(--card-border); padding-top:12px; }}
+      .skeleton {{ position:relative; overflow:hidden; background:{'#111827' if False else '#f1f5f9'}; border-radius:14px; min-height:64px; border:1px solid var(--ring); }}
       .skeleton::after {{
-        content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%);
+        content:""; position:absolute; inset:0;
+        background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.3) 50%, rgba(255,255,255,0) 100%);
         transform:translateX(-100%); animation:shimmer 1.2s infinite;
       }}
       @keyframes shimmer {{ 100% {{ transform:translateX(100%); }} }}
@@ -263,7 +294,7 @@ def _inject_css(theme_color: str, pro: bool):
     st.markdown(f"<div class='pro-badge'>{'PRO' if pro else 'DEMO'}</div>", unsafe_allow_html=True)
 
 THEME_COLOR, LOGO_BYTES = _load_branding()
-_inject_css(THEME_COLOR, IS_PRO)
+_inject_css(THEME_COLOR, IS_PRO, mode=SET.get("theme_mode", "light"))
 
 # ------------------------ Helpers ----------------------------------
 def _looks_like_xlsx(path: Path) -> bool:
@@ -1135,6 +1166,10 @@ with tab_settings:
         cfg["auto_experiments"] = st.toggle("Slimme testen (A/B → bandit)", value=cfg.get("auto_experiments", True))
         cfg["auto_post_mode"] = st.selectbox("Auto-post modus", ["review","off"], index=["review","off"].index(cfg.get("auto_post_mode","review")))
         cfg["lang"] = st.selectbox("Taal", ["nl","en"], index=["nl","en"].index(cfg.get("lang","nl")))
+        # Thema-toggle (licht/donker)
+        is_dark = (cfg.get("theme_mode", "light") == "dark")
+        use_dark = st.toggle("Donker thema", value=is_dark, help="Schakel tussen licht en donker.")
+        cfg["theme_mode"] = "dark" if use_dark else "light"
     with col2:
         cfg["alert_channel"] = st.selectbox("Alerts kanaal", ["email"], index=0)
         cfg["data_retention_days"] = st.number_input("Data-retentie (dagen)", min_value=30, max_value=365, value=int(cfg.get("data_retention_days",180)))
