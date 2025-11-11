@@ -1,8 +1,9 @@
-# app.py — PostAi (TikTok Growth Agent) • 10/10 polish edition
+# app.py — PostAi (TikTok Growth Agent) • 10/10 polish edition (dev-friendly + secrets-safe)
 from __future__ import annotations
 
 from typing import Dict, List, Tuple
-import re, io, json, uuid, base64, time
+from dataclasses import dataclass
+import re, io, json, uuid, base64, time, logging
 from pathlib import Path
 from datetime import datetime, date
 
@@ -16,37 +17,78 @@ try:
     HAS_ALTAIR = True
 except Exception:
     HAS_ALTAIR = False
-# === TikTok OAuth (Login Kit) – minimal review version ======================
-# Vereist env vars op Render:
-# - TIKTOK_CLIENT_KEY  (Client Key uit TikTok Developer Portal)
-# - TIKTOK_SCOPES      (optioneel, bv: user.info.basic,video.list)
-# - APP_PUBLIC_URL     (je base URL, bv: https://postai.bouwmijnshop.nl)
 
-import os, urllib.parse, uuid
+# === TikTok OAuth (Login Kit) – minimal review version ======================
+# Vereist env vars of secrets:
+# - TIKTOK_CLIENT_KEY
+# - TIKTOK_SCOPES      (optioneel, bv: user.info.basic)
+# - APP_PUBLIC_URL     (https://postai.bouwmijnshop.nl)
+
+import os, urllib.parse
+from urllib.parse import urlparse
+
+# ------------------------ Tijdzone / Basis ------------------------
+TZ = "Europe/Amsterdam"  # tijdzone voor alle datum/tijd-analyses
+
+# ------------------------ Logging ------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+log = logging.getLogger("postai")
+
+# ------------------------ Secrets helper (safe) --------------------
+def getconf(key: str, default: str = "") -> str:
+    """
+    Leest eerst uit st.secrets (als aanwezig), anders uit os.environ.
+    Gooit nooit StreamlitSecretNotFoundError.
+    """
+    try:
+        return st.secrets.get(key, os.getenv(key, default))
+    except Exception:
+        return os.getenv(key, default)
+
+# ------------------------ Dev helpers ------------------------------
+DEV_ALLOW_HTTP_LOCAL = True  # laat http://localhost toe tijdens lokaal testen
+
+def _is_local_url(url: str) -> bool:
+    try:
+        u = urlparse(url)
+        return u.hostname in ("localhost", "127.0.0.1")
+    except Exception:
+        return False
+
+def has_oauth_config() -> bool:
+    """Check of we genoeg config hebben om de TikTok login te tonen."""
+    base = getconf("APP_PUBLIC_URL", "").strip()
+    key  = getconf("TIKTOK_CLIENT_KEY", "").strip()
+    if not base or not key:
+        return False
+    if base.startswith("https://"):
+        return True
+    return DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://")
 
 def _get_public_base_url() -> str:
-    # Gebruik env zodat dit ook op custom domain werkt
-    url = os.getenv("APP_PUBLIC_URL", "").strip().rstrip("/")
-    return url
+    url = getconf("APP_PUBLIC_URL", "").strip().rstrip("/")
+    if not url:
+        return ""
+    if url.startswith("https://"):
+        return url
+    if DEV_ALLOW_HTTP_LOCAL and _is_local_url(url) and url.startswith("http://"):
+        return url
+    st.error("Misconfiguratie: **APP_PUBLIC_URL** moet een geldige https-URL zijn.")
+    return ""
 
 def build_tiktok_auth_url() -> str:
-    client_key = os.getenv("TIKTOK_CLIENT_KEY", "").strip()
-    # Voor eerste review: vraag alleen login-scope aan
-    scopes     = os.getenv("TIKTOK_SCOPES", "user.info.basic").strip()
+    client_key = getconf("TIKTOK_CLIENT_KEY", "").strip()
+    scopes     = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
     base_url   = _get_public_base_url()
 
-    # Striktere validatie + duidelijke feedback i.p.v. stilzwijgend ""
-    if not client_key:
-        st.error("Misconfiguratie: **TIKTOK_CLIENT_KEY** ontbreekt.")
-        return ""
-    if not base_url or not base_url.startswith("https://"):
-        st.error("Misconfiguratie: **APP_PUBLIC_URL** ontbreekt of is niet **https**.")
+    # Incompleet? Geef leeg terug (geen rode errors in UI)
+    if not client_key or not base_url:
         return ""
 
-    # We gebruiken de homepage als redirect (Streamlit leest query params)
     redirect_uri = f"{base_url}/"
-
-    # state voor CSRF bescherming
     state = st.session_state.get("_tiktok_state") or uuid.uuid4().hex
     st.session_state["_tiktok_state"] = state
 
@@ -101,10 +143,8 @@ def _remove_license() -> bool:
     except Exception:
         return False
 
-import os
-
-# 1️⃣ Check eerst environment variable (Render / .env)
-ENV_LICENSE = os.getenv("LICENSE_KEY", "").strip()
+# 1️⃣ Check eerst secrets/env
+ENV_LICENSE = getconf("LICENSE_KEY", "").strip()
 
 if ENV_LICENSE:
     LICENSE_KEY = ENV_LICENSE
@@ -113,7 +153,6 @@ else:
     # 2️⃣ Anders val terug op lokaal license.key bestand
     LICENSE_KEY, IS_PRO = _read_license()
 
-
 # ------------------------ Streamlit setup --------------------------
 st.set_page_config(
     page_title=f"{APP_NAME} — {'PRO' if IS_PRO else 'DEMO'}",
@@ -121,17 +160,18 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 # === OAuth callback handling (leest query params van TikTok) ===============
-# TikTok stuurt terug naar je base URL met ?code=&state=&scopes=
 qp = st.query_params
-if "code" in qp:
-    # Toon status voor je review video
+if "error" in qp:
+    err = qp.get("error_description", qp.get("error", "onbekende fout"))
+    st.error(f"❌ TikTok OAuth error: {err}")
+elif "code" in qp:
     code  = qp.get("code")
     state = qp.get("state", "")
     ok_state = (state == st.session_state.get("_tiktok_state"))
-    # Alleen tijdens review de code tonen/bewaren, niet in productie
     if REVIEW_MODE:
-        st.success(f"✅ TikTok OAuth code ontvangen (state ok: {ok_state}). Je kunt dit scherm tonen in je reviewvideo.")
+        st.success(f"✅ TikTok OAuth code ontvangen (state ok: {ok_state}). Je kunt dit tonen in je reviewvideo.")
         st.session_state["tik_code"] = code
     else:
         st.success("✅ Ingelogd via TikTok.")
@@ -169,67 +209,17 @@ def _remove_brand_logo() -> bool:
 
 THEME_COLOR, LOGO_BYTES = _load_branding()
 
-# ------------------------ Settings / I18N --------------------------
-DEFAULT_SETTINGS = {
-    "auto_experiments": True,
-    "auto_post_mode": "review",
-    "alert_channel": "email",
-    "lang": "nl",
-    "data_retention_days": 180,
-}
-
-def _load_settings() -> dict:
-    if SETTINGS_FILE.exists():
-        try: return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-        except Exception: pass
-    return DEFAULT_SETTINGS.copy()
-
-def _save_settings(cfg: dict) -> bool:
-    try:
-        SETTINGS_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8"); return True
-    except Exception:
-        return False
-
-SET = _load_settings()
-
-def tr(k: str) -> str:
-    I18N = dict(
-        no_data="Nog geen data.",
-        next_best="Jouw groeiaanbeveling",
-        review_queue="Review-wachtrij",
-        approve_post="Goedkeuren & Posten",
-        add_queue="Zet in review-wachtrij",
-        playbook="Playbook",
-        plan7="Postplan",
-        trust1="GDPR-proof",
-        trust2="CSV/XLSX",
-        trust3="14-dagen gratis",
-        trust4="Made for TikTok",
-    )
-    return I18N.get(k, k)
-
 # ------------------------ CSS --------------------------------------
-
 def _inject_css(theme_color: str, pro: bool, mode: str = "light"):
-    # Variabelen per modus
-    if mode == "dark":
-        CSS_VARS = dict(
-            brand=theme_color, ring="#2e3a4d", muted="#aab3bf", head="#0b1220",
-            card="#111827", card_border="#263244", text="#e6e8ec", bg="#0b1220",
-            hover="#101826", track="#1f2937", skeleton="#0f172a"
-        )
-        color_scheme = "dark"
-        pro_bg = "#111827"
-    else:
-        CSS_VARS = dict(
-            brand=theme_color, ring="#e8edf3", muted="#4b5563", head="#f8fafc",
-            card="#ffffff", card_border="#eef2f7", text="#111827", bg="#ffffff",
-            hover="#f4f8ff", track="#e5e7eb", skeleton="#f1f5f9"
-        )
-        color_scheme = "light"
-        pro_bg = "#10b981"
+    # Vast licht thema (geen switch)
+    CSS_VARS = dict(
+        brand=theme_color, ring="#e8edf3", muted="#4b5563", head="#f8fafc",
+        card="#ffffff", card_border="#eef2f7", text="#111827", bg="#ffffff",
+        hover="#f4f8ff", track="#e5e7eb", skeleton="#f1f5f9"
+    )
+    color_scheme = "light"
+    pro_bg = "#10b981"
 
-    # :root-variabelen opbouwen
     vars_lines = [
         ":root {",
         f"  --brand:{CSS_VARS['brand']};",
@@ -312,7 +302,8 @@ def _looks_like_xlsx(path: Path) -> bool:
         with open(path, "rb") as f: return f.read(4) == b"PK\x03\x04"
     except Exception: return False
 
-@st.cache_data(show_spinner=False, ttl=600)
+@st.cache_data(show_spinner=False, ttl=600,
+               hash_funcs={Path: lambda p: (p.stat().st_mtime, p.stat().st_size)})
 def _smart_read_any(path_or_file) -> pd.DataFrame:
     try:
         if isinstance(path_or_file, (str, Path)):
@@ -370,6 +361,14 @@ def _is_tiktok_url(u: str) -> bool:
     u = str(u).strip().lower()
     return u.startswith("http") and "tiktok.com" in u
 
+# ------------------------ Tijdzone utils --------------------------
+def _to_localized_utcaware(series_or_str):
+    ts = pd.to_datetime(series_or_str, errors="coerce", utc=True)
+    try:
+        return ts.tz_convert(TZ)
+    except Exception:
+        return ts  # al local/NaT
+
 def normalize_per_post(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty: return pd.DataFrame()
     lower = {_nk(c): c for c in df.columns}
@@ -397,9 +396,20 @@ def normalize_per_post(df: pd.DataFrame) -> pd.DataFrame:
 
     if col["date"]:
         raw_dates = d[col["date"]].astype(str).str.strip(" '\"\t\r\n,.;")
-        parsed = pd.to_datetime(raw_dates, dayfirst=True, errors="coerce")
-        parsed = parsed.where(parsed.notna(), pd.to_datetime(raw_dates.apply(_parse_nl_date), errors="coerce"))
-        parsed = parsed.apply(lambda x: x.replace(hour=12) if pd.notna(x) and getattr(x, "hour", 0)==0 else x)
+        parsed = pd.to_datetime(raw_dates, dayfirst=True, errors="coerce", utc=True)
+        parsed = parsed.where(parsed.notna(), pd.to_datetime(raw_dates.apply(_parse_nl_date), errors="coerce", utc=True))
+        try:
+            parsed = parsed.dt.tz_convert(TZ)
+        except Exception:
+            pass
+        def _norm(x):
+            if pd.isna(x): return x
+            try:
+                xl = x.tz_localize(None) if hasattr(x, "tz_localize") else x
+                return xl.replace(hour=12) if getattr(xl, "hour", 0)==0 else xl
+            except Exception:
+                return x
+        parsed = parsed.apply(_norm)
         d["Datum"] = parsed
     else:
         d["Datum"] = pd.NaT
@@ -481,17 +491,34 @@ def trending_hashtags(d: pd.DataFrame, days_window: int = 14) -> pd.DataFrame:
     g1 = p1.groupby("tag", dropna=True).agg(avg_views=("Views","mean"), cnt=("Views","count"))
     g2 = p2.groupby("tag", dropna=True).agg(avg_views=("Views","mean"), cnt=("Views","count"))
     out = g1.join(g2, how="outer", lsuffix="_prev", rsuffix="_curr").fillna(0)
-    denom = out["avg_views_prev"].replace(0, np.nan)
-    out["growth_%"] = ((out["avg_views_curr"] - out["avg_views_prev"]) / denom) * 100
-    out["growth_%"] = out["growth_%"].replace([np.inf,-np.inf], np.nan).fillna(0)
-    out = out.sort_values(["growth_%","avg_views_curr","cnt_curr"], ascending=[False,False,False])
+    prev = pd.to_numeric(out["avg_views_prev"], errors="coerce").fillna(0.0)
+    curr = pd.to_numeric(out["avg_views_curr"], errors="coerce").fillna(0.0)
+    out["growth_%"] = np.where(prev>0, (curr - prev) / prev * 100.0, 0.0)
+    out["n_prev"] = out["cnt_prev"].astype(int)
+    out["n_curr"] = out["cnt_curr"].astype(int)
+    out = out[out["n_curr"] >= 3].copy()
+    out = out.sort_values(["growth_%","avg_views_curr","n_curr"], ascending=[False,False,False])
     return out
+
+def _sparkline(series: pd.Series, width=120, height=28):
+    s = pd.to_numeric(series, errors="coerce").fillna(method="ffill").fillna(0.0)
+    if HAS_ALTAIR:
+        df_s = pd.DataFrame({"x": np.arange(len(s)), "y": s})
+        return alt.Chart(df_s).mark_line().encode(x="x:Q", y="y:Q").properties(width=width, height=height).configure_axis(disable=True)
+    else:
+        st.line_chart(s, height=height)
+        return None
 
 def _best_hours(d: pd.DataFrame, n: int = 3) -> List[int]:
     if d is None or d.empty: return [19, 20, 18][:n]
     dt = pd.to_datetime(d["Datum"], errors="coerce")
-    tmp = d.copy(); tmp["hour"] = dt.dt.hour.fillna(12).astype(int)
-    best = tmp.groupby("hour")["Views"].median().sort_values(ascending=False).head(n).index.tolist()
+    v  = pd.to_numeric(d["Views"], errors="coerce")
+    v_cap = v.clip(upper=v.quantile(0.95))
+    days_ago = (pd.Timestamp.today().normalize() - dt.dt.normalize()).dt.days.clip(lower=0).fillna(30)
+    recent_w = np.exp(-(days_ago / 30.0))
+    hrs = dt.dt.hour.fillna(12).astype(int)
+    score = (v_cap * recent_w).groupby(hrs).median().sort_values(ascending=False)
+    best = score.head(max(1, n)).index.tolist()
     return best or [19, 20, 18][:n]
 
 def _should_sync_hourly() -> bool:
@@ -537,6 +564,59 @@ def undo_post(item_id: str) -> bool:
             it["status"] = "pending"; _write_queue(items); return True
     return False
 
+# ------------------------ Settings / I18N --------------------------
+DEFAULT_SETTINGS = {
+    "auto_experiments": True,
+    "auto_post_mode": "review",
+    "alert_channel": "email",
+    "lang": "nl",
+    "data_retention_days": 180,
+}
+
+def _load_settings() -> dict:
+    if SETTINGS_FILE.exists():
+        try: return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+        except Exception: pass
+    return DEFAULT_SETTINGS.copy()
+
+def _save_settings(cfg: dict) -> bool:
+    try:
+        SETTINGS_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8"); return True
+    except Exception:
+        return False
+
+@dataclass
+class Settings:
+    auto_experiments: bool = True
+    auto_post_mode: str = "review"
+    alert_channel: str = "email"
+    lang: str = "nl"
+    data_retention_days: int = 180
+
+def _load_settings_obj() -> Settings:
+    raw = _load_settings()
+    base = Settings()
+    merged = {**base.__dict__, **raw}
+    return Settings(**merged)
+
+SET = _load_settings()
+
+def tr(k: str) -> str:
+    I18N = dict(
+        no_data="Nog geen data.",
+        next_best="Jouw groeiaanbeveling",
+        review_queue="Review-wachtrij",
+        approve_post="Goedkeuren & Posten",
+        add_queue="Zet in review-wachtrij",
+        playbook="Playbook",
+        plan7="Postplan",
+        trust1="GDPR-proof",
+        trust2="CSV/XLSX",
+        trust3="14-dagen gratis",
+        trust4="Made for TikTok",
+    )
+    return I18N.get(k, k)
+
 # ------------------------ Sidebar ----------------------------------
 with st.sidebar:
     # PRO/DEMO status
@@ -554,15 +634,22 @@ with st.sidebar:
     _login_url = build_tiktok_auth_url()
     if _login_url:
         st.link_button("Log in with TikTok", _login_url, use_container_width=True)
-        # Transparantie m.b.t. scope/data
         with st.popover("Welke data gebruiken we?"):
             st.caption("`user.info.basic` – nodig om je in te loggen en je profielnaam/afbeelding te tonen. "
                        "We posten niets automatisch en lezen geen video’s of vriendenlijst in deze versie. "
                        "Zie het Privacybeleid hieronder.")
     else:
-        st.caption("Set env vars on Render → TIKTOK_CLIENT_KEY & APP_PUBLIC_URL")
+        base = getconf("APP_PUBLIC_URL", "").strip() or "(leeg)"
+        key  = getconf("TIKTOK_CLIENT_KEY", "").strip()
+        if not base:
+            st.warning("APP_PUBLIC_URL ontbreekt. Voor lokaal testen: `http://localhost:8501` is oké.")
+        elif not (base.startswith("https://") or (DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://"))):
+            st.warning("APP_PUBLIC_URL moet https zijn (of http://localhost bij lokaal testen).")
+        if not key:
+            st.warning("TIKTOK_CLIENT_KEY ontbreekt.")
+        st.caption("Zet **APP_PUBLIC_URL** en **TIKTOK_CLIENT_KEY** via environment variables of voeg `.streamlit/secrets.toml` toe.")
 
-    # Toon minimale debug voor reviewers
+    # Debug voor reviewers
     if st.session_state.get("tik_code"):
         st.caption("Status: OAuth code ontvangen ✅ (alleen login & display; geen auto-posting).")
     else:
@@ -629,9 +716,18 @@ with st.sidebar:
             st.session_state["df"] = df_up
             st.session_state["demo_active"] = False
             st.success(f"✅ Bestand opgeslagen ({up.name}) — {len(df_up):,} rijen")
+
+            # === Kolom-mapping check ===
+            base_chk = normalize_per_post(df_up)
+            recognized = [c for c in ["Hashtags","Views","Likes","Comments","Shares","Datum","Video link"] if c in base_chk.columns]
+            missing    = [c for c in ["Views","Likes","Comments","Shares","Datum"] if c not in base_chk.columns]
+            if recognized:
+                st.success(f"Herkenning: {', '.join(recognized)}")
+            if missing:
+                st.warning(f"Ontbrekende kernkolommen: {', '.join(missing)}. Voeg deze toe of hernoem in je CSV/XLSX.")
+
         except Exception as e:
             st.error(f"Kon bestand niet verwerken: {e}")
-
 
 # ------------------------ Header -------------------------------
 hwrap1, hwrap2 = st.columns([1, 8])
@@ -681,9 +777,13 @@ def _fmt_delta(curr, prev):
     except Exception: return "—", None
 
 def _sparkline(series: pd.Series, width=120, height=28):
-    if not HAS_ALTAIR: return None
-    df_s = pd.DataFrame({"x": np.arange(len(series)), "y": pd.to_numeric(series, errors="coerce").fillna(method="ffill").fillna(0.0)})
-    return alt.Chart(df_s).mark_line().encode(x="x:Q", y="y:Q").properties(width=width, height=height).configure_axis(disable=True)
+    s = pd.to_numeric(series, errors="coerce").fillna(method="ffill").fillna(0.0)
+    if HAS_ALTAIR:
+        df_s = pd.DataFrame({"x": np.arange(len(s)), "y": s})
+        return alt.Chart(df_s).mark_line().encode(x="x:Q", y="y:Q").properties(width=width, height=height).configure_axis(disable=True)
+    else:
+        st.line_chart(s, height=height)
+        return None
 
 def _kpi_row(d: pd.DataFrame, key_ns: str = "top"):
     st.markdown("<div class='kpi-gap'></div>", unsafe_allow_html=True)
@@ -707,20 +807,26 @@ def _kpi_row(d: pd.DataFrame, key_ns: str = "top"):
         sel = st.selectbox("Periode", period_options, index=idx_default, key=f"kpi_range_{key_ns}")
         st.session_state["period_value"] = sel
 
-    range_days = sel
+        range_days = sel
     with kpi_left:
         dt = pd.to_datetime(d["Datum"], errors="coerce"); now = pd.Timestamp.today().normalize()
         cur_mask = (dt >= (now - pd.Timedelta(days=range_days))) & (dt <= now + pd.Timedelta(days=1))
         prev_mask = (dt >= (now - pd.Timedelta(days=2*range_days))) & (dt < (now - pd.Timedelta(days=range_days)))
+
         def _sum(df, col): return int(pd.to_numeric(df[col], errors="coerce").sum(skipna=True))
         def _mean(df, col): return float(pd.to_numeric(df[col], errors="coerce").mean(skipna=True))
-        cur = d.loc[cur_mask]; prev = d.loc[prev_mask]
+
+        # ✅ FIX: opsplitsen in 2 regels (geen ‘)’ na loc[...] )
+        cur = d.loc[cur_mask]
+        prev = d.loc[prev_mask]
+
         total_views_cur  = _sum(cur, "Views") if not cur.empty else 0
         total_views_prev = _sum(prev, "Views") if not prev.empty else 0
         avg_eng_cur  = (_mean(cur, "Engagement %") * 100) if not cur.empty else 0.0
         avg_eng_prev = (_mean(prev, "Engagement %") * 100) if not prev.empty else 0.0
         vir_cur  = _mean(cur, "Virality") if not cur.empty else 0.0
         vir_prev = _mean(prev, "Virality") if not prev.empty else 0.0
+
         d1, a1 = _fmt_delta(total_views_cur, total_views_prev)
         d2, a2 = _fmt_delta(avg_eng_cur, avg_eng_prev)
         d3, a3 = _fmt_delta(vir_cur, vir_prev)
@@ -743,47 +849,26 @@ def _kpi_row(d: pd.DataFrame, key_ns: str = "top"):
             if s1: c1.altair_chart(s1, use_container_width=False)
             if s2: c2.altair_chart(s2, use_container_width=False)
             if s3: c3.altair_chart(s3, use_container_width=False)
+
 def _confidence_from_data(d: pd.DataFrame) -> int:
-    """
-    Schat een confidence-score (0–100) voor de aanbeveling.
-    Factoren:
-    - hoeveel datapoints (laatste ~30 posts)
-    - hoeveel recente posts (< 30 dagen)
-    - kolomdekking (views/likes/comments/shares/datum)
-    - stabiliteit van het signaal (std/mean op views)
-    """
     if d is None or d.empty:
         return 0
-
     dc = d.copy()
     dc["Datum"] = pd.to_datetime(dc.get("Datum"), errors="coerce")
-
-    # 1) Grootte
     v = pd.to_numeric(dc.get("Views"), errors="coerce")
     n = int(v.notna().sum())
     size_score = float(np.clip(n / 30.0, 0, 1))
-
-    # 2) Recency (aantal posts in laatste 30 dagen)
     now = pd.Timestamp.today().normalize()
     n_recent = int((dc["Datum"] >= (now - pd.Timedelta(days=30))).sum())
     recency_score = float(np.clip(n_recent / 15.0, 0, 1))
-
-    # 3) Kolomdekking
     have = sum(c in dc.columns for c in ["Views", "Likes", "Comments", "Shares", "Datum"])
     coverage = have / 5.0
-
-    # 4) Stabiliteit (lager = stabieler = hogere confidence)
     v_clean = v.dropna()
     if len(v_clean) >= 5 and v_clean.mean() > 0:
         stability = 1.0 - float(np.clip(v_clean.std() / (v_clean.mean() + 1e-9), 0, 1))
     else:
-        stability = 0.5  # neutraal als te weinig data
-
-    conf = (0.4 * size_score +
-            0.3 * recency_score +
-            0.2 * coverage +
-            0.1 * stability) * 100.0
-
+        stability = 0.5
+    conf = (0.4 * size_score + 0.3 * recency_score + 0.2 * coverage + 0.1 * stability) * 100.0
     return int(round(np.clip(conf, 0, 100)))
 
 # ------------------------ Hero + Jouw groeiaanbeveling -------------
@@ -806,12 +891,10 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
         with left:
             st.markdown("<div class='hero'>", unsafe_allow_html=True)
 
-            # TikTok login-knop (optioneel voor reviewvideo)
             _login_url_top = build_tiktok_auth_url()
             if _login_url_top:
                 st.link_button("Log in with TikTok", _login_url_top, use_container_width=True)
 
-            # CTA met loading state
             if st.button("🚀 Start analyse", key="hero_analyse_btn",
                          use_container_width=True, type="primary", disabled=False):
                 with st.spinner("Analyseren…"):
@@ -870,7 +953,6 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     st.session_state["demo_active"] = True
                     st.toast("✅ Demo-data geladen")
 
-            # trust mini
             st.markdown(
                 f"<div class='trust-row'>"
                 f"<span class='chip badge'>🛡️ {tr('trust1')}</span>"
@@ -900,6 +982,7 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                 with st.expander("Waarom?"):
                     st.write("Op basis van mediane views, share rate en je topuren van de afgelopen 14 dagen.")
                 st.button("🔥 Voer aanbeveling uit", use_container_width=True)
+
 # ------------------------ Build data for hero/KPI -------------------
 base_for_hero = normalize_per_post(df_raw)
 d_for_hero = add_kpis(base_for_hero) if not base_for_hero.empty else pd.DataFrame()
@@ -980,8 +1063,12 @@ with tab_results:
         cols = [c for c in ["Hashtags","Views","Likes","Comments","Shares","Datum","Like rate","Share rate","Velocity","Score","Virality","Video link"] if c in filt.columns]
         st.dataframe(filt[cols], use_container_width=True, hide_index=True)
         st.markdown("#### Export")
+        dt_str = pd.Timestamp.today().strftime("%Y-%m-%d")
         html = filt.to_html(index=False)
-        st.download_button("⬇️ Download data (HTML)", data=html, file_name="tiktok_data.html", mime="text/html")
+        st.download_button("⬇️ Download data (HTML)",
+                           data=html,
+                           file_name=f"tiktok_data_{dt_str}.html",
+                           mime="text/html")
         if not IS_PRO: st.caption("🔒 PDF-rapporten zijn PRO.")
         else: st.caption("PDF-rapport (placeholder) — integratie hier toevoegen.")
 
@@ -1083,11 +1170,14 @@ with tab_ab:
             hour_b = st.number_input("Uur B", min_value=0, max_value=23, value=21)
 
         def pvs(hook, tags, hr):
-            base_vir = float(d["Virality"].tail(30).mean(skipna=True)) if "Virality" in d and not d["Virality"].empty else 50
-            hook_bonus = min(len(hook.split())*2, 20)
-            tags_bonus = min(len([t for t in tags.split() if t.startswith("#")])*3, 18)
-            hr_bonus   = 20 if hr in _best_hours(d, n=3) else 8
-            return int(np.clip(base_vir*0.3 + hook_bonus + tags_bonus + hr_bonus, 0, 100))
+            base_vir = float(d["Virality"].tail(50).mean(skipna=True)) if "Virality" in d and not d["Virality"].empty else 50
+            hook_len = len(hook.split())
+            n_tags   = len([t for t in tags.split() if t.startswith("#")])
+            hook_bonus = np.clip(hook_len*2.2, 0, 22)
+            tags_bonus = np.clip(n_tags*3.0, 0, 18)
+            hr_bonus   = 22 if hr in _best_hours(d, n=3) else 8
+            score = base_vir*0.3 + hook_bonus + tags_bonus + hr_bonus
+            return int(np.clip(score, 0, 100))
 
         rows = []
         for label, hook, tags, hr in [("A", hook_a, tags_a, int(hour_a)), ("B", hook_b, tags_b, int(hour_b))]:
@@ -1162,7 +1252,11 @@ with tab_play:
             plan = generate_week_plan(d); st.dataframe(plan, use_container_width=True, hide_index=True)
             colx1, colx2 = st.columns(2)
             with colx1:
-                st.download_button("⬇️ Exporteer plan (CSV)", data=plan.to_csv(index=False).encode("utf-8"), file_name="postplan_7_dagen.csv", mime="text/csv")
+                dt_str = pd.Timestamp.today().strftime("%Y-%m-%d")
+                st.download_button("⬇️ Exporteer plan (CSV)",
+                                   data=plan.to_csv(index=False).encode("utf-8"),
+                                   file_name=f"postplan_7_dagen_{dt_str}.csv",
+                                   mime="text/csv")
             with colx2:
                 txt = io.StringIO(); txt.write("PLAYBOOK\n"); [txt.write(f"{k}: {v}\n") for k,v in pb.items()]
                 st.download_button("⬇️ Exporteer playbook (TXT)", data=txt.getvalue().encode("utf-8"), file_name="playbook.txt", mime="text/plain")
@@ -1210,13 +1304,26 @@ with tab_settings:
             else: st.warning("Voer een geldige key in.")
         st.caption("Heb je nog geen licentie? Koop ‘m hieronder.")
         st.link_button("✨ Koop PRO", LEMON_CHECKOUT_URL, use_container_width=True)
+
+    st.markdown("---"); st.markdown("### Data opschonen (GDPR)")
+    if st.button("🧹 Verwijder lokale data (CSV/archief/state)"):
+        try:
+            for p in DATA_DIR.glob("*.csv"):
+                p.unlink(missing_ok=True)
+            for p in [LATEST_FILE, ALERT_STATE_FILE, SYNC_STATE_FILE, POST_QUEUE_FILE]:
+                if p.exists(): p.unlink()
+            st.success("Alle lokale data/states zijn verwijderd.")
+        except Exception as e:
+            st.error(f"Kon data niet verwijderen: {e}")
+
 with st.expander("Legal & TikTok Review Info", expanded=False):
     base = _get_public_base_url() or "https://postai.bouwmijnshop.nl"
+    requested_scopes = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
     st.markdown(
         f"""
 - **Website (this app):** {base}  
 - **Redirect URI:** {base}/  
-- **Requested scopes:** `user.info.basic, video.list`  
+- **Requested scopes:** `{requested_scopes}`  
 - **What we do:** authentication + analytics display only. **No auto-posting.**  
 - **Terms:** <https://www.bouwmijnshop.nl/pages/onze-voorwaarden>  
 - **Privacy:** <https://www.bouwmijnshop.nl/pages/privacy>  
