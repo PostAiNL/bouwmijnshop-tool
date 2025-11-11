@@ -1,45 +1,39 @@
-// chat-server/server.js
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
+// chat-server/server.js  (CommonJS)
+const express = require("express");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS
-const allowed = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
-  : [];
-app.use(cors({
-  origin: function(origin, cb) {
-    if (!origin) return cb(null, true);
-    if (allowed.some(a => origin.endsWith(a.replace('*', '')) || a === origin)) {
-      return cb(null, true);
-    }
-    return cb(null, false);
-  },
-  credentials: true
-}));
-
+// CORS & JSON
 app.use(express.json());
-
-// 🔹 root → redirect naar widget
-app.get('/', (req, res) => {
-  return res.redirect('/widget');
+app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+  next();
 });
 
-// healthcheck
-app.get('/health', (req, res) => res.send('ok'));
+// Statische assets uit ./public
+app.use(express.static(path.join(__dirname, "public")));
 
-// 🔹 widget UI (serveer statische files uit /public)
-app.use('/widget', express.static(path.join(__dirname, '..', 'public')));
+// Healthcheck
+app.get("/health", (_req, res) => res.json({ ok: true }));
 
-// (optionele) chat-API endpoints
-app.post('/api/message', async (req, res) => {
-  // TODO: jouw logic / OpenAI-call
-  res.json({ reply: 'Hallo! 👋 (demo-reply)' });
+// Widget pagina (IFRAME-content)
+app.get("/widget", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "widget.html"));
+});
+
+// Dummy endpoint waar de widget zijn bericht naartoe post
+app.post("/api/message", (req, res) => {
+  // Hier kun je later doorsturen naar Slack, e-mail, database, etc.
+  console.log("Nieuw chatbericht:", req.body);
+  res.json({ ok: true, received: req.body });
 });
 
 app.listen(PORT, () => {
-  console.log(`Chat server listening on :${PORT}`);
+  console.log(`Chat server running on :${PORT}`);
 });
