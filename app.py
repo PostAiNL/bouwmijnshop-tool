@@ -1,11 +1,10 @@
-# app.py — PostAi (TikTok Growth Agent) • publiek-klaar + pro-look
+# app.py — PostAi (TikTok Growth Agent) • PRO-ready + AI Coach/Generator/Chat
 from __future__ import annotations
 
 import os, re, io, json, uuid, base64, time, logging, urllib.parse
 from pathlib import Path
 from datetime import datetime, date
 from typing import Dict, List, Tuple
-from urllib.parse import urlparse
 
 import numpy as np
 import pandas as pd
@@ -31,6 +30,7 @@ LICENSE_FILE     = APP_DIR / "license.key"
 ALERT_STATE_FILE = APP_DIR / "last_alert.txt"
 SYNC_STATE_FILE  = APP_DIR / "last_sync.txt"
 POST_QUEUE_FILE  = DATA_DIR / "post_queue.json"
+COACH_STATE_FILE = DATA_DIR / "coach_state.json"  # ⬅️ nieuw
 
 LEMON_CHECKOUT_URL = "https://your-lemon-squeezy-checkout.link/PRODUCT"  # vervang
 
@@ -41,13 +41,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(
 log = logging.getLogger("postai")
 
 def getconf(key: str, default: str = "") -> str:
-    """Eerst uit st.secrets (stil als die er niet is), dan uit env, anders default."""
+    """Eerst uit st.secrets, dan uit env, anders default."""
     try:
         return st.secrets.get(key, os.getenv(key, default))
     except Exception:
         return os.getenv(key, default)
 
 # ------------------------------- Dev helpers ---------------------------------
+from urllib.parse import urlparse
 DEV_ALLOW_HTTP_LOCAL = True
 
 def _is_local_url(url: str) -> bool:
@@ -59,30 +60,25 @@ def _is_local_url(url: str) -> bool:
 
 def _get_public_base_url() -> str:
     url = getconf("APP_PUBLIC_URL", "").strip().rstrip("/")
-    if not url:
-        return ""
-    if url.startswith("https://"):
-        return url
+    if not url: return ""
+    if url.startswith("https://"): return url
     if DEV_ALLOW_HTTP_LOCAL and _is_local_url(url) and url.startswith("http://"):
         return url
-    st.error("Misconfiguratie: **APP_PUBLIC_URL** moet een geldige https-URL zijn.")
+    st.error("Misconfiguratie: **APP_PUBLIC_URL** moet https zijn (of http://localhost bij lokaal testen).")
     return ""
 
 def has_oauth_config() -> bool:
     base = getconf("APP_PUBLIC_URL", "").strip()
     key  = getconf("TIKTOK_CLIENT_KEY", "").strip()
-    if not base or not key:
-        return False
-    if base.startswith("https://"):
-        return True
+    if not base or not key: return False
+    if base.startswith("https://"): return True
     return DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://")
 
 def build_tiktok_auth_url() -> str:
     client_key = getconf("TIKTOK_CLIENT_KEY", "").strip()
     scopes     = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
     base_url   = _get_public_base_url()
-    if not client_key or not base_url:
-        return ""
+    if not client_key or not base_url: return ""
     redirect_uri = f"{base_url}/"
     state = st.session_state.get("_tiktok_state") or uuid.uuid4().hex
     st.session_state["_tiktok_state"] = state
@@ -100,8 +96,7 @@ def _read_license() -> Tuple[str, bool]:
     try:
         if LICENSE_FILE.exists():
             key = LICENSE_FILE.read_text(encoding="utf-8").strip()
-            if key and key.upper() != "DEMO":
-                return key, True
+            if key and key.upper() != "DEMO": return key, True
     except Exception:
         pass
     return "", False
@@ -252,7 +247,6 @@ def _looks_like_xlsx(p: Path) -> bool:
     except Exception:
         return False
 
-
 @st.cache_data(show_spinner=False, ttl=600, hash_funcs={Path: lambda p: (p.stat().st_mtime, p.stat().st_size)})
 def _smart_read_any(path_or_file) -> pd.DataFrame:
     try:
@@ -280,7 +274,6 @@ def _smart_read_any(path_or_file) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-
 def _nk(s: str) -> str:
     import unicodedata
     s = unicodedata.normalize("NFKD", str(s))
@@ -290,13 +283,11 @@ def _nk(s: str) -> str:
     s = re.sub(r"[^a-z0-9]", "", s)
     return s
 
-
 def _pick(lower: dict, *keys):
     for k in keys:
         if k in lower:
             return lower[k]
     return None
-
 
 def _to_int_safe(x):
     if pd.isna(x):
@@ -315,14 +306,13 @@ def _to_int_safe(x):
     except Exception:
         return np.nan
 
-
 def _parse_nl_date(s):
     if pd.isna(s):
         return None
     txt = str(s).strip().lower().strip(" '\"\t\r\n,.;")
     months = {
         "januari": 1, "februari": 2, "maart": 3, "april": 4, "mei": 5, "juni": 6,
-        "juli": 7, "augustus": 8, "september": 9, "oktober": 10, "november": 11, "december": 12
+        "juli": 7, "augustus": 8, "september": 9, "oktober": 10, "november": 12 if False else 11, "december": 12
     }
     m = re.search(rf"(\d{{1,2}})\s*({'|'.join(months.keys())})", txt)
     if m:
@@ -336,11 +326,9 @@ def _parse_nl_date(s):
     except Exception:
         return None
 
-
 def _is_tiktok_url(u: str) -> bool:
     u = str(u).strip().lower()
     return u.startswith("http") and "tiktok.com" in u
-
 
 def _to_local(series_or_str):
     ts = pd.to_datetime(series_or_str, errors="coerce", utc=True)
@@ -348,7 +336,6 @@ def _to_local(series_or_str):
         return ts.tz_convert(TZ)
     except Exception:
         return ts
-
 
 def normalize_per_post(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
@@ -405,18 +392,14 @@ def normalize_per_post(df: pd.DataFrame) -> pd.DataFrame:
     keep = ["Hashtags", "Video link", "Views", "Likes", "Comments", "Shares", "Datum"]
     return d[keep].copy()
 
-
 def add_kpis(df: pd.DataFrame) -> pd.DataFrame:
     """Voegt Like/Comment/Share rates, Engagement %, Velocity, Recency, Score en Virality toe."""
     if df is None or df.empty:
         return pd.DataFrame()
 
     d = df.copy()
-
-    # Zorg dat basis-kolommen bestaan
     for c in ["Views", "Likes", "Comments", "Shares"]:
-        if c not in d.columns:
-            d[c] = np.nan
+        if c not in d.columns: d[c] = np.nan
 
     views = pd.to_numeric(d["Views"], errors="coerce")
     likes = pd.to_numeric(d["Likes"], errors="coerce")
@@ -424,24 +407,21 @@ def add_kpis(df: pd.DataFrame) -> pd.DataFrame:
     shares = pd.to_numeric(d["Shares"], errors="coerce")
 
     denom = views.replace(0, np.nan)
-    d["Like rate"] = (likes / denom).fillna(0.0)
+    d["Like rate"]    = (likes    / denom).fillna(0.0)
     d["Comment rate"] = (comments / denom).fillna(0.0)
-    d["Share rate"] = (shares / denom).fillna(0.0)
+    d["Share rate"]   = (shares   / denom).fillna(0.0)
     d["Engagement %"] = d["Like rate"] + d["Comment rate"] + d["Share rate"]
 
-    # Datum tz-naive maken vóór berekeningen
     ds = pd.to_datetime(d.get("Datum"), errors="coerce")
-    try:
-        ds = ds.dt.tz_localize(None)
-    except Exception:
-        pass
+    try: ds = ds.dt.tz_localize(None)
+    except Exception: pass
 
     today = pd.Timestamp.today().normalize()
     days = (today - ds).dt.days
     days = days.clip(lower=0).fillna(7).replace(0, 1)
 
     d["Velocity"] = (likes / days).fillna(0.0)
-    d["Recency"] = np.exp(-days / 90.0)
+    d["Recency"]  = np.exp(-days / 90.0)
 
     def _mm(x: pd.Series) -> pd.Series:
         x = x.astype(float)
@@ -463,7 +443,6 @@ def add_kpis(df: pd.DataFrame) -> pd.DataFrame:
     d["Virality"] = (d["Score"] * 100).round(0)
     return d
 
-
 @st.cache_data(show_spinner=False, ttl=600)
 def trending_hashtags(d: pd.DataFrame, days_window: int = 14) -> pd.DataFrame:
     if d is None or d.empty:
@@ -471,148 +450,93 @@ def trending_hashtags(d: pd.DataFrame, days_window: int = 14) -> pd.DataFrame:
 
     df = d.copy()
     df["Datum"] = pd.to_datetime(df["Datum"], errors="coerce")
-    # tz-naive voor consistente vergelijkingen
-    try:
-        df["Datum"] = df["Datum"].dt.tz_localize(None)
-    except Exception:
-        pass
+    try: df["Datum"] = df["Datum"].dt.tz_localize(None)
+    except Exception: pass
     df = df.dropna(subset=["Datum"])
-    if df.empty:
-        return pd.DataFrame()
+    if df.empty: return pd.DataFrame()
 
     last_date = df["Datum"].max().normalize()
     p2_start = last_date - pd.Timedelta(days=days_window - 1)
-    p1_end = p2_start - pd.Timedelta(days=1)
+    p1_end   = p2_start - pd.Timedelta(days=1)
     p1_start = p1_end - pd.Timedelta(days=days_window - 1)
 
     tmp = df.assign(tag=df["Hashtags"].fillna("").str.split()).explode("tag")
     tmp = tmp[tmp["tag"].astype(str).str.startswith("#", na=False)]
-    if tmp.empty:
-        return pd.DataFrame()
+    if tmp.empty: return pd.DataFrame()
 
-    p1 = tmp[(tmp["Datum"] >= p1_start) & (tmp["Datum"] <= p1_end)]
-    p2 = tmp[(tmp["Datum"] >= p2_start) & (tmp["Datum"] <= last_date)]
+    p1 = tmp[(tmp["Datum"]>=p1_start) & (tmp["Datum"]<=p1_end)]
+    p2 = tmp[(tmp["Datum"]>=p2_start) & (tmp["Datum"]<=last_date)]
 
-    g1 = p1.groupby("tag").agg(avg_views=("Views", "mean"), cnt=("Views", "count"))
-    g2 = p2.groupby("tag").agg(avg_views=("Views", "mean"), cnt=("Views", "count"))
+    g1 = p1.groupby("tag").agg(avg_views=("Views","mean"), cnt=("Views","count"))
+    g2 = p2.groupby("tag").agg(avg_views=("Views","mean"), cnt=("Views","count"))
 
     out = g1.join(g2, how="outer", lsuffix="_prev", rsuffix="_curr").fillna(0)
     prev = pd.to_numeric(out["avg_views_prev"], errors="coerce").fillna(0.0)
     curr = pd.to_numeric(out["avg_views_curr"], errors="coerce").fillna(0.0)
-    out["growth_%"] = np.where(prev > 0, (curr - prev) / prev * 100.0, 0.0)
-
-    out = out[out["cnt_curr"] >= 3].sort_values(
-        ["growth_%", "avg_views_curr", "cnt_curr"], ascending=[False, False, False]
-    )
+    out["growth_%"] = np.where(prev>0, (curr-prev)/prev*100.0, 0.0)
+    out = out[out["cnt_curr"] >= 3].sort_values(["growth_%","avg_views_curr","cnt_curr"], ascending=[False,False,False])
     return out
 
-
 def _sparkline(series: pd.Series, width=120, height=28):
-    if not HAS_ALTAIR:
-        return None
-    df_s = pd.DataFrame({
-        "x": np.arange(len(series)),
-        "y": pd.to_numeric(series, errors="coerce").fillna(method="ffill").fillna(0.0),
-    })
-    return (
-        alt.Chart(df_s)
-        .mark_line()
-        .encode(x="x:Q", y="y:Q")
-        .properties(width=width, height=height)
-        .configure_axis(disable=True)
-    )
-
+    if not HAS_ALTAIR: return None
+    df_s = pd.DataFrame({"x": np.arange(len(series)), "y": pd.to_numeric(series, errors="coerce").fillna(method="ffill").fillna(0.0)})
+    return alt.Chart(df_s).mark_line().encode(x="x:Q", y="y:Q").properties(width=width, height=height).configure_axis(disable=True)
 
 def _best_hours(d: pd.DataFrame, n: int = 3) -> List[int]:
-    if d is None or d.empty:
-        return [19, 20, 18][:n]
-
+    if d is None or d.empty: return [19, 20, 18][:n]
     dt = pd.to_datetime(d["Datum"], errors="coerce")
-    # tz-naive
-    try:
-        dt = dt.dt.tz_localize(None)
-    except Exception:
-        pass
-
+    try: dt = dt.dt.tz_localize(None)
+    except Exception: pass
     v = pd.to_numeric(d["Views"], errors="coerce")
-    v_cap = v.clip(upper=v.quantile(0.95))  # outliers dempen
-
+    v_cap = v.clip(upper=v.quantile(0.95))
     days_ago = (pd.Timestamp.today().normalize() - dt.dt.normalize()).dt.days.clip(lower=0).fillna(30)
     recent_w = np.exp(-(days_ago / 30.0))
     hrs = dt.dt.hour.fillna(12).astype(int)
-
     score = (v_cap * recent_w).groupby(hrs).median().sort_values(ascending=False)
     best = score.head(max(1, n)).index.tolist()
     return best or [19, 20, 18][:n]
 
-
 def _should_sync_hourly() -> bool:
     try:
-        if not SYNC_STATE_FILE.exists():
-            return True
+        if not SYNC_STATE_FILE.exists(): return True
         ts = float(SYNC_STATE_FILE.read_text().strip() or "0")
         return (datetime.utcnow().timestamp() - ts) > 3600
-    except Exception:
-        return True
-
+    except Exception: return True
 
 def _mark_synced():
-    try:
-        SYNC_STATE_FILE.write_text(str(datetime.utcnow().timestamp()))
-    except Exception:
-        pass
-
+    try: SYNC_STATE_FILE.write_text(str(datetime.utcnow().timestamp()))
+    except Exception: pass
 
 def run_manual_fetch() -> dict:
     _mark_synced()
-    if LATEST_FILE.exists():
-        return {"ok": True, "msg": "Gegevens ververst."}
-    else:
-        return {"ok": True, "msg": "Klaar. (Laad demo of upload CSV om data te zien.)"}
-
+    if LATEST_FILE.exists(): return {"ok": True, "msg": "Gegevens ververst."}
+    else: return {"ok": True, "msg": "Klaar. (Laad demo of upload CSV om data te zien.)"}
 
 def _read_queue() -> List[dict]:
     try:
-        if POST_QUEUE_FILE.exists():
-            return json.loads(POST_QUEUE_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        pass
+        if POST_QUEUE_FILE.exists(): return json.loads(POST_QUEUE_FILE.read_text(encoding="utf-8"))
+    except Exception: pass
     return []
 
-
-def _write_queue(items: List[dict]):
-    POST_QUEUE_FILE.write_text(json.dumps(items, indent=2), encoding="utf-8")
-
+def _write_queue(items: List[dict]): POST_QUEUE_FILE.write_text(json.dumps(items, indent=2), encoding="utf-8")
 
 def queue_post(caption: str, hashtags: str, hour: int):
     items = _read_queue()
-    items.append({
-        "id": uuid.uuid4().hex[:8],
-        "caption": caption,
-        "hashtags": hashtags,
-        "hour": int(hour),
-        "status": "pending"
-    })
+    items.append({"id": uuid.uuid4().hex[:8], "caption": caption, "hashtags": hashtags, "hour": int(hour), "status": "pending"})
     _write_queue(items)
-
 
 def approve_and_post(item_id: str) -> bool:
     items = _read_queue()
     for it in items:
         if it["id"] == item_id:
-            it["status"] = "posted"
-            _write_queue(items)
-            return True
+            it["status"] = "posted"; _write_queue(items); return True
     return False
-
 
 def undo_post(item_id: str) -> bool:
     items = _read_queue()
     for it in items:
         if it["id"] == item_id and it["status"] == "posted":
-            it["status"] = "pending"
-            _write_queue(items)
-            return True
+            it["status"] = "pending"; _write_queue(items); return True
     return False
 
 # =============================== I18N / Tekst ================================
@@ -635,7 +559,7 @@ with st.sidebar:
         st.info("🔓 Je draait **DEMO** (7 dagen). Sommige functies zijn vergrendeld.")
         st.link_button("✨ Ontgrendel PRO", LEMON_CHECKOUT_URL, use_container_width=True)
 
-    # TikTok koppeling (vriendelijke hints)
+    # TikTok koppeling
     st.markdown("### 🔗 TikTok koppelen")
     _login_url = build_tiktok_auth_url()
     if _login_url:
@@ -645,14 +569,11 @@ with st.sidebar:
     else:
         base = getconf("APP_PUBLIC_URL", "").strip() or "(leeg)"
         key  = getconf("TIKTOK_CLIENT_KEY", "").strip()
-        if not base:
-            st.warning("APP_PUBLIC_URL ontbreekt. Lokaal mag `http://localhost:8501`.")
+        if not base: st.warning("APP_PUBLIC_URL ontbreekt. Lokaal mag `http://localhost:8501`.")
         elif not (base.startswith("https://") or (DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://"))):
             st.warning("APP_PUBLIC_URL moet https (of http://localhost bij lokaal testen).")
-        if not key:
-            st.warning("TIKTOK_CLIENT_KEY ontbreekt.")
+        if not key: st.warning("TIKTOK_CLIENT_KEY ontbreekt.")
         st.caption("Zet **APP_PUBLIC_URL** en **TIKTOK_CLIENT_KEY** als env vars of in `.streamlit/secrets.toml`.")
-
     if st.session_state.get("tik_code"):
         st.caption("Status: OAuth code ontvangen ✅ (alleen login & display).")
     st.markdown("---")
@@ -725,7 +646,7 @@ with st.expander("Uitleg in het kort (altijd zichtbaar)", expanded=False):
 2) Klik **Start analyse** — wij kijken: *wat werkt? wanneer posten?*  
 3) **A/B-planner**: test 2 hooks, 2 hashtag-mixen en 2 tijden.  
 4) **Playbook & Plan**: simpel weekplan met beste tijden.  
-5) *(PRO)* **PDF/e-mail**, **alerts** en **auto-post (review)**.  
+5) *(PRO)* **AI Coach**, **Caption generator**, **Chat-assistent**, **PDF/e-mail**.
 """)
 
 # =============================== Data load ===================================
@@ -758,43 +679,32 @@ def _kpi_row(d: pd.DataFrame, key_ns: str = "top"):
         sel = st.selectbox("Periode", period_options, index=0, key=f"kpi_range_{key_ns}")
     with kpi_left:
         dt = pd.to_datetime(d["Datum"], errors="coerce")
-        # maak tz-aware datums tz-naive vóór we met 'now' vergelijken
-        try:
-            dt = dt.dt.tz_localize(None)
-        except Exception:
-            pass
+        try: dt = dt.dt.tz_localize(None)
+        except Exception: pass
         now = pd.Timestamp.today().normalize()
-
-        cur_mask  = (dt >= (now - pd.Timedelta(days=sel))) & (dt <= now + pd.Timedelta(days=1))
-        prev_mask = (dt >= (now - pd.Timedelta(days=2*sel))) & (dt <  (now - pd.Timedelta(days=sel)))
-
-        def _sum(df, col):  return int(pd.to_numeric(df[col], errors="coerce").sum(skipna=True))
+        cur_mask = (dt >= (now - pd.Timedelta(days=sel))) & (dt <= now + pd.Timedelta(days=1))
+        prev_mask = (dt >= (now - pd.Timedelta(days=2*sel))) & (dt < (now - pd.Timedelta(days=sel)))
+        def _sum(df, col): return int(pd.to_numeric(df[col], errors="coerce").sum(skipna=True))
         def _mean(df, col): return float(pd.to_numeric(df[col], errors="coerce").mean(skipna=True))
-
         cur  = d.loc[cur_mask]
         prev = d.loc[prev_mask]
-
-        total_views_cur  = _sum(cur,  "Views")         if not cur.empty  else 0
-        total_views_prev = _sum(prev, "Views")         if not prev.empty else 0
-        avg_eng_cur      = (_mean(cur,  "Engagement %") * 100) if not cur.empty  else 0.0
-        avg_eng_prev     = (_mean(prev, "Engagement %") * 100) if not prev.empty else 0.0
-        vir_cur          = _mean(cur,  "Virality")     if not cur.empty  else 0.0
-        vir_prev         = _mean(prev, "Virality")     if not prev.empty else 0.0
-
+        total_views_cur  = _sum(cur, "Views") if not cur.empty else 0
+        total_views_prev = _sum(prev, "Views") if not prev.empty else 0
+        avg_eng_cur  = (_mean(cur, "Engagement %") * 100) if not cur.empty else 0.0
+        avg_eng_prev = (_mean(prev, "Engagement %") * 100) if not prev.empty else 0.0
+        vir_cur  = _mean(cur, "Virality") if not cur.empty else 0.0
+        vir_prev = _mean(prev, "Virality") if not prev.empty else 0.0
         d1, a1 = _fmt_delta(total_views_cur, total_views_prev)
-        d2, a2 = _fmt_delta(avg_eng_cur,    avg_eng_prev)
-        d3, a3 = _fmt_delta(vir_cur,        vir_prev)
-
+        d2, a2 = _fmt_delta(avg_eng_cur, avg_eng_prev)
+        d3, a3 = _fmt_delta(vir_cur, vir_prev)
         c1, c2, c3 = st.columns(3)
         def _card(title, value, delta_str, arrow, icon):
             color = "#16a34a" if arrow == "↑" else ("#dc2626" if arrow == "↓" else "#6b7280")
             html = f"<div class='kpi-card'><div class='kpi-label'>{title}</div><div class='kpi-value'>{icon} {value} <span style='color:{color}'>({delta_str if delta_str!='—' else '—'})</span></div></div>"
             return html
-
         c1.markdown(_card(f"Totaal views ({sel}d)", f"{total_views_cur:,}".replace(",", "."), d1, a1, "👁️"), unsafe_allow_html=True)
         c2.markdown(_card(f"Gem. reactie-score ({sel}d)", f"{avg_eng_cur:.2f}%", d2, a2, "💬"), unsafe_allow_html=True)
         c3.markdown(_card(f"Virale kans ({sel}d)", f"{vir_cur:.0f}/100", d3, a3, "🔥"), unsafe_allow_html=True)
-
         if HAS_ALTAIR and not cur.empty:
             s1 = _sparkline(pd.to_numeric(cur["Views"], errors="coerce"))
             s2 = _sparkline(pd.to_numeric(cur["Engagement %"], errors="coerce") * 100)
@@ -804,6 +714,26 @@ def _kpi_row(d: pd.DataFrame, key_ns: str = "top"):
             if s3: c3.altair_chart(s3, use_container_width=False)
 
 # ========================== Hero + Aanbeveling ===============================
+def _confidence_from_data(d: pd.DataFrame) -> int:
+    if d is None or d.empty: return 0
+    dc = d.copy()
+    dc["Datum"] = pd.to_datetime(dc.get("Datum"), errors="coerce")
+    try: dc["Datum"] = dc["Datum"].dt.tz_localize(None)
+    except Exception: pass
+    v = pd.to_numeric(dc.get("Views"), errors="coerce")
+    n = int(v.notna().sum()); size_score = float(np.clip(n/30.0, 0, 1))
+    now = pd.Timestamp.today().normalize()
+    n_recent = int((dc["Datum"] >= (now - pd.Timedelta(days=30))).sum())
+    recency_score = float(np.clip(n_recent/15.0, 0, 1))
+    have = sum(c in dc.columns for c in ["Views","Likes","Comments","Shares","Datum"])
+    coverage = have/5.0
+    v_clean = v.dropna()
+    if len(v_clean)>=5 and v_clean.mean()>0:
+        stability = 1.0 - float(np.clip(v_clean.std()/(v_clean.mean()+1e-9), 0, 1))
+    else: stability = 0.5
+    conf = 100*(0.4*size_score + 0.3*recency_score + 0.2*coverage + 0.1*stability)
+    return int(np.clip(conf, 0, 100))
+
 def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
     with st.container(border=True):
         st.markdown(
@@ -819,7 +749,7 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
             _login_url_top = build_tiktok_auth_url()
             if _login_url_top:
                 st.link_button("Log in met TikTok", _login_url_top, use_container_width=True)
-            if st.button("🚀 Laat PostAi mijn TikToks bekijken", key="hero_analyse_btn", use_container_width=True, type="primary"):
+            if st.button("🚀 Start analyse", key="hero_analyse_btn", use_container_width=True, type="primary"):
                 with st.spinner("We kijken wat werkt…"):
                     time.sleep(0.7); st.toast("✅ Analyse voltooid — aanbeveling geüpdatet.")
             st.caption("Duurt ± 3–5 sec. We checken *wat* en *wanneer* je het beste post.")
@@ -858,57 +788,248 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     st.write("Op basis van mediane views, deel-ratio en je topuren van de afgelopen 14 dagen.")
                 st.button("🔥 Voer aanbeveling uit", use_container_width=True)
 
-def _confidence_from_data(d: pd.DataFrame) -> int:
-    """Bepaalt de betrouwbaarheid van je dataset op basis van volledigheid, versheid en stabiliteit."""
-    if d is None or d.empty:
-        return 0
-
-    dc = d.copy()
-
-    # Datum parsen én tz strippen (tz-naive) vóór vergelijkingen met 'now'
-    dc["Datum"] = pd.to_datetime(dc.get("Datum"), errors="coerce")
-    try:
-        dc["Datum"] = dc["Datum"].dt.tz_localize(None)
-    except Exception:
-        pass
-
-    v = pd.to_numeric(dc.get("Views"), errors="coerce")
-    n = int(v.notna().sum())
-    size_score = float(np.clip(n / 30.0, 0, 1))
-
-    now = pd.Timestamp.today().normalize()
-    n_recent = int((dc["Datum"] >= (now - pd.Timedelta(days=30))).sum())
-    recency_score = float(np.clip(n_recent / 15.0, 0, 1))
-
-    have = sum(c in dc.columns for c in ["Views", "Likes", "Comments", "Shares", "Datum"])
-    coverage = have / 5.0
-
-    v_clean = v.dropna()
-    if len(v_clean) >= 5 and v_clean.mean() > 0:
-        stability = 1.0 - float(np.clip(v_clean.std() / (v_clean.mean() + 1e-9), 0, 1))
-    else:
-        stability = 0.5  # neutraal bij weinig data
-
-    conf = 100 * (0.4 * size_score + 0.3 * recency_score + 0.2 * coverage + 0.1 * stability)
-    return int(np.clip(conf, 0, 100))
-
 # ============================== Build & Hero ================================
 base_for_hero = normalize_per_post(df_raw)
 d_for_hero = add_kpis(base_for_hero) if not base_for_hero.empty else pd.DataFrame()
 try:
     ts = float(SYNC_STATE_FILE.read_text().strip()) if SYNC_STATE_FILE.exists() else 0
     last_sync = datetime.fromtimestamp(ts).strftime("%d-%m %H:%M") if ts else "—"
-except Exception:
-    last_sync = "—"
+except Exception: last_sync = "—"
 bron = "DEMO" if st.session_state.get("demo_active") else ("CSV/XLSX" if LATEST_FILE.exists() else "—")
 
 _hero_and_nba(d_for_hero, last_sync, bron)
 _kpi_row(d_for_hero, key_ns="top")
 st.divider()
 
+# ================================ LLM / AI Core ==============================
+# We ondersteunen OpenAI via openai-py of HTTP fallback.
+def _has_openai() -> bool:
+    return bool(getconf("OPENAI_API_KEY", ""))
+
+def _default_model() -> str:
+    return getconf("OPENAI_MODEL", "gpt-4o-mini")
+
+def _ask_llm(system: str, user: str, temperature: float = 0.4, max_tokens: int = 900) -> str:
+    api_key = getconf("OPENAI_API_KEY", "")
+    if not api_key:
+        return "⚠️ Geen OPENAI_API_KEY gevonden. Voeg je key toe in st.secrets."
+    model = _default_model()
+    # Probeer de moderne SDK
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            messages=[
+                {"role":"system","content":system},
+                {"role":"user","content":user}
+            ]
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        # Fallback via requests (unofficial minimal)
+        import requests
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type":"application/json"}
+        payload = {
+            "model": model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "messages":[
+                {"role":"system","content":system},
+                {"role":"user","content":user}
+            ]
+        }
+        r = requests.post(url, headers=headers, json=payload, timeout=60)
+        if r.status_code != 200:
+            return f"⚠️ OpenAI API fout ({r.status_code}): {r.text[:200]}"
+        data = r.json()
+        try:
+            return data["choices"][0]["message"]["content"].strip()
+        except Exception:
+            return "⚠️ Kon geen geldig antwoord ophalen van het model."
+
+def _summarize_dataset_for_context(d: pd.DataFrame, top_n: int = 30) -> str:
+    """Kleine contextstring met high-level cijfers voor de AI (beperkt tokens)."""
+    if d is None or d.empty:
+        return "GEEN_DATA"
+    df = d.copy()
+    df["Datum"] = pd.to_datetime(df["Datum"], errors="coerce")
+    df = df.sort_values("Datum", ascending=False).head(top_n)
+    views = pd.to_numeric(df["Views"], errors="coerce").fillna(0)
+    likes = pd.to_numeric(df["Likes"], errors="coerce").fillna(0)
+    comments = pd.to_numeric(df["Comments"], errors="coerce").fillna(0)
+    shares = pd.to_numeric(df["Shares"], errors="coerce").fillna(0)
+    like_rate = (likes / views.replace(0, np.nan)).fillna(0).mean()
+    share_rate = (shares / views.replace(0, np.nan)).fillna(0).mean()
+    best_hours = _best_hours(d, n=3)
+    top_tags = (df["Hashtags"].dropna().astype(str).str.split().explode()
+                .pipe(lambda s: s[s.str.startswith("#")])
+                .value_counts().head(5).index.tolist())
+    return (
+        f"posts_analyzed={len(df)}; mean_views={int(views.mean())}; "
+        f"like_rate_avg={like_rate:.3f}; share_rate_avg={share_rate:.3f}; "
+        f"best_hours={best_hours}; top_hashtags={top_tags}"
+    )
+
+# ---------------------------- Coach Memory (nieuw) ----------------------------
+def _load_coach_state() -> dict:
+    """Kennisbank + feedback + meta."""
+    if COACH_STATE_FILE.exists():
+        try:
+            return json.loads(COACH_STATE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"kb": [], "feedback": [], "accepted_tips": []}
+
+def _save_coach_state(state: dict) -> bool:
+    try:
+        COACH_STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+        return True
+    except Exception:
+        return False
+
+def add_kb_note(text: str, tags: List[str] | None = None):
+    stt = _load_coach_state()
+    stt["kb"].append({"id": uuid.uuid4().hex[:8], "text": text.strip(), "tags": tags or []})
+    _save_coach_state(stt)
+
+def add_feedback(prompt: str, tips_text: str, rating: int):
+    stt = _load_coach_state()
+    stt["feedback"].append({"ts": time.time(), "prompt": prompt, "tips": tips_text, "rating": int(rating)})
+    _save_coach_state(stt)
+
+def mark_tip_accepted(tip_text: str):
+    stt = _load_coach_state()
+    stt["accepted_tips"].append(tip_text.strip())
+    _save_coach_state(stt)
+
+def _rank_notes_simple(query: str, notes: List[dict], top_k: int = 5) -> List[dict]:
+    """Eenvoudige overlap-ranking (later eventueel embeddings)."""
+    if not query or not query.strip() or not notes: return []
+    q = set(re.findall(r"[a-z0-9#]+", _nk(query)))
+    scored = []
+    for n in notes:
+        t = _nk(n.get("text",""))
+        toks = set(re.findall(r"[a-z0-9#]+", t))
+        overlap = len(q & toks)
+        if overlap > 0:
+            scored.append((overlap, n))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [n for _, n in scored[:top_k]]
+
+# ---------------------------- AI Coach (Feature 1) ---------------------------
+def ai_coach_suggestions(d: pd.DataFrame, niche_hint: str = "", user_prompt: str = "") -> str:
+    ctx = _summarize_dataset_for_context(d, top_n=30)
+    stt = _load_coach_state()
+
+    # RAG: relevante notities ophalen
+    kb_hits = _rank_notes_simple(user_prompt or niche_hint or "coach", stt.get("kb", []), top_k=6)
+    kb_context = "\n".join(f"- {n['text']}" for n in kb_hits) if kb_hits else "(geen)"
+
+    # Few-shot uit geaccepteerde tips
+    accepted = stt.get("accepted_tips", [])[-3:]
+    fewshot = "\n".join(f"- {t}" for t in accepted) if accepted else "(geen)"
+
+    # adaptieve temperatuur o.b.v. recente feedback
+    last5 = stt.get("feedback", [])[-5:]
+    neg_rate = (sum(1 for f in last5 if f.get("rating") == 0) / max(1, len(last5)))
+    temp = 0.35 if neg_rate >= 0.4 else 0.4  # iets conservatiever bij veel 👎
+
+    sys = (
+        "Je bent een vriendelijke, concrete TikTok coach voor beginners. "
+        "Gebruik Jip-en-Janneke taal en geef ALTIJD precies 3 bullets en een korte afsluitende actie. "
+        "Focus op timing (uren/dagen), hooks/captions (hooks max 8–12 woorden), max 3 hashtags, lengte/structuur, en hergebruik van topcontent. "
+        "Weeg de kennisbank en eerder geaccepteerde tips mee waar relevant."
+    )
+    usr = (
+        f"Dataset samenvatting: {ctx}\n"
+        f"Niche/onderwerp: {niche_hint or 'onbekend'}\n"
+        f"Gebruikersvraag: {user_prompt or '—'}\n\n"
+        f"Kennisbank (relevant):\n{kb_context}\n\n"
+        f"Eerder geaccepteerde tips (few-shot):\n{fewshot}\n\n"
+        "Geef 3 direct uitvoerbare tips met cijfers/uren waar logisch. "
+        "Sluit af met één duidelijke actiestap."
+    )
+    return _ask_llm(sys, usr, temperature=temp, max_tokens=600)
+
+# ------------------ AI Caption & Hook generator (Feature 2) ------------------
+def ai_generate_captions(d: pd.DataFrame, topic: str, n_variants: int = 3, style: str = "hooky") -> List[str]:
+    ctx = _summarize_dataset_for_context(d, top_n=50)
+    # haal top hashtags uit dataset (max 3)
+    hash_df = (d.assign(_tag=d["Hashtags"].fillna("").str.split())
+                 .explode("_tag"))
+    hash_df = hash_df[hash_df["_tag"].astype(str).str.startswith("#", na=False)]
+    top_hashtags = []
+    if not hash_df.empty:
+        top_hashtags = (hash_df["_tag"].value_counts()
+                        .head(6).index.tolist())[:3]
+    sys = (
+        "Je bent een TikTok caption & hook generator. "
+        "Geef korte, pakkende hooks (max 8–12 woorden), en 1–2 zinnen caption. "
+        "Gebruik max 3 relevante hashtags. Geen emoji-spam."
+    )
+    usr = (
+        f"Topic: {topic}\n"
+        f"Dataset context: {ctx}\n"
+        f"Stijl: {style}\n"
+        f"Voorkeur-hashtags (op basis van data): {', '.join(top_hashtags) if top_hashtags else '(geen)'}\n"
+        f"Geef {n_variants} varianten. Formaat per variant: HOOK — Caption — Hashtags"
+    )
+    raw = _ask_llm(sys, usr, temperature=0.8, max_tokens=600)
+    # Probeer simpele parsing naar lijst
+    lines = [l.strip() for l in raw.split("\n") if l.strip()]
+    # groepeer regels die eruitzien als varianten
+    variants = []
+    buff = []
+    for ln in lines:
+        if re.match(r"^\d+[\).\-]\s*", ln) and buff:
+            variants.append(" ".join(buff).strip()); buff = [ln]
+        else:
+            buff.append(ln)
+    if buff: variants.append(" ".join(buff).strip())
+    # fallback: als niets geparsed, geef raw terug als 1 item
+    if not variants:
+        variants = [raw]
+    # beperk tot n_variants
+    return variants[:n_variants]
+
+# -------------------------- Chat met PostAi (Feature 3) ----------------------
+def ai_chat_answer(d: pd.DataFrame, question: str) -> str:
+    ctx = _summarize_dataset_for_context(d, top_n=60)
+    # Mini “facts” die helpen bruikbare, concrete antwoorden te geven
+    if d is None or d.empty:
+        facts = "GEEN_DATA"
+    else:
+        df = d.copy()
+        df["Datum"] = pd.to_datetime(df["Datum"], errors="coerce")
+        df = df.sort_values("Datum", ascending=False).head(60)
+        views = pd.to_numeric(df["Views"], errors="coerce").fillna(0)
+        top_view = int(views.max()) if len(views) else 0
+        med_view = int(views.median()) if len(views) else 0
+        best_hours = _best_hours(d, n=3)
+        facts = f"top_views={top_view}; median_views={med_view}; best_hours={best_hours}"
+    sys = (
+        "Je bent een data-assistent die antwoorden geeft op basis van de meegegeven dataset. "
+        "Antwoord kort en duidelijk. Als iets niet exact te zeggen is, geef een eenvoudige vuistregel."
+    )
+    usr = (
+        f"Vraag: {question}\n"
+        f"Dataset_context: {ctx}\n"
+        f"Kerncijfers: {facts}\n"
+        "Geef een kort antwoord (2–5 zinnen), en sluit af met één praktische vervolgstap."
+    )
+    return _ask_llm(sys, usr, temperature=0.4, max_tokens=450)
+
 # ================================ Tabs ======================================
-tabs = st.tabs(["🧠 Slimme assistent","📊 Resultaten","🏷️ Hashtags","🔥 Wat werkt nu?","⚖️ Vergelijk","🗃️ Archief","🎯 A/B-planner","💡 Ideeën","📅 Playbook & Plan","⚙️ Instellingen"])
-tab_assist, tab_results, tab_tags, tab_trend, tab_compare, tab_arch, tab_ab, tab_ideas, tab_play, tab_settings = tabs
+tabs = st.tabs([
+    "🧠 Slimme assistent","📊 Resultaten","🏷️ Hashtags","🔥 Wat werkt nu?","⚖️ Vergelijk",
+    "🗃️ Archief","🎯 A/B-planner","💡 Ideeën","🤖 AI Coach","🪄 Captions & Hooks","💬 Chat met PostAi","📅 Playbook & Plan","⚙️ Instellingen"
+])
+(tab_assist, tab_results, tab_tags, tab_trend, tab_compare, tab_arch,
+ tab_ab, tab_ideas, tab_coach, tab_caps, tab_chat, tab_play, tab_settings) = tabs
 
 # ---------------------------- Slimme assistent ------------------------------
 with tab_assist:
@@ -923,7 +1044,7 @@ with tab_assist:
             st.checkbox("Eerste A/B test gepland", value=False, disabled=True)
             st.checkbox("Alerts ingesteld (e-mail)", value=False, disabled=True)
     else:
-        st.markdown("Deze assistent vertelt je **wat** en **wanneer** je vandaag het best post. Simpel zat 😊")
+        st.markdown("Deze assistent vertelt je **wat** en **wanneer** je vandaag het best post. Simpel 😊")
         st.divider()
         q = _read_queue()
         with st.container(border=True):
@@ -1063,7 +1184,7 @@ with tab_ab:
             rows.append([label, hook, tags, hr, pvs(hook, tags, hr)])
         combo = pd.DataFrame(rows, columns=["Variant","Hook (tekst)","Hashtag-mix","Uur","PVS"])
         st.dataframe(combo, use_container_width=True, hide_index=True)
-        if IS_PRO and True:
+        if IS_PRO:
             st.markdown("### In review-wachtrij zetten")
             pick = st.selectbox("Welke variant toevoegen?", ["A","B"])
             if st.button(tr("add_queue")):
@@ -1092,6 +1213,141 @@ with tab_ideas:
             else:
                 st.markdown("<div class='locked' style='border-radius:12px; height:44px;'></div>", unsafe_allow_html=True)
             st.divider()
+
+# ---------------------------- 🤖 AI Coach (UPGRADED) ------------------------
+# helper: rerun werkt in nieuwe én oude Streamlit
+def _rerun():
+    try:
+        st.rerun()
+    except AttributeError:
+        try:
+            st.experimental_rerun()  # fallback voor oudere versies
+        except Exception:
+            pass
+
+# ---------------------------- 🤖 AI Coach (UPGRADED) ------------------------
+with tab_coach:
+    st.subheader("🤖 AI Coach — persoonlijk advies")
+    if not _has_openai():
+        st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om de AI Coach te gebruiken.")
+    else:
+        base = normalize_per_post(df_raw)
+        d = add_kpis(base) if not base.empty else pd.DataFrame()
+        if d.empty:
+            st.info("Nog geen data. Upload of laad de demo-set.")
+        else:
+            # 📚 Kennisbank invoer
+            with st.expander("📚 Coach leren (kennisbank)"):
+                kb_txt = st.text_area(
+                    "Voeg regels/notities toe voor de coach (do’s/don’ts, merkstem, formules, CTA’s)…",
+                    height=120,
+                    placeholder="Voorbeeld:\n- Gebruik max 3 hashtags, nooit #foryou.\n- Merkstem: direct, geen emoji-spam.\n- Hook-sjabloon: 'Dit gaat je X besparen in Y seconden'."
+                )
+                kb_tags = st.text_input("Tags (optioneel, komma-gescheiden)", value="brand, captions, hooks")
+                if st.button("➕ Voeg toe aan kennisbank"):
+                    if kb_txt.strip():
+                        add_kb_note(kb_txt.strip(), [t.strip() for t in kb_tags.split(",") if t.strip()])
+                        st.success("Toegevoegd aan kennisbank.")
+
+                st.caption("Laatste 5 kennisitems:")
+                kb_items = _load_coach_state().get("kb", [])
+                st.write("\n".join(f"• {n['text']}" for n in kb_items[-5:]) or "—")
+
+            # 🔎 Vraag & advies
+            niche = st.text_input("Niche (optioneel)", placeholder="psychologie, fashion, fitness…")
+            prefill = st.session_state.get("coach_q_prefill", "")
+            q_user = st.text_input(
+                "Waar heb je nu advies voor nodig?",
+                value=prefill,
+                placeholder="Bijv. betere hooks voor mijn dark psychology video’s"
+            )
+
+            if st.button("🧠 Vraag advies aan Coach", type="primary"):
+                with st.spinner("Coach denkt met je mee…"):
+                    tips = ai_coach_suggestions(d, niche_hint=niche, user_prompt=q_user)
+                st.markdown(tips)
+
+                colA, colB, colC = st.columns(3)
+                with colA:
+                    if st.button("👍 Helpt mij"):
+                        add_feedback(q_user, tips, rating=1)
+                        st.success("Top! Coach onthoudt dat dit werkte.")
+                with colB:
+                    if st.button("👎 Niet helpend"):
+                        add_feedback(q_user, tips, rating=0)
+                        st.info("Feedback opgeslagen. Volgende keer sturen we bij.")
+                with colC:
+                    if st.button("➕ Zet tip in wachtrij (19:00)"):
+                        first_line = tips.splitlines()[0] if tips else "Nieuwe tip"
+                        queue_post(first_line, "#tiktoknl", 19)
+                        mark_tip_accepted(first_line)
+                        st.success("Toegevoegd aan review-wachtrij.")
+
+            # ---- 🔧 Snelle prompts ----
+            st.markdown("#### 🔧 Snelle prompts")
+            c1, c2, c3 = st.columns(3)
+
+            if c1.button("Hooks verbeteren"):
+                st.session_state["coach_q_prefill"] = (
+                    "Geef 3 hook-verbeteringen voor mijn best presterende onderwerp."
+                )
+                _rerun()
+
+            if c2.button("Hashtag-mix"):
+                st.session_state["coach_q_prefill"] = (
+                    "Welke 3 hashtags werken nu het best en waarom?"
+                )
+                _rerun()
+
+            if c3.button("Posttijden"):
+                st.session_state["coach_q_prefill"] = (
+                    "Welke 3 posttijden bevelen we aan komende week?"
+                )
+                _rerun()
+
+            # 📌 Snelle info uit je data  ← LET OP: zelfde indent als 'Snelle prompts'
+            best = _best_hours(d, n=3)
+            st.caption(f"📌 Beste uren volgens je data: **{', '.join([f'{h:02d}:00' for h in best])}**")
+# ----------------------- 🪄 Captions & Hooks (NEW) -----------------------
+with tab_caps:
+    st.subheader("🪄 Caption & Hook generator")
+    if not _has_openai():
+        st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om de generator te gebruiken.")
+    else:
+        base = normalize_per_post(df_raw); d = add_kpis(base) if not base.empty else pd.DataFrame()
+        if d.empty:
+            st.info("Nog geen data. Upload of laad demo (we kunnen desnoods zonder, maar mét data zijn de captions beter).")
+        topic = st.text_input("Onderwerp/video-idee", placeholder="Bijv. Waarom 90% dit fout doet…")
+        style = st.selectbox("Stijl", ["hooky (kort & punchy)","informatief","conversational"], index=0)
+        n_var = st.slider("Aantal varianten", 1, 5, 3)
+        if st.button("✨ Genereer captions"):
+            if not topic.strip():
+                st.warning("Vul eerst een onderwerp in.")
+            else:
+                with st.spinner("Aan het bedenken…"):
+                    out = ai_generate_captions(d if not d.empty else pd.DataFrame(), topic=topic, n_variants=int(n_var), style=style.split()[0])
+                for i, var in enumerate(out, 1):
+                    st.markdown(f"**Variant {i}**")
+                    st.code(var)
+                st.caption("Tip: voeg je favoriete variant direct toe in de A/B-planner.")
+
+# -------------------------- 💬 Chat met PostAi (NEW) -----------------------
+with tab_chat:
+    st.subheader("💬 Chat met PostAi")
+    if not _has_openai():
+        st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om te chatten.")
+    else:
+        base = normalize_per_post(df_raw); d = add_kpis(base) if not base.empty else pd.DataFrame()
+        if d.empty:
+            st.info("Nog geen data. Upload of laad demo om gerichte antwoorden te krijgen.")
+        question = st.text_input("Stel je vraag (bijv. 'Wat is mijn beste posttijd?' of 'Wat verbeteren aan mijn captions?')")
+        if st.button("Vraag het PostAi"):
+            if not question.strip():
+                st.warning("Typ eerst een vraag.")
+            else:
+                with st.spinner("Kijken wat je data zegt…"):
+                    ans = ai_chat_answer(d if not d.empty else pd.DataFrame(), question)
+                st.markdown(ans)
 
 # --------------------------- Playbook & Plan -------------------------------
 with tab_play:
@@ -1157,10 +1413,8 @@ with tab_settings:
         cfg["data_retention_days"] = st.number_input("Data-retentie (dagen)", min_value=30, max_value=365, value=int(cfg.get("data_retention_days",180)))
         st.session_state["alert_email"] = st.text_input("Alert e-mail ontvanger", value=st.session_state.get("alert_email",""))
     if st.button("Bewaar instellingen"):
-        if _save_settings(cfg):
-            st.success("Instellingen opgeslagen.")
-        else:
-            st.error("Kon instellingen niet opslaan.")
+        if _save_settings(cfg): st.success("Instellingen opgeslagen.")
+        else: st.error("Kon instellingen niet opslaan.")
     st.markdown("---"); st.markdown("### Branding")
     b1, b2 = st.columns([1,1])
     with b1:
@@ -1192,7 +1446,7 @@ with tab_settings:
     if st.button("🧹 Verwijder lokale data (CSV/archief/state)"):
         try:
             for p in DATA_DIR.glob("*.csv"): p.unlink(missing_ok=True)
-            for p in [LATEST_FILE, ALERT_STATE_FILE, SYNC_STATE_FILE, POST_QUEUE_FILE]:
+            for p in [LATEST_FILE, ALERT_STATE_FILE, SYNC_STATE_FILE, POST_QUEUE_FILE, COACH_STATE_FILE]:
                 if p.exists(): p.unlink()
             st.success("Alle lokale data/states zijn verwijderd.")
         except Exception as e:
