@@ -10,6 +10,36 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+# Nieuwe OpenAI SDK (>=1.0)
+try:
+    from openai import OpenAI
+except ImportError:
+    raise RuntimeError("Voeg 'openai>=1.0.0' toe aan requirements.txt")
+
+# Key ophalen: eerst uit Streamlit secrets (lokaal), anders uit env (Render)
+try:
+    OPENAI_KEY = st.secrets["OPENAI_API_KEY"]
+except Exception:
+    OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+
+if not OPENAI_KEY:
+    st.warning("Voeg je OPENAI_API_KEY toe in Streamlit secrets of als Render environment variable.")
+    client = None
+else:
+    client = OpenAI(api_key=OPENAI_KEY)
+
+def ai_coach_reply(prompt: str) -> str:
+    """Kleine helper voor je AI Coach."""
+    if client is None:
+        return "⚠️ Geen OPENAI_API_KEY gevonden."
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "system", "content": "Je bent een nuchtere TikTok growth coach."},
+                  {"role": "user", "content": prompt}],
+        temperature=0.3,
+    )
+    return resp.choices[0].message.content.strip()
+
 # --------------------------------- Optioneel ---------------------------------
 try:
     import altair as alt
@@ -221,7 +251,7 @@ label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p { color: var(--text) !imp
 /* Confidence bar */
 .nbabarshell { margin:8px 0;height:8px;background:var(--track);border-radius:8px; position:relative; }
 .nbabar { height:100%;background:#22c55e;border-radius:8px; }
-.nbalabel { position:absolute; right:8px; top:-18px; font-size:.8rem; color:var(--muted); }
+.nbalabel { position:absolute; right:8px; top:-18px; font-size:.8rem; color:#6b7280; }
 
 /* Skeleton */
 .skeleton { position:relative; overflow:hidden; background:var(--skeleton); border-radius:14px; min-height:64px; border:1px solid var(--ring); }
@@ -312,7 +342,7 @@ def _parse_nl_date(s):
     txt = str(s).strip().lower().strip(" '\"\t\r\n,.;")
     months = {
         "januari": 1, "februari": 2, "maart": 3, "april": 4, "mei": 5, "juni": 6,
-        "juli": 7, "augustus": 8, "september": 9, "oktober": 10, "november": 12 if False else 11, "december": 12
+        "juli": 7, "augustus": 8, "september": 9, "oktober": 10, "november": 11, "december": 12
     }
     m = re.search(rf"(\d{{1,2}})\s*({'|'.join(months.keys())})", txt)
     if m:
@@ -794,7 +824,8 @@ d_for_hero = add_kpis(base_for_hero) if not base_for_hero.empty else pd.DataFram
 try:
     ts = float(SYNC_STATE_FILE.read_text().strip()) if SYNC_STATE_FILE.exists() else 0
     last_sync = datetime.fromtimestamp(ts).strftime("%d-%m %H:%M") if ts else "—"
-except Exception: last_sync = "—"
+except Exception: 
+    last_sync = "—"
 bron = "DEMO" if st.session_state.get("demo_active") else ("CSV/XLSX" if LATEST_FILE.exists() else "—")
 
 _hero_and_nba(d_for_hero, last_sync, bron)
@@ -802,7 +833,6 @@ _kpi_row(d_for_hero, key_ns="top")
 st.divider()
 
 # ================================ LLM / AI Core ==============================
-# We ondersteunen OpenAI via openai-py of HTTP fallback.
 def _has_openai() -> bool:
     return bool(getconf("OPENAI_API_KEY", ""))
 
@@ -814,11 +844,10 @@ def _ask_llm(system: str, user: str, temperature: float = 0.4, max_tokens: int =
     if not api_key:
         return "⚠️ Geen OPENAI_API_KEY gevonden. Voeg je key toe in st.secrets."
     model = _default_model()
-    # Probeer de moderne SDK
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        resp = client.chat.completions.create(
+        client_ = OpenAI(api_key=api_key)
+        resp = client_.chat.completions.create(
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -829,7 +858,6 @@ def _ask_llm(system: str, user: str, temperature: float = 0.4, max_tokens: int =
         )
         return resp.choices[0].message.content.strip()
     except Exception:
-        # Fallback via requests (unofficial minimal)
         import requests
         url = "https://api.openai.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type":"application/json"}
@@ -936,7 +964,7 @@ def ai_coach_suggestions(d: pd.DataFrame, niche_hint: str = "", user_prompt: str
     # adaptieve temperatuur o.b.v. recente feedback
     last5 = stt.get("feedback", [])[-5:]
     neg_rate = (sum(1 for f in last5 if f.get("rating") == 0) / max(1, len(last5)))
-    temp = 0.35 if neg_rate >= 0.4 else 0.4  # iets conservatiever bij veel 👎
+    temp = 0.35 if neg_rate >= 0.4 else 0.4
 
     sys = (
         "Je bent een vriendelijke, concrete TikTok coach voor beginners. "
@@ -959,13 +987,14 @@ def ai_coach_suggestions(d: pd.DataFrame, niche_hint: str = "", user_prompt: str
 def ai_generate_captions(d: pd.DataFrame, topic: str, n_variants: int = 3, style: str = "hooky") -> List[str]:
     ctx = _summarize_dataset_for_context(d, top_n=50)
     # haal top hashtags uit dataset (max 3)
-    hash_df = (d.assign(_tag=d["Hashtags"].fillna("").str.split())
-                 .explode("_tag"))
-    hash_df = hash_df[hash_df["_tag"].astype(str).str.startswith("#", na=False)]
+    if d is not None and not d.empty:
+        hash_df = (d.assign(_tag=d["Hashtags"].fillna("").str.split()).explode("_tag"))
+        hash_df = hash_df[hash_df["_tag"].astype(str).str.startswith("#", na=False)]
+    else:
+        hash_df = pd.DataFrame(columns=["_tag"])
     top_hashtags = []
     if not hash_df.empty:
-        top_hashtags = (hash_df["_tag"].value_counts()
-                        .head(6).index.tolist())[:3]
+        top_hashtags = (hash_df["_tag"].value_counts().head(6).index.tolist())[:3]
     sys = (
         "Je bent een TikTok caption & hook generator. "
         "Geef korte, pakkende hooks (max 8–12 woorden), en 1–2 zinnen caption. "
@@ -979,9 +1008,7 @@ def ai_generate_captions(d: pd.DataFrame, topic: str, n_variants: int = 3, style
         f"Geef {n_variants} varianten. Formaat per variant: HOOK — Caption — Hashtags"
     )
     raw = _ask_llm(sys, usr, temperature=0.8, max_tokens=600)
-    # Probeer simpele parsing naar lijst
     lines = [l.strip() for l in raw.split("\n") if l.strip()]
-    # groepeer regels die eruitzien als varianten
     variants = []
     buff = []
     for ln in lines:
@@ -990,16 +1017,13 @@ def ai_generate_captions(d: pd.DataFrame, topic: str, n_variants: int = 3, style
         else:
             buff.append(ln)
     if buff: variants.append(" ".join(buff).strip())
-    # fallback: als niets geparsed, geef raw terug als 1 item
     if not variants:
         variants = [raw]
-    # beperk tot n_variants
     return variants[:n_variants]
 
 # -------------------------- Chat met PostAi (Feature 3) ----------------------
 def ai_chat_answer(d: pd.DataFrame, question: str) -> str:
     ctx = _summarize_dataset_for_context(d, top_n=60)
-    # Mini “facts” die helpen bruikbare, concrete antwoorden te geven
     if d is None or d.empty:
         facts = "GEEN_DATA"
     else:
@@ -1024,12 +1048,8 @@ def ai_chat_answer(d: pd.DataFrame, question: str) -> str:
     return _ask_llm(sys, usr, temperature=0.4, max_tokens=450)
 
 # ================================ Tabs ======================================
-tabs = st.tabs([
-    "🧠 Slimme assistent","📊 Resultaten","🏷️ Hashtags","🔥 Wat werkt nu?","⚖️ Vergelijk",
-    "🗃️ Archief","🎯 A/B-planner","💡 Ideeën","🤖 AI Coach","🪄 Captions & Hooks","💬 Chat met PostAi","📅 Playbook & Plan","⚙️ Instellingen"
-])
-(tab_assist, tab_results, tab_tags, tab_trend, tab_compare, tab_arch,
- tab_ab, tab_ideas, tab_coach, tab_caps, tab_chat, tab_play, tab_settings) = tabs
+tabs = st.tabs(["🧠 Assistent", "📊 Analyse", "🎯 Strategie", "🗃️ Archief", "⚙️ Instellingen"])
+tab_assist, tab_analyse, tab_strategy, tab_arch, tab_settings = tabs
 
 # ---------------------------- Slimme assistent ------------------------------
 with tab_assist:
@@ -1066,84 +1086,71 @@ with tab_assist:
                         else:
                             r.markdown("✅ Geplaatst")
 
-# ------------------------------- Resultaten --------------------------------
-with tab_results:
-    st.subheader("📊 Resultaten")
+# ---- Analyse (Resultaten/Hashtags/Trends/Vergelijk) -------------------------
+with tab_analyse:
+    st.subheader("📊 Analyse")
     base = normalize_per_post(df_raw)
-    if base.empty: st.info(tr("no_data"))
-    else:
-        d = add_kpis(base); st.caption("Tip: filter op een hashtag om te zien wat wérkt.")
-        qtxt = st.text_input("Filter op hashtag (bijv. #love, #psychology)…").strip().lower()
-        filt = d if not qtxt else d[d["Hashtags"].fillna("").str.lower().str.contains(qtxt, regex=False)]
-        cols = [c for c in ["Hashtags","Views","Likes","Comments","Shares","Datum","Like rate","Share rate","Velocity","Score","Virality","Video link"] if c in filt.columns]
-        st.dataframe(filt[cols], use_container_width=True, hide_index=True)
-        st.markdown("#### Export")
-        dt_str = pd.Timestamp.today().strftime("%Y-%m-%d")
-        st.download_button("⬇️ Download data (HTML)", data=filt.to_html(index=False), file_name=f"tiktok_data_{dt_str}.html", mime="text/html")
-        if not IS_PRO:
-            st.caption("🔒 PDF-rapport is onderdeel van PRO.")
-            with st.container(border=True):
-                st.markdown("<div class='locked' style='border-radius:16px; padding:10px;'></div>", unsafe_allow_html=True)
-        else:
-            st.caption("PDF-rapport (placeholder) — integratie hier toevoegen.")
+    d = add_kpis(base) if not base.empty else pd.DataFrame()
 
-# -------------------------------- Hashtags ----------------------------------
-with tab_tags:
-    st.subheader("🏷️ Hashtags")
-    base = normalize_per_post(df_raw)
-    if base.empty: st.info(tr("no_data"))
-    else:
-        d = add_kpis(base)
-        tags = (d.assign(_tag=d["Hashtags"].fillna("").str.split()).explode("_tag"))
-        tags = tags[tags["_tag"].str.startswith("#", na=False)]
-        if tags.empty: st.info("Geen hashtags gevonden.")
+    with st.expander("Resultaten", expanded=True):
+        if d.empty: st.info(tr("no_data"))
         else:
-            agg = (tags.groupby("_tag", dropna=True)
-                      .agg(freq=("Views","count"), views=("Views","sum"),
-                           avg_like_rate=("Like rate","mean"), avg_share_rate=("Share rate","mean"),
-                           avg_score=("Score","mean"), avg_virality=("Virality","mean"))
-                      .sort_values(["freq","avg_score"], ascending=[False, False]))
-            st.dataframe(agg.head(30), use_container_width=True)
+            st.caption("Tip: filter op een hashtag om te zien wat wérkt.")
+            qtxt = st.text_input("Filter op hashtag (bijv. #love, #psychology)…").strip().lower()
+            filt = d if not qtxt else d[d["Hashtags"].fillna("").str.lower().str.contains(qtxt, regex=False)]
+            cols = [c for c in ["Hashtags","Views","Likes","Comments","Shares","Datum","Like rate","Share rate","Velocity","Score","Virality","Video link"] if c in filt.columns]
+            st.dataframe(filt[cols], use_container_width=True, hide_index=True)
 
-# ---------------------------- Wat werkt nu? ---------------------------------
-with tab_trend:
-    st.subheader("🔥 Wat werkt nu goed? (14d vs 14d)")
-    base = normalize_per_post(df_raw)
-    if base.empty: st.info(tr("no_data"))
-    else:
-        d = add_kpis(base); tr_df = trending_hashtags(d, days_window=14)
-        if tr_df is None or tr_df.empty: st.info("Niet genoeg datapunten om trends te berekenen.")
+    with st.expander("Hashtags"):
+        if d.empty: st.info(tr("no_data"))
         else:
-            st.dataframe(tr_df.head(25), use_container_width=True)
-            st.caption("We vergelijken de laatste 14 dagen met de 14 dagen daarvoor.")
+            tags = (d.assign(_tag=d["Hashtags"].fillna("").str.split()).explode("_tag"))
+            tags = tags[tags["_tag"].astype(str).str.startswith("#", na=False)]
+            if tags.empty: st.info("Geen hashtags gevonden.")
+            else:
+                agg = (tags.groupby("_tag", dropna=True)
+                          .agg(freq=("Views","count"), views=("Views","sum"),
+                               avg_like_rate=("Like rate","mean"), avg_share_rate=("Share rate","mean"),
+                               avg_score=("Score","mean"), avg_virality=("Virality","mean"))
+                          .sort_values(["freq","avg_score"], ascending=[False, False]))
+                st.dataframe(agg.head(30), use_container_width=True)
 
-# ---------------------------- Vergelijk perioden ----------------------------
-with tab_compare:
-    st.subheader("⚖️ Vergelijk twee perioden")
-    base = normalize_per_post(df_raw)
-    if base.empty: st.info(tr("no_data"))
-    else:
-        d = add_kpis(base)
-        colA, colB = st.columns(2)
-        with colA: a = st.date_input("Periode A", value=(), format="YYYY-MM-DD", key="pa")
-        with colB: b = st.date_input("Periode B", value=(), format="YYYY-MM-DD", key="pb")
-        def slice_period(rng: tuple) -> pd.DataFrame:
-            if not isinstance(rng, (list, tuple)) or len(rng) != 2: return pd.DataFrame()
-            start = pd.to_datetime(rng[0]); end = pd.to_datetime(rng[1]) + pd.Timedelta(days=1)
-            dt = pd.to_datetime(d["Datum"], errors="coerce"); mask = (dt >= start) & (dt < end)
-            return d.loc[mask].copy()
-        A = slice_period(a); B = slice_period(b)
-        def kpis(df: pd.DataFrame) -> tuple[int, float, float]:
-            if df is None or df.empty: return 0, 0.0, 0.0
-            tv = int(pd.to_numeric(df.get("Views", pd.Series(dtype=float)), errors="coerce").sum(skipna=True))
-            eng = float(pd.to_numeric(df.get("Engagement %", pd.Series(dtype=float)), errors="coerce").mean(skipna=True) * 100)
-            sc  = float(pd.to_numeric(df.get("Score", pd.Series(dtype=float)), errors="coerce").mean(skipna=True))
-            return tv, eng, sc
-        tvA, engA, scA = kpis(A); tvB, engB, scB = kpis(B)
-        k1, k2, k3 = st.columns(3)
-        k1.markdown(f"<div class='kpi-card'><div class='kpi-label'>Views A / B</div><div class='kpi-value'>👁️ {tvA:,} / {tvB:,}</div></div>".replace(",", "."), unsafe_allow_html=True)
-        k2.markdown(f"<div class='kpi-card'><div class='kpi-label'>Gem. reactie-score</div><div class='kpi-value'>📈 {engA:.2f}% / {engB:.2f}%</div></div>", unsafe_allow_html=True)
-        k3.markdown(f"<div class='kpi-card'><div class='kpi-label'>Δ Virale score (B − A)</div><div class='kpi-value'>{(scB - scA):+,.3f}</div></div>".replace(",", "."), unsafe_allow_html=True)
+    with st.expander("Wat werkt nu? (trends)"):
+        if d.empty: st.info(tr("no_data"))
+        else:
+            tr_df = trending_hashtags(d, days_window=14)
+            if tr_df is None or tr_df.empty: st.info("Niet genoeg datapunten om trends te berekenen.")
+            else:
+                st.dataframe(tr_df.head(25), use_container_width=True)
+                st.caption("We vergelijken de laatste 14 dagen met de 14 dagen daarvoor.")
+
+    with st.expander("Vergelijk perioden"):
+        if d.empty: st.info(tr("no_data"))
+        else:
+            colA, colB = st.columns(2)
+            with colA: a = st.date_input("Periode A", value=(), format="YYYY-MM-DD", key="pa")
+            with colB: b = st.date_input("Periode B", value=(), format="YYYY-MM-DD", key="pb")
+
+            def slice_period(rng: tuple) -> pd.DataFrame:
+                if not isinstance(rng, (list, tuple)) or len(rng) != 2: return pd.DataFrame()
+                start = pd.to_datetime(rng[0]); end = pd.to_datetime(rng[1]) + pd.Timedelta(days=1)
+                dt = pd.to_datetime(d["Datum"], errors="coerce"); mask = (dt >= start) & (dt < end)
+                return d.loc[mask].copy()
+
+            A = slice_period(a); B = slice_period(b)
+
+            def kpis(df: pd.DataFrame) -> tuple[int, float, float]:
+                if df is None or df.empty: return 0, 0.0, 0.0
+                tv = int(pd.to_numeric(df.get("Views", pd.Series(dtype=float)), errors="coerce").sum(skipna=True))
+                eng = float(pd.to_numeric(df.get("Engagement %", pd.Series(dtype=float)), errors="coerce").mean(skipna=True) * 100)
+                sc  = float(pd.to_numeric(df.get("Score", pd.Series(dtype=float)), errors="coerce").mean(skipna=True))
+                return tv, eng, sc
+
+            tvA, engA, scA = kpis(A); tvB, engB, scB = kpis(B)
+            k1, k2, k3 = st.columns(3)
+            k1.markdown(f"<div class='kpi-card'><div class='kpi-label'>Views A / B</div><div class='kpi-value'>👁️ {tvA:,} / {tvB:,}</div></div>".replace(",", "."), unsafe_allow_html=True)
+            k2.markdown(f"<div class='kpi-card'><div class='kpi-label'>Gem. reactie-score</div><div class='kpi-value'>📈 {engA:.2f}% / {engB:.2f}%</div></div>", unsafe_allow_html=True)
+            k3.markdown(f"<div class='kpi-card'><div class='kpi-label'>Δ Virale score (B − A)</div><div class='kpi-value'>{(scB - scA):+,.3f}</div></div>".replace(",", "."), unsafe_allow_html=True)
 
 # -------------------------------- Archief -----------------------------------
 with tab_arch:
@@ -1159,237 +1166,192 @@ with tab_arch:
     if table.empty: st.info("Nog geen bestanden in het archief.")
     else: st.dataframe(table, use_container_width=True, hide_index=True)
 
-# ------------------------------ A/B-planner ---------------------------------
-with tab_ab:
-    st.subheader("🎯 A/B-planner")
-    base = normalize_per_post(df_raw); d = add_kpis(base) if not base.empty else pd.DataFrame()
-    if d.empty: st.info("Upload of laad demo-data om te plannen.")
-    else:
-        col1, col2 = st.columns(2)
-        with col1:
-            hook_a = st.text_input("Hook A (de eerste zin)", value="Wat bijna niemand weet…")
-            tags_a = st.text_input("Hashtags A", value="#darkfacts #psychology #tiktoknl")
-            hour_a = st.number_input("Uur A", min_value=0, max_value=23, value=19)
-        with col2:
-            hook_b = st.text_input("Hook B", value="Dit klinkt raar, maar…")
-            tags_b = st.text_input("Hashtags B", value="#viral #mindblown #fyp")
-            hour_b = st.number_input("Uur B", min_value=0, max_value=23, value=21)
-        def pvs(hook, tags, hr):
-            base_vir = float(d["Virality"].tail(50).mean(skipna=True)) if "Virality" in d and not d["Virality"].empty else 50
-            hook_len = len(hook.split()); n_tags = len([t for t in tags.split() if t.startswith("#")])
-            hook_bonus = np.clip(hook_len*2.2, 0, 22); tags_bonus = np.clip(n_tags*3.0, 0, 18); hr_bonus = 22 if hr in _best_hours(d, n=3) else 8
-            return int(np.clip(base_vir*0.3 + hook_bonus + tags_bonus + hr_bonus, 0, 100))
-        rows = []
-        for label, hook, tags, hr in [("A", hook_a, tags_a, int(hour_a)), ("B", hook_b, tags_b, int(hour_b))]:
-            rows.append([label, hook, tags, hr, pvs(hook, tags, hr)])
-        combo = pd.DataFrame(rows, columns=["Variant","Hook (tekst)","Hashtag-mix","Uur","PVS"])
-        st.dataframe(combo, use_container_width=True, hide_index=True)
-        if IS_PRO:
-            st.markdown("### In review-wachtrij zetten")
-            pick = st.selectbox("Welke variant toevoegen?", ["A","B"])
-            if st.button(tr("add_queue")):
-                row = combo.loc[0 if pick=="A" else 1]
-                queue_post(row["Hook (tekst)"], row["Hashtag-mix"], int(row["Uur"]))
-                st.success("Toegevoegd aan wachtrij.")
-        else:
-            with st.container(border=True):
-                st.markdown("<div class='locked' style='border-radius:16px; padding:10px;'></div>", unsafe_allow_html=True)
+# ------------------------------ STRATEGIE -----------------------------------
+with tab_strategy:
+    st.subheader("🎯 Strategie")
+    base = normalize_per_post(df_raw)
+    d = add_kpis(base) if not base.empty else pd.DataFrame()
 
-# ---------------------------- Ideeëngenerator -------------------------------
-with tab_ideas:
-    st.subheader("💡 Ideeën")
-    topic = st.text_input("Onderwerp of thema? (bijv. manipulatie, angst, liefde, brein…)", placeholder="Typ hier je onderwerp…")
-    if topic:
-        st.caption("We geven je 3 kant-en-klare ideeën. Kort, duidelijk en meteen te filmen.")
-        for i in range(1,4):
-            st.markdown(f"**Idee {i}** — #{topic}")
-            cap = f"{topic}. Volg @Darkestpsycho voor meer dark psych facts."
-            tags = "#darkfacts #psychology #creepy #mindblown #tiktoknl"
-            prompt = (f"Korte 9:16 video over **{topic}**; donkere stijl; 5–8s; 1) hook shockfact 2) 2–3 beats 3) CTA 'Volg @Darkestpsycho'.")
-            st.code(cap); st.code(tags); st.code(prompt)
+    # A/B-planner
+    with st.expander("A/B-planner", expanded=True):
+        if d.empty: st.info("Upload of laad demo-data om te plannen.")
+        else:
+            col1, col2 = st.columns(2)
+            with col1:
+                hook_a = st.text_input("Hook A (de eerste zin)", value="Wat bijna niemand weet…")
+                tags_a = st.text_input("Hashtags A", value="#darkfacts #psychology #tiktoknl")
+                hour_a = st.number_input("Uur A", min_value=0, max_value=23, value=19, key="hourA")
+            with col2:
+                hook_b = st.text_input("Hook B", value="Dit klinkt raar, maar…")
+                tags_b = st.text_input("Hashtags B", value="#viral #mindblown #fyp")
+                hour_b = st.number_input("Uur B", min_value=0, max_value=23, value=21, key="hourB")
+            def pvs(hook, tags, hr):
+                base_vir = float(d["Virality"].tail(50).mean(skipna=True)) if "Virality" in d and not d["Virality"].empty else 50
+                hook_len = len(hook.split()); n_tags = len([t for t in tags.split() if t.startswith("#")])
+                hook_bonus = np.clip(hook_len*2.2, 0, 22); tags_bonus = np.clip(n_tags*3.0, 0, 18); hr_bonus = 22 if hr in _best_hours(d, n=3) else 8
+                return int(np.clip(base_vir*0.3 + hook_bonus + tags_bonus + hr_bonus, 0, 100))
+            rows = []
+            for label, hook, tags, hr in [("A", hook_a, tags_a, int(hour_a)), ("B", hook_b, tags_b, int(hour_b))]:
+                rows.append([label, hook, tags, hr, pvs(hook, tags, hr)])
+            combo = pd.DataFrame(rows, columns=["Variant","Hook (tekst)","Hashtag-mix","Uur","PVS"])
+            st.dataframe(combo, use_container_width=True, hide_index=True)
             if IS_PRO:
-                if st.button(tr("add_queue"), key=f"addq_{i}"):
-                    queue_post(cap, tags, 19); st.success("Toegevoegd aan wachtrij.")
+                st.markdown("### In review-wachtrij zetten")
+                pick = st.selectbox("Welke variant toevoegen?", ["A","B"])
+                if st.button(tr("add_queue")):
+                    row = combo.loc[0 if pick=="A" else 1]
+                    queue_post(row["Hook (tekst)"], row["Hashtag-mix"], int(row["Uur"]))
+                    st.success("Toegevoegd aan wachtrij.")
             else:
-                st.markdown("<div class='locked' style='border-radius:12px; height:44px;'></div>", unsafe_allow_html=True)
-            st.divider()
+                with st.container(border=True):
+                    st.markdown("<div class='locked' style='border-radius:16px; padding:10px;'></div>", unsafe_allow_html=True)
 
-# ---------------------------- 🤖 AI Coach (UPGRADED) ------------------------
-# helper: rerun werkt in nieuwe én oude Streamlit
-def _rerun():
-    try:
-        st.rerun()
-    except AttributeError:
-        try:
-            st.experimental_rerun()  # fallback voor oudere versies
-        except Exception:
-            pass
+    # Ideeën
+    with st.expander("Ideeëngenerator"):
+        topic = st.text_input("Onderwerp of thema? (bijv. manipulatie, angst, liefde, brein…)", placeholder="Typ hier je onderwerp…")
+        if topic:
+            st.caption("We geven je 3 kant-en-klare ideeën. Kort, duidelijk en meteen te filmen.")
+            for i in range(1,4):
+                st.markdown(f"**Idee {i}** — #{topic}")
+                cap = f"{topic}. Volg @Darkestpsycho voor meer dark psych facts."
+                tags = "#darkfacts #psychology #creepy #mindblown #tiktoknl"
+                prompt = (f"Korte 9:16 video over **{topic}**; donkere stijl; 5–8s; 1) hook shockfact 2) 2–3 beats 3) CTA 'Volg @Darkestpsycho'.")
+                st.code(cap); st.code(tags); st.code(prompt)
+                if IS_PRO:
+                    if st.button(tr("add_queue"), key=f"addq_{i}"):
+                        queue_post(cap, tags, 19); st.success("Toegevoegd aan wachtrij.")
+                else:
+                    st.markdown("<div class='locked' style='border-radius:12px; height:44px;'></div>", unsafe_allow_html=True)
+                st.divider()
 
-# ---------------------------- 🤖 AI Coach (UPGRADED) ------------------------
-with tab_coach:
-    st.subheader("🤖 AI Coach — persoonlijk advies")
-    if not _has_openai():
-        st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om de AI Coach te gebruiken.")
-    else:
-        base = normalize_per_post(df_raw)
-        d = add_kpis(base) if not base.empty else pd.DataFrame()
-        if d.empty:
-            st.info("Nog geen data. Upload of laad de demo-set.")
+    # AI Coach
+    with st.expander("🤖 AI Coach — persoonlijk advies", expanded=False):
+        if not _has_openai():
+            st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om de AI Coach te gebruiken.")
         else:
-            # 📚 Kennisbank invoer
-            with st.expander("📚 Coach leren (kennisbank)"):
-                kb_txt = st.text_area(
-                    "Voeg regels/notities toe voor de coach (do’s/don’ts, merkstem, formules, CTA’s)…",
-                    height=120,
-                    placeholder="Voorbeeld:\n- Gebruik max 3 hashtags, nooit #foryou.\n- Merkstem: direct, geen emoji-spam.\n- Hook-sjabloon: 'Dit gaat je X besparen in Y seconden'."
-                )
-                kb_tags = st.text_input("Tags (optioneel, komma-gescheiden)", value="brand, captions, hooks")
-                if st.button("➕ Voeg toe aan kennisbank"):
-                    if kb_txt.strip():
-                        add_kb_note(kb_txt.strip(), [t.strip() for t in kb_tags.split(",") if t.strip()])
-                        st.success("Toegevoegd aan kennisbank.")
-
-                st.caption("Laatste 5 kennisitems:")
-                kb_items = _load_coach_state().get("kb", [])
-                st.write("\n".join(f"• {n['text']}" for n in kb_items[-5:]) or "—")
-
-            # 🔎 Vraag & advies
-            niche = st.text_input("Niche (optioneel)", placeholder="psychologie, fashion, fitness…")
-            prefill = st.session_state.get("coach_q_prefill", "")
-            q_user = st.text_input(
-                "Waar heb je nu advies voor nodig?",
-                value=prefill,
-                placeholder="Bijv. betere hooks voor mijn dark psychology video’s"
-            )
-
-            if st.button("🧠 Vraag advies aan Coach", type="primary"):
-                with st.spinner("Coach denkt met je mee…"):
-                    tips = ai_coach_suggestions(d, niche_hint=niche, user_prompt=q_user)
-                st.markdown(tips)
-
-                colA, colB, colC = st.columns(3)
-                with colA:
-                    if st.button("👍 Helpt mij"):
-                        add_feedback(q_user, tips, rating=1)
-                        st.success("Top! Coach onthoudt dat dit werkte.")
-                with colB:
-                    if st.button("👎 Niet helpend"):
-                        add_feedback(q_user, tips, rating=0)
-                        st.info("Feedback opgeslagen. Volgende keer sturen we bij.")
-                with colC:
-                    if st.button("➕ Zet tip in wachtrij (19:00)"):
-                        first_line = tips.splitlines()[0] if tips else "Nieuwe tip"
-                        queue_post(first_line, "#tiktoknl", 19)
-                        mark_tip_accepted(first_line)
-                        st.success("Toegevoegd aan review-wachtrij.")
-
-            # ---- 🔧 Snelle prompts ----
-            st.markdown("#### 🔧 Snelle prompts")
-            c1, c2, c3 = st.columns(3)
-
-            if c1.button("Hooks verbeteren"):
-                st.session_state["coach_q_prefill"] = (
-                    "Geef 3 hook-verbeteringen voor mijn best presterende onderwerp."
-                )
-                _rerun()
-
-            if c2.button("Hashtag-mix"):
-                st.session_state["coach_q_prefill"] = (
-                    "Welke 3 hashtags werken nu het best en waarom?"
-                )
-                _rerun()
-
-            if c3.button("Posttijden"):
-                st.session_state["coach_q_prefill"] = (
-                    "Welke 3 posttijden bevelen we aan komende week?"
-                )
-                _rerun()
-
-            # 📌 Snelle info uit je data  ← LET OP: zelfde indent als 'Snelle prompts'
-            best = _best_hours(d, n=3)
-            st.caption(f"📌 Beste uren volgens je data: **{', '.join([f'{h:02d}:00' for h in best])}**")
-# ----------------------- 🪄 Captions & Hooks (NEW) -----------------------
-with tab_caps:
-    st.subheader("🪄 Caption & Hook generator")
-    if not _has_openai():
-        st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om de generator te gebruiken.")
-    else:
-        base = normalize_per_post(df_raw); d = add_kpis(base) if not base.empty else pd.DataFrame()
-        if d.empty:
-            st.info("Nog geen data. Upload of laad demo (we kunnen desnoods zonder, maar mét data zijn de captions beter).")
-        topic = st.text_input("Onderwerp/video-idee", placeholder="Bijv. Waarom 90% dit fout doet…")
-        style = st.selectbox("Stijl", ["hooky (kort & punchy)","informatief","conversational"], index=0)
-        n_var = st.slider("Aantal varianten", 1, 5, 3)
-        if st.button("✨ Genereer captions"):
-            if not topic.strip():
-                st.warning("Vul eerst een onderwerp in.")
+            if d.empty:
+                st.info("Nog geen data. Upload of laad de demo-set.")
             else:
-                with st.spinner("Aan het bedenken…"):
-                    out = ai_generate_captions(d if not d.empty else pd.DataFrame(), topic=topic, n_variants=int(n_var), style=style.split()[0])
-                for i, var in enumerate(out, 1):
-                    st.markdown(f"**Variant {i}**")
-                    st.code(var)
-                st.caption("Tip: voeg je favoriete variant direct toe in de A/B-planner.")
+                with st.expander("📚 Coach leren (kennisbank)"):
+                    kb_txt = st.text_area(
+                        "Voeg regels/notities toe voor de coach (do’s/don’ts, merkstem, formules, CTA’s)…",
+                        height=120,
+                        placeholder="Voorbeeld:\n- Gebruik max 3 hashtags, nooit #foryou.\n- Merkstem: direct, geen emoji-spam.\n- Hook-sjabloon: 'Dit gaat je X besparen in Y seconden'."
+                    )
+                    kb_tags = st.text_input("Tags (optioneel, komma-gescheiden)", value="brand, captions, hooks")
+                    if st.button("➕ Voeg toe aan kennisbank"):
+                        if kb_txt.strip():
+                            add_kb_note(kb_txt.strip(), [t.strip() for t in kb_tags.split(",") if t.strip()])
+                            st.success("Toegevoegd aan kennisbank.")
+                    st.caption("Laatste 5 kennisitems:")
+                    kb_items = _load_coach_state().get("kb", [])
+                    st.write("\n".join(f"• {n['text']}" for n in kb_items[-5:]) or "—")
 
-# -------------------------- 💬 Chat met PostAi (NEW) -----------------------
-with tab_chat:
-    st.subheader("💬 Chat met PostAi")
-    if not _has_openai():
-        st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om te chatten.")
-    else:
-        base = normalize_per_post(df_raw); d = add_kpis(base) if not base.empty else pd.DataFrame()
-        if d.empty:
-            st.info("Nog geen data. Upload of laad demo om gerichte antwoorden te krijgen.")
-        question = st.text_input("Stel je vraag (bijv. 'Wat is mijn beste posttijd?' of 'Wat verbeteren aan mijn captions?')")
-        if st.button("Vraag het PostAi"):
-            if not question.strip():
-                st.warning("Typ eerst een vraag.")
-            else:
-                with st.spinner("Kijken wat je data zegt…"):
-                    ans = ai_chat_answer(d if not d.empty else pd.DataFrame(), question)
-                st.markdown(ans)
+                niche = st.text_input("Niche (optioneel)", placeholder="psychologie, fashion, fitness…")
+                q_user = st.text_input(
+                    "Waar heb je nu advies voor nodig?",
+                    placeholder="Bijv. betere hooks voor mijn dark psychology video’s"
+                )
 
-# --------------------------- Playbook & Plan -------------------------------
-with tab_play:
-    st.subheader("📅 Playbook & 7-dagen Plan")
-    base = normalize_per_post(df_raw); d = add_kpis(base) if not base.empty else pd.DataFrame()
-    if not IS_PRO:
-        st.warning("🔒 Alleen in PRO. Ontgrendel om je weekplan te zien.")
-        st.markdown("<div class='locked' style='height:220px;'></div>", unsafe_allow_html=True)
-    else:
-        if d.empty: st.info(tr("no_data"))
+                if st.button("🧠 Vraag advies aan Coach", type="primary"):
+                    with st.spinner("Coach denkt met je mee…"):
+                        tips = ai_coach_suggestions(d, niche_hint=niche, user_prompt=q_user)
+                    st.markdown(tips)
+
+                    colA, colB, colC = st.columns(3)
+                    with colA:
+                        if st.button("👍 Helpt mij"):
+                            add_feedback(q_user, tips, rating=1)
+                            st.success("Top! Coach onthoudt dat dit werkte.")
+                    with colB:
+                        if st.button("👎 Niet helpend"):
+                            add_feedback(q_user, tips, rating=0)
+                            st.info("Feedback opgeslagen. Volgende keer sturen we bij.")
+                    with colC:
+                        if st.button("➕ Zet tip in wachtrij (19:00)"):
+                            first_line = tips.splitlines()[0] if tips else "Nieuwe tip"
+                            queue_post(first_line, "#tiktoknl", 19)
+                            mark_tip_accepted(first_line)
+                            st.success("Toegevoegd aan review-wachtrij.")
+                best = _best_hours(d, n=3)
+                st.caption(f"📌 Beste uren volgens je data: **{', '.join([f'{h:02d}:00' for h in best])}**")
+
+    # Captions & Hooks
+    with st.expander("🪄 Caption & Hook generator", expanded=False):
+        if not _has_openai():
+            st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om de generator te gebruiken.")
         else:
-            def generate_playbook(d: pd.DataFrame) -> Dict[str, str]:
-                hours = _best_hours(d, n=3); htxt = ", ".join([f"{h:02d}:00" for h in hours])
-                tr_df = trending_hashtags(d, days_window=14); top_tag = tr_df.head(1).index[0] if tr_df is not None and not tr_df.empty else "#viral"
-                return dict(beste_tijden=htxt, top_hashtag=top_tag, hook_stijl="shock", actie="Herpost je best scorende video en maak een vervolg.")
-            def generate_week_plan(d: pd.DataFrame) -> pd.DataFrame:
-                hours = _best_hours(d, n=3); h1,h2,h3=(hours+[19,20,18])[:3]
-                tr_df = trending_hashtags(d, days_window=14); trend_tag = tr_df.head(1).index[0] if tr_df is not None and not tr_df.empty else "#darkfacts"
-                rows=[["Ma","Herpost topvideo",f"{h1:02d}:00","Wat bijna niemand weet…",f"{trend_tag} #tiktoknl #fyp","Herbruik"],
-                      ["Di","Nieuw idee (trending)",f"{h2:02d}:00","Dit klinkt gek, maar…",f"{trend_tag} #psychology","Test"],
-                      ["Wo","Reacties / community","—","—","—","Engage"],
-                      ["Do","A/B-test variant A",f"{h1:02d}:00","Niemand vertelt je dit…","#viral #nl","Test"],
-                      ["Vr","A/B-test variant B",f"{h2:02d}:00","De meeste mensen weten niet…","#facts #dark","Test"],
-                      ["Za","Behind the scenes",f"{h3:02d}:00","Zo maak ik m’n video’s…","#creator #real","Connect"],
-                      ["Zo","Weekoverzicht / highlight",f"{h1:02d}:00","Deze video ging viral!","#recap #weekend","Reflectie"]]
-                return pd.DataFrame(rows, columns=["Dag","Type","Tijd","Hook/Caption","Hashtags","Doel"])
-            pb = generate_playbook(d)
-            c1,c2,c3,c4 = st.columns(4)
-            c1.markdown(f"<div class='kpi-card'><div class='kpi-label'>Beste tijden</div><div class='kpi-value'>{pb['beste_tijden']}</div></div>", unsafe_allow_html=True)
-            c2.markdown(f"<div class='kpi-card'><div class='kpi-label'>Top-hashtag</div><div class='kpi-value'>{pb['top_hashtag']}</div></div>", unsafe_allow_html=True)
-            c3.markdown(f"<div class='kpi-card'><div class='kpi-label'>Hook-stijl</div><div class='kpi-value'>{pb['hook_stijl']}</div></div>", unsafe_allow_html=True)
-            c4.markdown(f"<div class='kpi-card'><div class='kpi-label'>Actie</div><div class='kpi-value'>Nu doen</div></div>", unsafe_allow_html=True)
-            st.info(pb["actie"])
-            st.markdown("### 📅 7-dagen Postplan")
-            plan = generate_week_plan(d); st.dataframe(plan, use_container_width=True, hide_index=True)
-            colx1, colx2 = st.columns(2)
-            with colx1:
-                dt_str = pd.Timestamp.today().strftime("%Y-%m-%d")
-                st.download_button("⬇️ Exporteer plan (CSV)", data=plan.to_csv(index=False).encode("utf-8"), file_name=f"postplan_7_dagen_{dt_str}.csv", mime="text/csv")
-            with colx2:
-                txt = io.StringIO(); txt.write("PLAYBOOK\n"); [txt.write(f"{k}: {v}\n") for k,v in pb.items()]
-                st.download_button("⬇️ Exporteer playbook (TXT)", data=txt.getvalue().encode("utf-8"), file_name="playbook.txt", mime="text/plain")
+            if d.empty:
+                st.info("Nog geen data. Upload of laad demo (we kunnen desnoods zonder, maar mét data zijn de captions beter).")
+            topic = st.text_input("Onderwerp/video-idee", placeholder="Bijv. Waarom 90% dit fout doet…")
+            style = st.selectbox("Stijl", ["hooky (kort & punchy)","informatief","conversational"], index=0)
+            n_var = st.slider("Aantal varianten", 1, 5, 3)
+            if st.button("✨ Genereer captions"):
+                if not topic.strip():
+                    st.warning("Vul eerst een onderwerp in.")
+                else:
+                    with st.spinner("Aan het bedenken…"):
+                        out = ai_generate_captions(d if not d.empty else pd.DataFrame(), topic=topic, n_variants=int(n_var), style=style.split()[0])
+                    for i, var in enumerate(out, 1):
+                        st.markdown(f"**Variant {i}**")
+                        st.code(var)
+                    st.caption("Tip: voeg je favoriete variant direct toe in de A/B-planner.")
+
+    # Chat
+    with st.expander("💬 Chat met PostAi", expanded=False):
+        if not _has_openai():
+            st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om te chatten.")
+        else:
+            if d.empty:
+                st.info("Nog geen data. Upload of laad demo om gerichte antwoorden te krijgen.")
+            question = st.text_input("Stel je vraag (bijv. 'Wat is mijn beste posttijd?' of 'Wat verbeteren aan mijn captions?')")
+            if st.button("Vraag het PostAi"):
+                if not question.strip():
+                    st.warning("Typ eerst een vraag.")
+                else:
+                    with st.spinner("Kijken wat je data zegt…"):
+                        ans = ai_chat_answer(d if not d.empty else pd.DataFrame(), question)
+                    st.markdown(ans)
+
+    # Playbook & Plan
+    with st.expander("📅 Playbook & 7-dagen Plan", expanded=False):
+        if not IS_PRO:
+            st.warning("🔒 Alleen in PRO. Ontgrendel om je weekplan te zien.")
+            st.markdown("<div class='locked' style='height:220px;'></div>", unsafe_allow_html=True)
+        else:
+            if d.empty: st.info(tr("no_data"))
+            else:
+                def generate_playbook(d: pd.DataFrame) -> Dict[str, str]:
+                    hours = _best_hours(d, n=3); htxt = ", ".join([f"{h:02d}:00" for h in hours])
+                    tr_df = trending_hashtags(d, days_window=14); top_tag = tr_df.head(1).index[0] if tr_df is not None and not tr_df.empty else "#viral"
+                    return dict(beste_tijden=htxt, top_hashtag=top_tag, hook_stijl="shock", actie="Herpost je best scorende video en maak een vervolg.")
+                def generate_week_plan(d: pd.DataFrame) -> pd.DataFrame:
+                    hours = _best_hours(d, n=3); h1,h2,h3=(hours+[19,20,18])[:3]
+                    tr_df = trending_hashtags(d, days_window=14); trend_tag = tr_df.head(1).index[0] if tr_df is not None and not tr_df.empty else "#darkfacts"
+                    rows=[["Ma","Herpost topvideo",f"{h1:02d}:00","Wat bijna niemand weet…",f"{trend_tag} #tiktoknl #fyp","Herbruik"],
+                          ["Di","Nieuw idee (trending)",f"{h2:02d}:00","Dit klinkt gek, maar…",f"{trend_tag} #psychology","Test"],
+                          ["Wo","Reacties / community","—","—","—","Engage"],
+                          ["Do","A/B-test variant A",f"{h1:02d}:00","Niemand vertelt je dit…","#viral #nl","Test"],
+                          ["Vr","A/B-test variant B",f"{h2:02d}:00","De meeste mensen weten niet…","#facts #dark","Test"],
+                          ["Za","Behind the scenes",f"{h3:02d}:00","Zo maak ik m’n video’s…","#creator #real","Connect"],
+                          ["Zo","Weekoverzicht / highlight",f"{h1:02d}:00","Deze video ging viral!","#recap #weekend","Reflectie"]]
+                    return pd.DataFrame(rows, columns=["Dag","Type","Tijd","Hook/Caption","Hashtags","Doel"])
+                pb = generate_playbook(d)
+                c1,c2,c3,c4 = st.columns(4)
+                c1.markdown(f"<div class='kpi-card'><div class='kpi-label'>Beste tijden</div><div class='kpi-value'>{pb['beste_tijden']}</div></div>", unsafe_allow_html=True)
+                c2.markdown(f"<div class='kpi-card'><div class='kpi-label'>Top-hashtag</div><div class='kpi-value'>{pb['top_hashtag']}</div></div>", unsafe_allow_html=True)
+                c3.markdown(f"<div class='kpi-card'><div class='kpi-label'>Hook-stijl</div><div class='kpi-value'>{pb['hook_stijl']}</div></div>", unsafe_allow_html=True)
+                c4.markdown(f"<div class='kpi-card'><div class='kpi-label'>Actie</div><div class='kpi-value'>Nu doen</div></div>", unsafe_allow_html=True)
+                st.info(pb["actie"])
+                st.markdown("### 📅 7-dagen Postplan")
+                plan = generate_week_plan(d); st.dataframe(plan, use_container_width=True, hide_index=True)
+                colx1, colx2 = st.columns(2)
+                with colx1:
+                    dt_str = pd.Timestamp.today().strftime("%Y-%m-%d")
+                    st.download_button("⬇️ Exporteer plan (CSV)", data=plan.to_csv(index=False).encode("utf-8"), file_name=f"postplan_7_dagen_{dt_str}.csv", mime="text/csv")
+                with colx2:
+                    txt = io.StringIO(); txt.write("PLAYBOOK\n"); [txt.write(f"{k}: {v}\n") for k,v in pb.items()]
+                    st.download_button("⬇️ Exporteer playbook (TXT)", data=txt.getvalue().encode("utf-8"), file_name="playbook.txt", mime="text/plain")
 
 # ------------------------------ Instellingen -------------------------------
 with tab_settings:
@@ -1468,3 +1430,12 @@ with st.expander("Legal & TikTok Review Info", expanded=False):
 
 # ----------------------------- Footer badges -------------------------------
 st.markdown(f"<div class='footer-trust'>🛡️ {tr('trust1')} · 📄 {tr('trust2')} · 🎁 {tr('trust3')} · 🎯 {tr('trust4')}</div>", unsafe_allow_html=True)
+import streamlit.components.v1 as components
+
+CHAT_SERVER = "https://chat-server.onrender.com"  # vervang met jouw URL
+components.html(f"""
+  <script>window.BMS_CHAT_SERVER = "{CHAT_SERVER}";</script>
+  <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css"/>
+  <script src="{CHAT_SERVER}/chat-widget.js" defer></script>
+""", height=0)
+
