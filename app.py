@@ -1,108 +1,24 @@
-# app.py — PostAi (TikTok Growth Agent) • 10/10 polish edition (dev-friendly + secrets-safe)
+# app.py — PostAi (TikTok Growth Agent) • publiek-klaar + pro-look
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
-from dataclasses import dataclass
-import re, io, json, uuid, base64, time, logging
+import os, re, io, json, uuid, base64, time, logging, urllib.parse
 from pathlib import Path
 from datetime import datetime, date
+from typing import Dict, List, Tuple
+from urllib.parse import urlparse
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 
-# ------------------------ Optionele imports ------------------------
+# --------------------------------- Optioneel ---------------------------------
 try:
     import altair as alt
     HAS_ALTAIR = True
 except Exception:
     HAS_ALTAIR = False
 
-# === TikTok OAuth (Login Kit) – minimal review version ======================
-# Vereist env vars of secrets:
-# - TIKTOK_CLIENT_KEY
-# - TIKTOK_SCOPES      (optioneel, bv: user.info.basic)
-# - APP_PUBLIC_URL     (https://postai.bouwmijnshop.nl)
-
-import os, urllib.parse
-from urllib.parse import urlparse
-
-# ------------------------ Tijdzone / Basis ------------------------
-TZ = "Europe/Amsterdam"  # tijdzone voor alle datum/tijd-analyses
-
-# ------------------------ Logging ------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
-log = logging.getLogger("postai")
-
-# ------------------------ Secrets helper (safe) --------------------
-def getconf(key: str, default: str = "") -> str:
-    """
-    Leest eerst uit st.secrets (als aanwezig), anders uit os.environ.
-    Gooit nooit StreamlitSecretNotFoundError.
-    """
-    try:
-        return st.secrets.get(key, os.getenv(key, default))
-    except Exception:
-        return os.getenv(key, default)
-
-# ------------------------ Dev helpers ------------------------------
-DEV_ALLOW_HTTP_LOCAL = True  # laat http://localhost toe tijdens lokaal testen
-
-def _is_local_url(url: str) -> bool:
-    try:
-        u = urlparse(url)
-        return u.hostname in ("localhost", "127.0.0.1")
-    except Exception:
-        return False
-
-def has_oauth_config() -> bool:
-    """Check of we genoeg config hebben om de TikTok login te tonen."""
-    base = getconf("APP_PUBLIC_URL", "").strip()
-    key  = getconf("TIKTOK_CLIENT_KEY", "").strip()
-    if not base or not key:
-        return False
-    if base.startswith("https://"):
-        return True
-    return DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://")
-
-def _get_public_base_url() -> str:
-    url = getconf("APP_PUBLIC_URL", "").strip().rstrip("/")
-    if not url:
-        return ""
-    if url.startswith("https://"):
-        return url
-    if DEV_ALLOW_HTTP_LOCAL and _is_local_url(url) and url.startswith("http://"):
-        return url
-    st.error("Misconfiguratie: **APP_PUBLIC_URL** moet een geldige https-URL zijn.")
-    return ""
-
-def build_tiktok_auth_url() -> str:
-    client_key = getconf("TIKTOK_CLIENT_KEY", "").strip()
-    scopes     = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
-    base_url   = _get_public_base_url()
-
-    # Incompleet? Geef leeg terug (geen rode errors in UI)
-    if not client_key or not base_url:
-        return ""
-
-    redirect_uri = f"{base_url}/"
-    state = st.session_state.get("_tiktok_state") or uuid.uuid4().hex
-    st.session_state["_tiktok_state"] = state
-
-    params = {
-        "client_key": client_key,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": scopes,
-        "state": state,
-    }
-    return "https://www.tiktok.com/v2/auth/authorize/?" + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
-# ============================================================================
-
-# ------------------------ Paden & metadata -------------------------
+# =============================== Basis / Config ===============================
 APP_NAME  = "PostAi — TikTok Growth Agent"
 APP_DIR   = Path(__file__).resolve().parent
 DATA_DIR  = APP_DIR / "auto"
@@ -118,9 +34,68 @@ POST_QUEUE_FILE  = DATA_DIR / "post_queue.json"
 
 LEMON_CHECKOUT_URL = "https://your-lemon-squeezy-checkout.link/PRODUCT"  # vervang
 
-# ------------------------ Licentie / Review-mode utils ---------------------------
+TZ = "Europe/Amsterdam"
 REVIEW_MODE = os.getenv("REVIEW_MODE", "0").strip() == "1"
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+log = logging.getLogger("postai")
+
+def getconf(key: str, default: str = "") -> str:
+    """Eerst uit st.secrets (stil als die er niet is), dan uit env, anders default."""
+    try:
+        return st.secrets.get(key, os.getenv(key, default))
+    except Exception:
+        return os.getenv(key, default)
+
+# ------------------------------- Dev helpers ---------------------------------
+DEV_ALLOW_HTTP_LOCAL = True
+
+def _is_local_url(url: str) -> bool:
+    try:
+        u = urlparse(url)
+        return u.hostname in ("localhost", "127.0.0.1")
+    except Exception:
+        return False
+
+def _get_public_base_url() -> str:
+    url = getconf("APP_PUBLIC_URL", "").strip().rstrip("/")
+    if not url:
+        return ""
+    if url.startswith("https://"):
+        return url
+    if DEV_ALLOW_HTTP_LOCAL and _is_local_url(url) and url.startswith("http://"):
+        return url
+    st.error("Misconfiguratie: **APP_PUBLIC_URL** moet een geldige https-URL zijn.")
+    return ""
+
+def has_oauth_config() -> bool:
+    base = getconf("APP_PUBLIC_URL", "").strip()
+    key  = getconf("TIKTOK_CLIENT_KEY", "").strip()
+    if not base or not key:
+        return False
+    if base.startswith("https://"):
+        return True
+    return DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://")
+
+def build_tiktok_auth_url() -> str:
+    client_key = getconf("TIKTOK_CLIENT_KEY", "").strip()
+    scopes     = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
+    base_url   = _get_public_base_url()
+    if not client_key or not base_url:
+        return ""
+    redirect_uri = f"{base_url}/"
+    state = st.session_state.get("_tiktok_state") or uuid.uuid4().hex
+    st.session_state["_tiktok_state"] = state
+    params = {
+        "client_key": client_key,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": scopes,
+        "state": state,
+    }
+    return "https://www.tiktok.com/v2/auth/authorize/?" + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+
+# --------------------------- Licentie / PRO status ----------------------------
 def _read_license() -> Tuple[str, bool]:
     try:
         if LICENSE_FILE.exists():
@@ -143,17 +118,13 @@ def _remove_license() -> bool:
     except Exception:
         return False
 
-# 1️⃣ Check eerst secrets/env
 ENV_LICENSE = getconf("LICENSE_KEY", "").strip()
-
 if ENV_LICENSE:
-    LICENSE_KEY = ENV_LICENSE
-    IS_PRO = True
+    LICENSE_KEY = ENV_LICENSE; IS_PRO = True
 else:
-    # 2️⃣ Anders val terug op lokaal license.key bestand
     LICENSE_KEY, IS_PRO = _read_license()
 
-# ------------------------ Streamlit setup --------------------------
+# ============================== Streamlit Setup ===============================
 st.set_page_config(
     page_title=f"{APP_NAME} — {'PRO' if IS_PRO else 'DEMO'}",
     page_icon="🧠",
@@ -161,24 +132,20 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# === OAuth callback handling (leest query params van TikTok) ===============
+# OAuth callback (minimal)
 qp = st.query_params
 if "error" in qp:
-    err = qp.get("error_description", qp.get("error", "onbekende fout"))
-    st.error(f"❌ TikTok OAuth error: {err}")
+    st.error(f"❌ TikTok OAuth error: {qp.get('error_description', qp.get('error'))}")
 elif "code" in qp:
-    code  = qp.get("code")
-    state = qp.get("state", "")
-    ok_state = (state == st.session_state.get("_tiktok_state"))
+    state_ok = (qp.get("state", "") == st.session_state.get("_tiktok_state"))
     if REVIEW_MODE:
-        st.success(f"✅ TikTok OAuth code ontvangen (state ok: {ok_state}). Je kunt dit tonen in je reviewvideo.")
-        st.session_state["tik_code"] = code
+        st.success(f"✅ TikTok OAuth code ontvangen (state ok: {state_ok}).")
+        st.session_state["tik_code"] = qp.get("code")
     else:
         st.success("✅ Ingelogd via TikTok.")
-    st.session_state["tik_state_ok"] = ok_state
-# ============================================================================
+    st.session_state["tik_state_ok"] = state_ok
 
-# ------------------------ Branding utils --------------------------
+# ================================ Branding ====================================
 def _load_branding():
     color = st.session_state.get("brand_color", "#2563eb")
     p = BRAND_DIR / "color.txt"
@@ -209,190 +176,209 @@ def _remove_brand_logo() -> bool:
 
 THEME_COLOR, LOGO_BYTES = _load_branding()
 
-# ------------------------ CSS --------------------------------------
-def _inject_css(theme_color: str, pro: bool, mode: str = "light"):
-    # Vast licht thema (geen switch)
-    CSS_VARS = dict(
-        brand=theme_color, ring="#e8edf3", muted="#4b5563", head="#f8fafc",
-        card="#ffffff", card_border="#eef2f7", text="#111827", bg="#ffffff",
-        hover="#f4f8ff", track="#e5e7eb", skeleton="#f1f5f9"
-    )
-    color_scheme = "light"
-    pro_bg = "#10b981"
-
-    vars_lines = [
-        ":root {",
-        f"  --brand:{CSS_VARS['brand']};",
-        f"  --ring:{CSS_VARS['ring']};",
-        f"  --muted:{CSS_VARS['muted']};",
-        f"  --head:{CSS_VARS['head']};",
-        f"  --card:{CSS_VARS['card']};",
-        f"  --card-border:{CSS_VARS['card_border']};",
-        f"  --text:{CSS_VARS['text']};",
-        f"  --bg:{CSS_VARS['bg']};",
-        f"  --hover:{CSS_VARS['hover']};",
-        f"  --track:{CSS_VARS['track']};",
-        f"  --skeleton:{CSS_VARS['skeleton']};",
-        "}",
-    ]
-    vars_block = "\n".join(vars_lines) + "\n"
-
+# ================================== CSS =======================================
+def _inject_css(theme_color: str, pro: bool):
+    vars_block = f"""
+:root {{
+  --brand:{theme_color};
+  --ring:#e8edf3; --muted:#4b5563; --head:#f8fafc;
+  --card:#ffffff; --card-border:#eef2f7; --text:#111827; --bg:#ffffff;
+  --hover:#f4f8ff; --track:#e5e7eb; --skeleton:#f1f5f9;
+}}
+"""
     base_css = """
-html { color-scheme: REPLACE_SCHEME; }
+html { color-scheme: light; }
 body, [data-testid="stAppViewContainer"] { background: var(--bg) !important; color: var(--text) !important; }
 section[data-testid="stSidebar"] > div:first-child { background: var(--head); border-right:1px solid var(--card-border); }
 .block-container { max-width:1200px; padding-top:14px; }
 section[data-testid="stSidebar"] { width:260px !important; }
 .accent { color:var(--brand); }
 h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
+
 /* Cards */
 .hero-card, .kpi-card { border:1px solid var(--card-border); border-radius:16px; padding:14px 16px; background: var(--card); box-shadow:0 6px 18px rgba(0,0,0,.06); color: var(--text); }
 .kpi-label { color:var(--muted); font-size:.85rem; margin-bottom:4px; }
 .kpi-value { font-size:1.35rem; font-weight:700; color: var(--text); }
 .chip { display:inline-block; padding:4px 10px; border:1px solid var(--ring); border-radius:999px; margin-right:6px; margin-bottom:6px; font-size:.8rem; background: var(--card); color: var(--text); }
 .kpi-gap { margin-top:10px; margin-bottom:14px; }
-/* Inputs & widgets */
-.stSelectbox div[role="combobox"], .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea { background: var(--card) !important; color: var(--text) !important; border:1px solid var(--card-border) !important; border-radius:12px !important; }
-label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p { color: var(--text) !important; }
-.stTabs [data-baseweb="tab-list"] { position:sticky; top:0; z-index:5; background: var(--head); padding-top:6px; border-bottom:1px solid var(--card-border); }
-.stTabs [data-baseweb="tab"] { color: var(--text); }
+
 /* Buttons */
-.stButton>button { transition:transform .1s ease, box-shadow .1s ease, opacity .2s ease; border-radius:12px; font-weight:700; }
+.stButton>button { transition:transform .12s ease, box-shadow .12s ease, opacity .2s ease; border-radius:12px; font-weight:700; }
 .stButton>button:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.06); }
 .primary-btn>button { background:var(--brand); color:#fff; border:1px solid var(--brand); height:50px; font-size:1.05rem; }
-.primary-btn>button:disabled { opacity:.7; cursor:not-allowed; }
 .soft-btn>button { background:var(--card); border:1px solid var(--ring); color: var(--text); }
-.stButton>button:focus, a:focus { outline:2px solid var(--brand) !important; outline-offset:2px !important; }
-/* Alerts */
-.stAlert { background: var(--card) !important; color: var(--text) !important; border:1px solid var(--card-border) !important; border-radius:12px !important; }
-.stAlert p { color: var(--text) !important; }
-/* Upload */
-[data-testid="stFileUploaderDropzone"] { border:1px dashed var(--ring); border-radius:14px; background: var(--card); }
-[data-testid="stFileUploaderDropzone"]:hover { border-color: var(--brand); background: var(--hover); }
-/* Progress bars */
+
+/* Inputs */
+.stSelectbox div[role="combobox"], .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea { background: var(--card) !important; color: var(--text) !important; border:1px solid var(--card-border) !important; border-radius:12px !important; }
+label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p { color: var(--text) !important; }
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] { position:sticky; top:0; z-index:5; background: var(--head); padding-top:6px; border-bottom:1px solid var(--card-border); }
+
+/* Progress / bars */
 .stProgress > div > div { background: var(--brand) !important; }
 .stProgress > div { background: var(--track) !important; border-radius:8px; }
+
 /* Dataframes */
 .stDataFrame, .stTable { background: var(--card) !important; color: var(--text) !important; }
-.dataframe tbody tr, .dataframe thead tr { background: var(--card) !important; color: var(--text) !important; }
 .dataframe td, .dataframe th { border-color: var(--card-border) !important; }
+
 /* Confidence bar */
 .nbabarshell { margin:8px 0;height:8px;background:var(--track);border-radius:8px; position:relative; }
 .nbabar { height:100%;background:#22c55e;border-radius:8px; }
 .nbalabel { position:absolute; right:8px; top:-18px; font-size:.8rem; color:var(--muted); }
-/* Skeletons */
-.skeleton { position:relative; overflow:hidden; background:var(--skeleton); border-radius:14px; min-height:64px; border:1px solid var(--ring); }
-.skeleton::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.25) 50%, rgba(255,255,255,0) 100%); transform:translateX(-100%); animation:shimmer 1.2s infinite; }
-@keyframes shimmer { 100% { transform:translateX(100%); } }
-/* Pro badge */
-.pro-badge { position:fixed; top:8px; right:12px; z-index:9999; color:#fff; padding:6px 12px; border-radius:999px; font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,.1); background: VAR_PRO_BG; }
-"""
-    base_css = base_css.replace("REPLACE_SCHEME", color_scheme).replace("VAR_PRO_BG", pro_bg)
 
+/* Skeleton */
+.skeleton { position:relative; overflow:hidden; background:var(--skeleton); border-radius:14px; min-height:64px; border:1px solid var(--ring); }
+.skeleton::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.25) 50%, rgba(255,255,255,0) 100%); transform:translateX(-100%); animation:shimmer 1.15s infinite; }
+@keyframes shimmer { 100% { transform:translateX(100%); } }
+
+/* Pro badge & lock preview */
+.pro-badge { position:fixed; top:8px; right:12px; z-index:9999; color:#fff; padding:6px 12px; border-radius:999px; font-weight:700; background:#10b981; }
+.locked { position:relative; filter:blur(1.2px) saturate(.8); }
+.locked::after { content:"🔒 PRO — Ontgrendel om dit te gebruiken"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#111827; background:rgba(255,255,255,.65); border:1px dashed var(--card-border); border-radius:16px; font-weight:700; }
+"""
     st.markdown("<style>" + vars_block + base_css + "</style>", unsafe_allow_html=True)
-    label = "PRO" if pro else "DEMO"
-    st.markdown(f"<div class='pro-badge'>{label}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='pro-badge'>{'PRO' if pro else 'DEMO'}</div>", unsafe_allow_html=True)
 
 THEME_COLOR, LOGO_BYTES = _load_branding()
 _inject_css(THEME_COLOR, IS_PRO)
 
-# ------------------------ Helpers ----------------------------------
-def _looks_like_xlsx(path: Path) -> bool:
+# ============================== Data Helpers ==============================
+def _looks_like_xlsx(p: Path) -> bool:
     try:
-        with open(path, "rb") as f: return f.read(4) == b"PK\x03\x04"
-    except Exception: return False
+        with open(p, "rb") as f:
+            return f.read(4) == b"PK\x03\x04"
+    except Exception:
+        return False
 
-@st.cache_data(show_spinner=False, ttl=600,
-               hash_funcs={Path: lambda p: (p.stat().st_mtime, p.stat().st_size)})
+
+@st.cache_data(show_spinner=False, ttl=600, hash_funcs={Path: lambda p: (p.stat().st_mtime, p.stat().st_size)})
 def _smart_read_any(path_or_file) -> pd.DataFrame:
     try:
         if isinstance(path_or_file, (str, Path)):
             p = Path(path_or_file)
-            if not p.exists() or p.stat().st_size == 0: return pd.DataFrame()
-            if _looks_like_xlsx(p) or p.suffix.lower()==".xlsx": return pd.read_excel(p)
+            if not p.exists() or p.stat().st_size == 0:
+                return pd.DataFrame()
+            if _looks_like_xlsx(p) or p.suffix.lower() == ".xlsx":
+                return pd.read_excel(p)
             for args in (dict(sep=None, engine="python"), dict(sep=";"), dict()):
-                try: return pd.read_csv(p, **args)
-                except Exception: pass
+                try:
+                    return pd.read_csv(p, **args)
+                except Exception:
+                    pass
             return pd.read_csv(p)
         else:
             name = getattr(path_or_file, "name", "").lower()
-            if name.endswith(".xlsx"): return pd.read_excel(path_or_file)
-            try: return pd.read_csv(path_or_file, sep=None, engine="python")
+            if name.endswith(".xlsx"):
+                return pd.read_excel(path_or_file)
+            try:
+                return pd.read_csv(path_or_file, sep=None, engine="python")
             except Exception:
-                path_or_file.seek(0); return pd.read_csv(path_or_file)
-    except Exception: return pd.DataFrame()
+                path_or_file.seek(0)
+                return pd.read_csv(path_or_file)
+    except Exception:
+        return pd.DataFrame()
+
 
 def _nk(s: str) -> str:
     import unicodedata
     s = unicodedata.normalize("NFKD", str(s))
     s = "".join(ch for ch in s if not unicodedata.combining(ch))
-    s = s.lower(); s = re.sub(r"\s+","",s); s = re.sub(r"[^a-z0-9]","",s); return s
+    s = s.lower()
+    s = re.sub(r"\s+", "", s)
+    s = re.sub(r"[^a-z0-9]", "", s)
+    return s
+
 
 def _pick(lower: dict, *keys):
     for k in keys:
-        if k in lower: return lower[k]
+        if k in lower:
+            return lower[k]
     return None
 
+
 def _to_int_safe(x):
-    if pd.isna(x): return np.nan
+    if pd.isna(x):
+        return np.nan
     s = str(x).strip().lower()
-    if s.endswith(("k","m")):
+    if s.endswith(("k", "m")):
         mul = 1000 if s.endswith("k") else 1_000_000
         s = s[:-1].replace(",", ".")
-        try: return int(float(s)*mul)
-        except: return np.nan
-    s = s.replace(".","").replace(",","")
-    try: return int(float(s))
-    except: return np.nan
+        try:
+            return int(float(s) * mul)
+        except Exception:
+            return np.nan
+    s = s.replace(".", "").replace(",", "")
+    try:
+        return int(float(s))
+    except Exception:
+        return np.nan
+
 
 def _parse_nl_date(s):
-    if pd.isna(s): return None
+    if pd.isna(s):
+        return None
     txt = str(s).strip().lower().strip(" '\"\t\r\n,.;")
-    months = {"januari":1,"februari":2,"maart":3,"april":4,"mei":5,"juni":6,"juli":7,"augustus":8,"september":9,"oktober":10,"november":11,"december":12}
+    months = {
+        "januari": 1, "februari": 2, "maart": 3, "april": 4, "mei": 5, "juni": 6,
+        "juli": 7, "augustus": 8, "september": 9, "oktober": 10, "november": 11, "december": 12
+    }
     m = re.search(rf"(\d{{1,2}})\s*({'|'.join(months.keys())})", txt)
     if m:
         d, mon = int(m.group(1)), m.group(2)
-        try: return date(datetime.now().year, months[mon], d)
-        except: pass
-    try: return pd.to_datetime(txt, dayfirst=True, errors="coerce").date()
-    except: return None
+        try:
+            return date(datetime.now().year, months[mon], d)
+        except Exception:
+            pass
+    try:
+        return pd.to_datetime(txt, dayfirst=True, errors="coerce").date()
+    except Exception:
+        return None
+
 
 def _is_tiktok_url(u: str) -> bool:
     u = str(u).strip().lower()
     return u.startswith("http") and "tiktok.com" in u
 
-# ------------------------ Tijdzone utils --------------------------
-def _to_localized_utcaware(series_or_str):
+
+def _to_local(series_or_str):
     ts = pd.to_datetime(series_or_str, errors="coerce", utc=True)
     try:
         return ts.tz_convert(TZ)
     except Exception:
-        return ts  # al local/NaT
+        return ts
+
 
 def normalize_per_post(df: pd.DataFrame) -> pd.DataFrame:
-    if df is None or df.empty: return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
     lower = {_nk(c): c for c in df.columns}
     col = {
-        "caption":  _pick(lower, "videotitle","videotitel","caption","tekst","title","titel","omschrijving","beschrijving"),
-        "views":    _pick(lower, "totalviews","views","plays","weergaven","videoweergaven","videoviews"),
-        "likes":    _pick(lower, "totallikes","likes","hearts","hartjes","vindikleuks"),
-        "comments": _pick(lower, "totalcomments","comments","reacties","opmerkingen"),
-        "shares":   _pick(lower, "totalshares","shares","gedeeld","keergedeeld","delen"),
-        "date":     _pick(lower, "posttime","time","date","datum","createdat","publicatiedatum","gepubliceerddatum"),
-        "link":     _pick(lower, "videolink","videourl","video link","link","url"),
-        "videoid":  _pick(lower, "videoid","awemeid","id"),
-        "author":   _pick(lower, "author","username","account"),
+        "caption": _pick(lower, "videotitle", "videotitel", "caption", "tekst", "title", "titel", "omschrijving", "beschrijving"),
+        "views": _pick(lower, "totalviews", "views", "plays", "weergaven", "videoweergaven", "videoviews"),
+        "likes": _pick(lower, "totallikes", "likes", "hearts", "hartjes", "vindikleuks"),
+        "comments": _pick(lower, "totalcomments", "comments", "reacties", "opmerkingen"),
+        "shares": _pick(lower, "totalshares", "shares", "gedeeld", "keergedeeld", "delen"),
+        "date": _pick(lower, "posttime", "time", "date", "datum", "createdat", "publicatiedatum", "gepubliceerddatum"),
+        "link": _pick(lower, "videolink", "videourl", "video link", "link", "url"),
+        "videoid": _pick(lower, "videoid", "awemeid", "id"),
+        "author": _pick(lower, "author", "username", "account"),
     }
+
     d = df.copy()
+
     if col["caption"]:
         raw = d[col["caption"]].astype(str)
         d["Hashtags"] = raw.apply(lambda s: " ".join(re.findall(r"#\w+", s))).replace("", np.nan)
     else:
         d["Hashtags"] = np.nan
-    d["Views"]    = d[col["views"]].apply(_to_int_safe) if col["views"] else np.nan
-    d["Likes"]    = d[col["likes"]].apply(_to_int_safe) if col["likes"] else np.nan
+
+    d["Views"] = d[col["views"]].apply(_to_int_safe) if col["views"] else np.nan
+    d["Likes"] = d[col["likes"]].apply(_to_int_safe) if col["likes"] else np.nan
     d["Comments"] = d[col["comments"]].apply(_to_int_safe) if col["comments"] else np.nan
-    d["Shares"]   = d[col["shares"]].apply(_to_int_safe) if col["shares"] else np.nan
+    d["Shares"] = d[col["shares"]].apply(_to_int_safe) if col["shares"] else np.nan
 
     if col["date"]:
         raw_dates = d[col["date"]].astype(str).str.strip(" '\"\t\r\n,.;")
@@ -402,14 +388,7 @@ def normalize_per_post(df: pd.DataFrame) -> pd.DataFrame:
             parsed = parsed.dt.tz_convert(TZ)
         except Exception:
             pass
-        def _norm(x):
-            if pd.isna(x): return x
-            try:
-                xl = x.tz_localize(None) if hasattr(x, "tz_localize") else x
-                return xl.replace(hour=12) if getattr(xl, "hour", 0)==0 else xl
-            except Exception:
-                return x
-        parsed = parsed.apply(_norm)
+        parsed = parsed.apply(lambda x: x.replace(hour=12) if pd.notna(x) and getattr(x, "hour", 0) == 0 else x)
         d["Datum"] = parsed
     else:
         d["Datum"] = pd.NaT
@@ -420,253 +399,271 @@ def normalize_per_post(df: pd.DataFrame) -> pd.DataFrame:
         d["Video link"] = urls.where(urls.map(_is_tiktok_url), "")
     elif col["videoid"] and col["author"]:
         base = d[col["author"]].fillna("").astype(str).str.lstrip("@").str.strip()
-        vid  = d[col["videoid"]].fillna("").astype(str).str.strip()
+        vid = d[col["videoid"]].fillna("").astype(str).str.strip()
         d["Video link"] = "https://www.tiktok.com/@" + base + "/video/" + vid
 
-    keep = ["Hashtags","Video link","Views","Likes","Comments","Shares","Datum"]
+    keep = ["Hashtags", "Video link", "Views", "Likes", "Comments", "Shares", "Datum"]
     return d[keep].copy()
 
+
 def add_kpis(df: pd.DataFrame) -> pd.DataFrame:
-    if df is None or df.empty: return pd.DataFrame()
+    """Voegt Like/Comment/Share rates, Engagement %, Velocity, Recency, Score en Virality toe."""
+    if df is None or df.empty:
+        return pd.DataFrame()
+
     d = df.copy()
-    for c in ["Views","Likes","Comments","Shares"]:
-        if c not in d.columns: d[c] = np.nan
-    views    = pd.to_numeric(d["Views"], errors="coerce")
-    likes    = pd.to_numeric(d["Likes"], errors="coerce")
+
+    # Zorg dat basis-kolommen bestaan
+    for c in ["Views", "Likes", "Comments", "Shares"]:
+        if c not in d.columns:
+            d[c] = np.nan
+
+    views = pd.to_numeric(d["Views"], errors="coerce")
+    likes = pd.to_numeric(d["Likes"], errors="coerce")
     comments = pd.to_numeric(d["Comments"], errors="coerce")
-    shares   = pd.to_numeric(d["Shares"], errors="coerce")
+    shares = pd.to_numeric(d["Shares"], errors="coerce")
 
     denom = views.replace(0, np.nan)
-    d["Like rate"]    = (likes    / denom).fillna(0.0)
+    d["Like rate"] = (likes / denom).fillna(0.0)
     d["Comment rate"] = (comments / denom).fillna(0.0)
-    d["Share rate"]   = (shares   / denom).fillna(0.0)
+    d["Share rate"] = (shares / denom).fillna(0.0)
     d["Engagement %"] = d["Like rate"] + d["Comment rate"] + d["Share rate"]
 
+    # Datum tz-naive maken vóór berekeningen
     ds = pd.to_datetime(d.get("Datum"), errors="coerce")
+    try:
+        ds = ds.dt.tz_localize(None)
+    except Exception:
+        pass
+
     today = pd.Timestamp.today().normalize()
     days = (today - ds).dt.days
     days = days.clip(lower=0).fillna(7).replace(0, 1)
+
     d["Velocity"] = (likes / days).fillna(0.0)
-    d["Recency"]  = np.exp(-days / 90.0)
+    d["Recency"] = np.exp(-days / 90.0)
 
     def _mm(x: pd.Series) -> pd.Series:
-        x = x.astype(float); mn, mx = np.nanmin(x), np.nanmax(x)
+        x = x.astype(float)
+        mn, mx = np.nanmin(x), np.nanmax(x)
         if not np.isfinite(mn) or not np.isfinite(mx) or mx <= mn:
             return pd.Series(0.0, index=x.index)
         return (x - mn) / (mx - mn)
 
     score = (
-        0.35 * _mm(views) +
-        0.25 * _mm(d["Engagement %"]) +
-        0.15 * _mm(d["Share rate"]) +
-        0.10 * _mm(d["Like rate"]) +
-        0.10 * _mm(d["Velocity"]) +
-        0.05 * d["Recency"]
-    ).astype(float).replace([np.inf,-np.inf], np.nan).fillna(0.0)
+        0.35 * _mm(views)
+        + 0.25 * _mm(d["Engagement %"])
+        + 0.15 * _mm(d["Share rate"])
+        + 0.10 * _mm(d["Like rate"])
+        + 0.10 * _mm(d["Velocity"])
+        + 0.05 * d["Recency"]
+    ).astype(float)
 
-    d["Score"] = score
-    d["Virality"] = (score * 100).round(0)
+    d["Score"] = score.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    d["Virality"] = (d["Score"] * 100).round(0)
     return d
+
 
 @st.cache_data(show_spinner=False, ttl=600)
 def trending_hashtags(d: pd.DataFrame, days_window: int = 14) -> pd.DataFrame:
     if d is None or d.empty:
         return pd.DataFrame()
+
     df = d.copy()
     df["Datum"] = pd.to_datetime(df["Datum"], errors="coerce")
+    # tz-naive voor consistente vergelijkingen
+    try:
+        df["Datum"] = df["Datum"].dt.tz_localize(None)
+    except Exception:
+        pass
     df = df.dropna(subset=["Datum"])
     if df.empty:
         return pd.DataFrame()
+
     last_date = df["Datum"].max().normalize()
     p2_start = last_date - pd.Timedelta(days=days_window - 1)
-    p1_end   = p2_start - pd.Timedelta(days=1)
+    p1_end = p2_start - pd.Timedelta(days=1)
     p1_start = p1_end - pd.Timedelta(days=days_window - 1)
+
     tmp = df.assign(tag=df["Hashtags"].fillna("").str.split()).explode("tag")
-    tmp["tag"] = tmp["tag"].astype(str)
-    tmp = tmp[tmp["tag"].str.startswith("#", na=False)]
+    tmp = tmp[tmp["tag"].astype(str).str.startswith("#", na=False)]
     if tmp.empty:
         return pd.DataFrame()
-    p1 = tmp[(tmp["Datum"]>=p1_start) & (tmp["Datum"]<=p1_end)]
-    p2 = tmp[(tmp["Datum"]>=p2_start) & (tmp["Datum"]<=last_date)]
-    g1 = p1.groupby("tag", dropna=True).agg(avg_views=("Views","mean"), cnt=("Views","count"))
-    g2 = p2.groupby("tag", dropna=True).agg(avg_views=("Views","mean"), cnt=("Views","count"))
+
+    p1 = tmp[(tmp["Datum"] >= p1_start) & (tmp["Datum"] <= p1_end)]
+    p2 = tmp[(tmp["Datum"] >= p2_start) & (tmp["Datum"] <= last_date)]
+
+    g1 = p1.groupby("tag").agg(avg_views=("Views", "mean"), cnt=("Views", "count"))
+    g2 = p2.groupby("tag").agg(avg_views=("Views", "mean"), cnt=("Views", "count"))
+
     out = g1.join(g2, how="outer", lsuffix="_prev", rsuffix="_curr").fillna(0)
     prev = pd.to_numeric(out["avg_views_prev"], errors="coerce").fillna(0.0)
     curr = pd.to_numeric(out["avg_views_curr"], errors="coerce").fillna(0.0)
-    out["growth_%"] = np.where(prev>0, (curr - prev) / prev * 100.0, 0.0)
-    out["n_prev"] = out["cnt_prev"].astype(int)
-    out["n_curr"] = out["cnt_curr"].astype(int)
-    out = out[out["n_curr"] >= 3].copy()
-    out = out.sort_values(["growth_%","avg_views_curr","n_curr"], ascending=[False,False,False])
+    out["growth_%"] = np.where(prev > 0, (curr - prev) / prev * 100.0, 0.0)
+
+    out = out[out["cnt_curr"] >= 3].sort_values(
+        ["growth_%", "avg_views_curr", "cnt_curr"], ascending=[False, False, False]
+    )
     return out
 
+
 def _sparkline(series: pd.Series, width=120, height=28):
-    s = pd.to_numeric(series, errors="coerce").fillna(method="ffill").fillna(0.0)
-    if HAS_ALTAIR:
-        df_s = pd.DataFrame({"x": np.arange(len(s)), "y": s})
-        return alt.Chart(df_s).mark_line().encode(x="x:Q", y="y:Q").properties(width=width, height=height).configure_axis(disable=True)
-    else:
-        st.line_chart(s, height=height)
+    if not HAS_ALTAIR:
         return None
+    df_s = pd.DataFrame({
+        "x": np.arange(len(series)),
+        "y": pd.to_numeric(series, errors="coerce").fillna(method="ffill").fillna(0.0),
+    })
+    return (
+        alt.Chart(df_s)
+        .mark_line()
+        .encode(x="x:Q", y="y:Q")
+        .properties(width=width, height=height)
+        .configure_axis(disable=True)
+    )
+
 
 def _best_hours(d: pd.DataFrame, n: int = 3) -> List[int]:
-    if d is None or d.empty: return [19, 20, 18][:n]
+    if d is None or d.empty:
+        return [19, 20, 18][:n]
+
     dt = pd.to_datetime(d["Datum"], errors="coerce")
-    v  = pd.to_numeric(d["Views"], errors="coerce")
-    v_cap = v.clip(upper=v.quantile(0.95))
+    # tz-naive
+    try:
+        dt = dt.dt.tz_localize(None)
+    except Exception:
+        pass
+
+    v = pd.to_numeric(d["Views"], errors="coerce")
+    v_cap = v.clip(upper=v.quantile(0.95))  # outliers dempen
+
     days_ago = (pd.Timestamp.today().normalize() - dt.dt.normalize()).dt.days.clip(lower=0).fillna(30)
     recent_w = np.exp(-(days_ago / 30.0))
     hrs = dt.dt.hour.fillna(12).astype(int)
+
     score = (v_cap * recent_w).groupby(hrs).median().sort_values(ascending=False)
     best = score.head(max(1, n)).index.tolist()
     return best or [19, 20, 18][:n]
 
+
 def _should_sync_hourly() -> bool:
     try:
-        if not SYNC_STATE_FILE.exists(): return True
+        if not SYNC_STATE_FILE.exists():
+            return True
         ts = float(SYNC_STATE_FILE.read_text().strip() or "0")
         return (datetime.utcnow().timestamp() - ts) > 3600
-    except Exception: return True
+    except Exception:
+        return True
+
 
 def _mark_synced():
-    try: SYNC_STATE_FILE.write_text(str(datetime.utcnow().timestamp()))
-    except Exception: pass
+    try:
+        SYNC_STATE_FILE.write_text(str(datetime.utcnow().timestamp()))
+    except Exception:
+        pass
+
 
 def run_manual_fetch() -> dict:
     _mark_synced()
-    if LATEST_FILE.exists(): return {"ok": True, "msg": "Gegevens ververst."}
-    else: return {"ok": True, "msg": "Klaar. (Laad demo of upload CSV om data te zien.)"}
+    if LATEST_FILE.exists():
+        return {"ok": True, "msg": "Gegevens ververst."}
+    else:
+        return {"ok": True, "msg": "Klaar. (Laad demo of upload CSV om data te zien.)"}
+
 
 def _read_queue() -> List[dict]:
     try:
-        if POST_QUEUE_FILE.exists(): return json.loads(POST_QUEUE_FILE.read_text(encoding="utf-8"))
-    except Exception: pass
+        if POST_QUEUE_FILE.exists():
+            return json.loads(POST_QUEUE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
     return []
 
-def _write_queue(items: List[dict]): POST_QUEUE_FILE.write_text(json.dumps(items, indent=2), encoding="utf-8")
+
+def _write_queue(items: List[dict]):
+    POST_QUEUE_FILE.write_text(json.dumps(items, indent=2), encoding="utf-8")
+
 
 def queue_post(caption: str, hashtags: str, hour: int):
     items = _read_queue()
-    items.append({"id": uuid.uuid4().hex[:8], "caption": caption, "hashtags": hashtags, "hour": int(hour), "status": "pending"})
+    items.append({
+        "id": uuid.uuid4().hex[:8],
+        "caption": caption,
+        "hashtags": hashtags,
+        "hour": int(hour),
+        "status": "pending"
+    })
     _write_queue(items)
+
 
 def approve_and_post(item_id: str) -> bool:
     items = _read_queue()
     for it in items:
         if it["id"] == item_id:
-            it["status"] = "posted"; _write_queue(items); return True
+            it["status"] = "posted"
+            _write_queue(items)
+            return True
     return False
+
 
 def undo_post(item_id: str) -> bool:
     items = _read_queue()
     for it in items:
         if it["id"] == item_id and it["status"] == "posted":
-            it["status"] = "pending"; _write_queue(items); return True
+            it["status"] = "pending"
+            _write_queue(items)
+            return True
     return False
 
-# ------------------------ Settings / I18N --------------------------
-DEFAULT_SETTINGS = {
-    "auto_experiments": True,
-    "auto_post_mode": "review",
-    "alert_channel": "email",
-    "lang": "nl",
-    "data_retention_days": 180,
-}
-
-def _load_settings() -> dict:
-    if SETTINGS_FILE.exists():
-        try: return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-        except Exception: pass
-    return DEFAULT_SETTINGS.copy()
-
-def _save_settings(cfg: dict) -> bool:
-    try:
-        SETTINGS_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8"); return True
-    except Exception:
-        return False
-
-@dataclass
-class Settings:
-    auto_experiments: bool = True
-    auto_post_mode: str = "review"
-    alert_channel: str = "email"
-    lang: str = "nl"
-    data_retention_days: int = 180
-
-def _load_settings_obj() -> Settings:
-    raw = _load_settings()
-    base = Settings()
-    merged = {**base.__dict__, **raw}
-    return Settings(**merged)
-
-SET = _load_settings()
-
+# =============================== I18N / Tekst ================================
 def tr(k: str) -> str:
     I18N = dict(
         no_data="Nog geen data.",
         next_best="Jouw groeiaanbeveling",
         review_queue="Review-wachtrij",
-        approve_post="Goedkeuren & Posten",
         add_queue="Zet in review-wachtrij",
-        playbook="Playbook",
-        plan7="Postplan",
-        trust1="GDPR-proof",
-        trust2="CSV/XLSX",
-        trust3="14-dagen gratis",
-        trust4="Made for TikTok",
+        trust1="GDPR-proof", trust2="CSV/XLSX", trust3="7 dagen gratis", trust4="Gemaakt voor TikTok",
     )
     return I18N.get(k, k)
 
-# ------------------------ Sidebar ----------------------------------
+# =============================== Sidebar =====================================
 with st.sidebar:
-    # PRO/DEMO status
+    # PRO/DEMO badge
     if IS_PRO:
-        st.markdown(
-            "<div class='chip' style='background:#ecfdf5;border-color:#a7f3d0;'>✅ Je draait <b>PRO</b>. Bedankt! 🎉</div>",
-            unsafe_allow_html=True
-        )
+        st.markdown("<div class='chip' style='background:#ecfdf5;border-color:#a7f3d0;'>✅ Je draait <b>PRO</b>. Bedankt! 🎉</div>", unsafe_allow_html=True)
     else:
-        st.info("🔓 Je draait **DEMO**. Een deel is vergrendeld.")
+        st.info("🔓 Je draait **DEMO** (7 dagen). Sommige functies zijn vergrendeld.")
         st.link_button("✨ Ontgrendel PRO", LEMON_CHECKOUT_URL, use_container_width=True)
 
-    # --- TikTok koppeling (review) ---
+    # TikTok koppeling (vriendelijke hints)
     st.markdown("### 🔗 TikTok koppelen")
     _login_url = build_tiktok_auth_url()
     if _login_url:
-        st.link_button("Log in with TikTok", _login_url, use_container_width=True)
+        st.link_button("Log in met TikTok", _login_url, use_container_width=True)
         with st.popover("Welke data gebruiken we?"):
-            st.caption("`user.info.basic` – nodig om je in te loggen en je profielnaam/afbeelding te tonen. "
-                       "We posten niets automatisch en lezen geen video’s of vriendenlijst in deze versie. "
-                       "Zie het Privacybeleid hieronder.")
+            st.caption("Alleen **inloggen** en je profielfoto/naam. We posten **niets** en lezen geen vriendenlijst. Privacy-first.")
     else:
         base = getconf("APP_PUBLIC_URL", "").strip() or "(leeg)"
         key  = getconf("TIKTOK_CLIENT_KEY", "").strip()
         if not base:
-            st.warning("APP_PUBLIC_URL ontbreekt. Voor lokaal testen: `http://localhost:8501` is oké.")
+            st.warning("APP_PUBLIC_URL ontbreekt. Lokaal mag `http://localhost:8501`.")
         elif not (base.startswith("https://") or (DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://"))):
-            st.warning("APP_PUBLIC_URL moet https zijn (of http://localhost bij lokaal testen).")
+            st.warning("APP_PUBLIC_URL moet https (of http://localhost bij lokaal testen).")
         if not key:
             st.warning("TIKTOK_CLIENT_KEY ontbreekt.")
-        st.caption("Zet **APP_PUBLIC_URL** en **TIKTOK_CLIENT_KEY** via environment variables of voeg `.streamlit/secrets.toml` toe.")
+        st.caption("Zet **APP_PUBLIC_URL** en **TIKTOK_CLIENT_KEY** als env vars of in `.streamlit/secrets.toml`.")
 
-    # Debug voor reviewers
     if st.session_state.get("tik_code"):
-        st.caption("Status: OAuth code ontvangen ✅ (alleen login & display; geen auto-posting).")
-    else:
-        st.caption("We use TikTok Login for authentication only (no auto-post).")
+        st.caption("Status: OAuth code ontvangen ✅ (alleen login & display).")
     st.markdown("---")
 
-    # --- Data ---
+    # Data
     st.markdown("### 📊 Data")
-    st.markdown("<div class='sidebar-stack'>", unsafe_allow_html=True)
     if st.button("📥 Haal analytics op", use_container_width=True):
-        res = run_manual_fetch()
-        st.toast(res["msg"] if res["ok"] else f"❌ {res['msg']}")
-
+        res = run_manual_fetch(); st.toast(res["msg"] if res["ok"] else f"❌ {res['msg']}")
     if st.button("🎯 Probeer met voorbeelddata", use_container_width=True):
         rng = pd.date_range(end=pd.Timestamp.today().normalize(), periods=35, freq="D")
-        np.random.seed(42)
-        rows = []
+        np.random.seed(42); rows = []
         tags_pool = [
             "#darkfacts #psychology #fyp",
             "#love #lovestory #bf #bestie",
@@ -687,77 +684,51 @@ with st.sidebar:
         st.session_state["demo_active"] = True
         st.toast("✅ Demo-data geladen")
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # --- Bestanden ---
-    st.markdown("### 📁 Bestanden")
-    try:
-        ts = float(SYNC_STATE_FILE.read_text().strip()) if SYNC_STATE_FILE.exists() else 0
-        last_sync = datetime.fromtimestamp(ts).strftime("%d-%m %H:%M") if ts else "—"
-    except Exception:
-        last_sync = "—"
-
-    bron = "DEMO" if st.session_state.get("demo_active") else ("CSV/XLSX" if LATEST_FILE.exists() else "—")
-    st.markdown(
-        f"<span class='chip badge'>⏱️ Laatste sync: {last_sync}</span> "
-        f"<span class='chip badge'>📁 Bron: {bron}</span>",
-        unsafe_allow_html=True
-    )
-    st.markdown("Upload je TikTok-data (CSV/XLSX)")
-    up = st.file_uploader(" ", type=["csv", "xlsx"], label_visibility="collapsed")
+    st.markdown("### 📁 Upload bestand")
+    up = st.file_uploader("Upload je TikTok CSV/XLSX (of gebruik demo)", type=["csv", "xlsx"])
     if up is not None:
         try:
             df_up = _smart_read_any(up)
-            try:
-                up.seek(0)
-            except Exception:
-                pass
+            try: up.seek(0)
+            except Exception: pass
             df_up.to_csv(LATEST_FILE, index=False)
-            st.session_state["df"] = df_up
-            st.session_state["demo_active"] = False
+            st.session_state["df"] = df_up; st.session_state["demo_active"] = False
             st.success(f"✅ Bestand opgeslagen ({up.name}) — {len(df_up):,} rijen")
-
-            # === Kolom-mapping check ===
             base_chk = normalize_per_post(df_up)
-            recognized = [c for c in ["Hashtags","Views","Likes","Comments","Shares","Datum","Video link"] if c in base_chk.columns]
-            missing    = [c for c in ["Views","Likes","Comments","Shares","Datum"] if c not in base_chk.columns]
-            if recognized:
-                st.success(f"Herkenning: {', '.join(recognized)}")
-            if missing:
-                st.warning(f"Ontbrekende kernkolommen: {', '.join(missing)}. Voeg deze toe of hernoem in je CSV/XLSX.")
-
+            need = [c for c in ["Views","Likes","Comments","Shares","Datum"] if c not in base_chk.columns]
+            if need: st.warning("We missen kolommen: " + ", ".join(need) + ". Gebruik ons sjabloon (zie hoofdscherm).")
         except Exception as e:
             st.error(f"Kon bestand niet verwerken: {e}")
 
-# ------------------------ Header -------------------------------
-hwrap1, hwrap2 = st.columns([1, 8])
-with hwrap1:
+# =============================== Header =======================================
+c1, c2 = st.columns([1, 8])
+with c1:
     if LOGO_BYTES:
         b64 = base64.b64encode(LOGO_BYTES).decode("ascii")
-        st.markdown(
-            f"<img src='data:image/png;base64,{b64}' style='height:60px;border-radius:12px;' />",
-            unsafe_allow_html=True
-        )
-with hwrap2:
-    st.markdown(
-        "<h1 style='margin:0;font-size:1.6rem;'>"
-        "<span class='accent'>PostAi</span> — TikTok Growth Agent — "
-        f"{'PRO' if IS_PRO else 'DEMO'}</h1>",
-        unsafe_allow_html=True
-    )
+        st.markdown(f"<img src='data:image/png;base64,{b64}' style='height:60px;border-radius:12px;' />", unsafe_allow_html=True)
+with c2:
+    st.markdown(f"<h1 style='margin:0;font-size:1.6rem;'><span class='accent'>PostAi</span> — TikTok Growth Agent — {'PRO' if IS_PRO else 'DEMO'}</h1>", unsafe_allow_html=True)
     st.caption("Slimmer groeien met data. **Dare to know.**")
 
-# ------------------------ Uitleg -----------------------
+# ============================= Onboarding bar ================================
+def _onboarding_bar(step: int):
+    labels = ["Upload", "Analyse", "A/B test", "Playbook", "Resultaat"]
+    filled = min(step, len(labels))
+    frac = filled / len(labels)
+    st.progress(frac, text=" ➜ ".join([("✅ "+l) if i < filled else l for i,l in enumerate(labels)]))
+
+# ============================== Uitleg =======================================
 with st.expander("Uitleg in het kort (altijd zichtbaar)", expanded=False):
     st.markdown("""
-**Stap 1.** Upload je **CSV/XLSX** of klik **🎯 Probeer met voorbeelddata**.  
-**Stap 2.** **Slimme assistent** — zie wat nú werkt en wat je opnieuw moet posten.  
-**Stap 3.** **A/B-planner** — test 2 hooks, 2 hashtag-mixen en 2 tijden.  
-**Stap 4.** **Playbook & Plan** — jouw weekplan met beste tijden.  
-**Stap 5.** *(PRO)* **PDF/e-mail**, **alerts** en **auto-post (review)**.  
+**Zo werkt het in 1 minuut (zonder vakjargon):**  
+1) **Upload** je CSV/XLSX of kies **Voorbeelddata**.  
+2) Klik **Start analyse** — wij kijken: *wat werkt? wanneer posten?*  
+3) **A/B-planner**: test 2 hooks, 2 hashtag-mixen en 2 tijden.  
+4) **Playbook & Plan**: simpel weekplan met beste tijden.  
+5) *(PRO)* **PDF/e-mail**, **alerts** en **auto-post (review)**.  
 """)
 
-# ------------------------ Data load -------------------------------
+# =============================== Data load ===================================
 if "df" not in st.session_state:
     st.session_state["df"] = _smart_read_any(LATEST_FILE)
 df_raw = st.session_state.get("df", pd.DataFrame())
@@ -767,80 +738,62 @@ if _should_sync_hourly():
     if "df" not in st.session_state or st.session_state["df"].empty:
         st.session_state["df"] = _smart_read_any(LATEST_FILE); df_raw = st.session_state["df"]
 
-# ------------------------ KPI helpers ------------------------------
+# ================================ KPI helpers ================================
 def _fmt_delta(curr, prev):
     try:
         if prev is None or not np.isfinite(prev) or prev == 0: return "—", None
         diff = ((curr - prev) / prev) * 100
-        arrow = "↑" if diff >= 0 else "↓"
-        return f"{diff:+.1f}%", arrow
+        return f"{diff:+.1f}%", ("↑" if diff >= 0 else "↓")
     except Exception: return "—", None
-
-def _sparkline(series: pd.Series, width=120, height=28):
-    s = pd.to_numeric(series, errors="coerce").fillna(method="ffill").fillna(0.0)
-    if HAS_ALTAIR:
-        df_s = pd.DataFrame({"x": np.arange(len(s)), "y": s})
-        return alt.Chart(df_s).mark_line().encode(x="x:Q", y="y:Q").properties(width=width, height=height).configure_axis(disable=True)
-    else:
-        st.line_chart(s, height=height)
-        return None
 
 def _kpi_row(d: pd.DataFrame, key_ns: str = "top"):
     st.markdown("<div class='kpi-gap'></div>", unsafe_allow_html=True)
     if d is None or d.empty:
-        c1, c2, c3 = st.columns([3,3,3])
-        c1.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
-        c2.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
-        c3.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
+        a,b,c = st.columns(3)
+        for col in (a,b,c): col.markdown("<div class='skeleton'></div>", unsafe_allow_html=True)
         return
-
-    # persist periode
     period_options = [7,14,28]
-    default_period = st.session_state.get("period_value", 7)
-    try:
-        idx_default = period_options.index(default_period)
-    except ValueError:
-        idx_default = 0
-
     kpi_left, kpi_right = st.columns([4,1])
     with kpi_right:
-        sel = st.selectbox("Periode", period_options, index=idx_default, key=f"kpi_range_{key_ns}")
-        st.session_state["period_value"] = sel
-
-        range_days = sel
+        sel = st.selectbox("Periode", period_options, index=0, key=f"kpi_range_{key_ns}")
     with kpi_left:
-        dt = pd.to_datetime(d["Datum"], errors="coerce"); now = pd.Timestamp.today().normalize()
-        cur_mask = (dt >= (now - pd.Timedelta(days=range_days))) & (dt <= now + pd.Timedelta(days=1))
-        prev_mask = (dt >= (now - pd.Timedelta(days=2*range_days))) & (dt < (now - pd.Timedelta(days=range_days)))
+        dt = pd.to_datetime(d["Datum"], errors="coerce")
+        # maak tz-aware datums tz-naive vóór we met 'now' vergelijken
+        try:
+            dt = dt.dt.tz_localize(None)
+        except Exception:
+            pass
+        now = pd.Timestamp.today().normalize()
 
-        def _sum(df, col): return int(pd.to_numeric(df[col], errors="coerce").sum(skipna=True))
+        cur_mask  = (dt >= (now - pd.Timedelta(days=sel))) & (dt <= now + pd.Timedelta(days=1))
+        prev_mask = (dt >= (now - pd.Timedelta(days=2*sel))) & (dt <  (now - pd.Timedelta(days=sel)))
+
+        def _sum(df, col):  return int(pd.to_numeric(df[col], errors="coerce").sum(skipna=True))
         def _mean(df, col): return float(pd.to_numeric(df[col], errors="coerce").mean(skipna=True))
 
-        # ✅ FIX: opsplitsen in 2 regels (geen ‘)’ na loc[...] )
-        cur = d.loc[cur_mask]
+        cur  = d.loc[cur_mask]
         prev = d.loc[prev_mask]
 
-        total_views_cur  = _sum(cur, "Views") if not cur.empty else 0
-        total_views_prev = _sum(prev, "Views") if not prev.empty else 0
-        avg_eng_cur  = (_mean(cur, "Engagement %") * 100) if not cur.empty else 0.0
-        avg_eng_prev = (_mean(prev, "Engagement %") * 100) if not prev.empty else 0.0
-        vir_cur  = _mean(cur, "Virality") if not cur.empty else 0.0
-        vir_prev = _mean(prev, "Virality") if not prev.empty else 0.0
+        total_views_cur  = _sum(cur,  "Views")         if not cur.empty  else 0
+        total_views_prev = _sum(prev, "Views")         if not prev.empty else 0
+        avg_eng_cur      = (_mean(cur,  "Engagement %") * 100) if not cur.empty  else 0.0
+        avg_eng_prev     = (_mean(prev, "Engagement %") * 100) if not prev.empty else 0.0
+        vir_cur          = _mean(cur,  "Virality")     if not cur.empty  else 0.0
+        vir_prev         = _mean(prev, "Virality")     if not prev.empty else 0.0
 
         d1, a1 = _fmt_delta(total_views_cur, total_views_prev)
-        d2, a2 = _fmt_delta(avg_eng_cur, avg_eng_prev)
-        d3, a3 = _fmt_delta(vir_cur, vir_prev)
-        c1, c2, c3 = st.columns(3)
+        d2, a2 = _fmt_delta(avg_eng_cur,    avg_eng_prev)
+        d3, a3 = _fmt_delta(vir_cur,        vir_prev)
 
-        def _kpi_html(title, value, delta_str, arrow, icon):
+        c1, c2, c3 = st.columns(3)
+        def _card(title, value, delta_str, arrow, icon):
             color = "#16a34a" if arrow == "↑" else ("#dc2626" if arrow == "↓" else "#6b7280")
-            html = f"<div class='kpi-card'><div class='kpi-label'>{title}</div><div class='kpi-value'>{icon} {value} "
-            html += f"<span style='color:{color}'>({delta_str if delta_str!='—' else '—'})</span></div></div>"
+            html = f"<div class='kpi-card'><div class='kpi-label'>{title}</div><div class='kpi-value'>{icon} {value} <span style='color:{color}'>({delta_str if delta_str!='—' else '—'})</span></div></div>"
             return html
 
-        c1.markdown(_kpi_html(f"Totaal views ({range_days}d)", f"{total_views_cur:,}".replace(",", "."), d1, a1, "👁️"), unsafe_allow_html=True)
-        c2.markdown(_kpi_html(f"Gem. engagement ({range_days}d)", f"{avg_eng_cur:.2f}%", d2, a2, "📈"), unsafe_allow_html=True)
-        c3.markdown(_kpi_html(f"Virality ({range_days}d)", f"{vir_cur:.0f}/100", d3, a3, "🔥"), unsafe_allow_html=True)
+        c1.markdown(_card(f"Totaal views ({sel}d)", f"{total_views_cur:,}".replace(",", "."), d1, a1, "👁️"), unsafe_allow_html=True)
+        c2.markdown(_card(f"Gem. reactie-score ({sel}d)", f"{avg_eng_cur:.2f}%", d2, a2, "💬"), unsafe_allow_html=True)
+        c3.markdown(_card(f"Virale kans ({sel}d)", f"{vir_cur:.0f}/100", d3, a3, "🔥"), unsafe_allow_html=True)
 
         if HAS_ALTAIR and not cur.empty:
             s1 = _sparkline(pd.to_numeric(cur["Views"], errors="coerce"))
@@ -850,120 +803,48 @@ def _kpi_row(d: pd.DataFrame, key_ns: str = "top"):
             if s2: c2.altair_chart(s2, use_container_width=False)
             if s3: c3.altair_chart(s3, use_container_width=False)
 
-def _confidence_from_data(d: pd.DataFrame) -> int:
-    if d is None or d.empty:
-        return 0
-    dc = d.copy()
-    dc["Datum"] = pd.to_datetime(dc.get("Datum"), errors="coerce")
-    v = pd.to_numeric(dc.get("Views"), errors="coerce")
-    n = int(v.notna().sum())
-    size_score = float(np.clip(n / 30.0, 0, 1))
-    now = pd.Timestamp.today().normalize()
-    n_recent = int((dc["Datum"] >= (now - pd.Timedelta(days=30))).sum())
-    recency_score = float(np.clip(n_recent / 15.0, 0, 1))
-    have = sum(c in dc.columns for c in ["Views", "Likes", "Comments", "Shares", "Datum"])
-    coverage = have / 5.0
-    v_clean = v.dropna()
-    if len(v_clean) >= 5 and v_clean.mean() > 0:
-        stability = 1.0 - float(np.clip(v_clean.std() / (v_clean.mean() + 1e-9), 0, 1))
-    else:
-        stability = 0.5
-    conf = (0.4 * size_score + 0.3 * recency_score + 0.2 * coverage + 0.1 * stability) * 100.0
-    return int(round(np.clip(conf, 0, 100)))
-
-# ------------------------ Hero + Jouw groeiaanbeveling -------------
+# ========================== Hero + Aanbeveling ===============================
 def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
     with st.container(border=True):
-        # Kop
         st.markdown(
-            "<div style='display:flex;align-items:center;gap:12px;'>"
-            "<div>"
-            "<h2 style='margin:0;'>PostAi — TikTok Growth Agent</h2>"
-            "<p style='margin:0;color:#4b5563;'>Slimmer groeien met data. <i>Dare to know.</i></p>"
-            f"<p style='margin:6px 0 0 0;color:#6b5563;'>⏱️ Laatste sync: <b>{last_sync}</b> · 📁 Bron: <b>{bron}</b></p>"
-            "</div></div>",
+            f"<h2 style='margin:0 0 4px 0;'>PostAi — TikTok Growth Agent</h2>"
+            f"<p style='margin:0;color:#4b5563;'>Slimmer groeien met data. <i>Dare to know.</i></p>"
+            f"<p style='margin:6px 0 0 0;color:#6b5563;'>⏱️ Laatste sync: <b>{last_sync}</b> · 📁 Bron: <b>{bron}</b></p>",
             unsafe_allow_html=True
         )
+        left, right = st.columns([3,2])
 
-        left, right = st.columns([3, 2])
-
-        # ---------- LINKERKOLOM ----------
         with left:
-            st.markdown("<div class='hero'>", unsafe_allow_html=True)
-
+            _onboarding_bar(1 if (df_raw is None or df_raw.empty) else 2)
             _login_url_top = build_tiktok_auth_url()
             if _login_url_top:
-                st.link_button("Log in with TikTok", _login_url_top, use_container_width=True)
-
-            if st.button("🚀 Start analyse", key="hero_analyse_btn",
-                         use_container_width=True, type="primary", disabled=False):
-                with st.spinner("Analyseren…"):
-                    time.sleep(0.6)
-                    st.toast("✅ Analyse voltooid — aanbeveling geüpdatet.")
-
-            st.caption("Duurt ± 3–5 sec. We genereren je aanbeveling op basis van recente prestaties.")
-            st.file_uploader("Sleep je CSV/XLSX hierheen", type=["csv", "xlsx"],
-                             label_visibility="collapsed", key="hero_upl")
-            st.markdown("</div>", unsafe_allow_html=True)
-
+                st.link_button("Log in met TikTok", _login_url_top, use_container_width=True)
+            if st.button("🚀 Laat PostAi mijn TikToks bekijken", key="hero_analyse_btn", use_container_width=True, type="primary"):
+                with st.spinner("We kijken wat werkt…"):
+                    time.sleep(0.7); st.toast("✅ Analyse voltooid — aanbeveling geüpdatet.")
+            st.caption("Duurt ± 3–5 sec. We checken *wat* en *wanneer* je het beste post.")
             # Quick actions
-            c1, c2 = st.columns(2)
-            with c1:
+            cc1, cc2 = st.columns(2)
+            with cc1:
                 tpl = pd.DataFrame([dict(
                     caption="Voorbeeld caption #hashtag",
                     views=12345, likes=678, comments=12, shares=34,
-                    date=pd.Timestamp.today().normalize(), videolink="",
-                    author="@account", videoid="1234567890"
+                    date=pd.Timestamp.today().normalize(), videolink="", author="@account", videoid="1234567890"
                 )])
-                st.download_button(
-                    "⬇️ Voorbeeld-CSV",
-                    data=tpl.to_csv(index=False).encode("utf-8"),
-                    file_name="postai_template.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-            with c2:
+                st.download_button("⬇️ Voorbeeld-CSV", data=tpl.to_csv(index=False).encode("utf-8"), file_name="postai_template.csv", mime="text/csv", use_container_width=True)
+            with cc2:
                 if st.button("🎯 Laad demo-set", use_container_width=True, key="demo_btn_hero"):
                     rng = pd.date_range(end=pd.Timestamp.today().normalize(), periods=35, freq="D")
-                    np.random.seed(42)
-                    rows = []
-                    tags_pool = [
-                        "#darkfacts #psychology #fyp",
-                        "#love #lovestory #bf #bestie",
-                        "#viral #mindblown #creepy #tiktoknl",
-                        "#redthoughts #besties #bff #lovehim",
-                        "#deepthought #foryou #real #reels",
-                    ]
+                    np.random.seed(42); rows=[]
+                    tags_pool = ["#darkfacts #psychology #fyp","#love #lovestory #bf #bestie","#viral #mindblown #creepy #tiktoknl","#redthoughts #besties #bff #lovehim","#deepthought #foryou #real #reels"]
                     for d_ in rng:
-                        views = np.random.randint(20_000, 500_000)
-                        likes = int(views * np.random.uniform(0.04, 0.18))
-                        comments = int(views * np.random.uniform(0.003, 0.02))
-                        shares = int(views * np.random.uniform(0.002, 0.015))
-                        d_ = d_ + pd.Timedelta(hours=int(np.random.choice(
-                            [12, 14, 16, 18, 20, 0], p=[.25, .2, .18, .15, .12, .1]
-                        )))
-                        rows.append(dict(
-                            caption=np.random.choice(tags_pool),
-                            views=views, likes=likes, comments=comments, shares=shares,
-                            date=d_, videolink=""
-                        ))
-                    df_demo = pd.DataFrame(rows)
-                    df_demo.to_csv(LATEST_FILE, index=False)
-                    st.session_state["df"] = df_demo
-                    st.session_state["demo_active"] = True
+                        v = np.random.randint(20_000, 500_000)
+                        rows.append(dict(caption=np.random.choice(tags_pool), views=v, likes=int(v*np.random.uniform(0.04,0.18)), comments=int(v*np.random.uniform(0.003,0.02)), shares=int(v*np.random.uniform(0.002,0.015)), date=d_+pd.Timedelta(hours=int(np.random.choice([12,14,16,18,20,0], p=[.25,.2,.18,.15,.12,.1]))), videolink=""))
+                    pd.DataFrame(rows).to_csv(LATEST_FILE, index=False)
+                    st.session_state["df"] = pd.read_csv(LATEST_FILE); st.session_state["demo_active"] = True
                     st.toast("✅ Demo-data geladen")
+            st.markdown(f"<div class='trust-row'><span class='chip badge'>🛡️ {tr('trust1')}</span><span class='chip badge'>📄 {tr('trust2')}</span><span class='chip badge'>🎁 {tr('trust3')}</span><span class='chip badge'>🎯 {tr('trust4')}</span></div>", unsafe_allow_html=True)
 
-            st.markdown(
-                f"<div class='trust-row'>"
-                f"<span class='chip badge'>🛡️ {tr('trust1')}</span>"
-                f"<span class='chip badge'>📄 {tr('trust2')}</span>"
-                f"<span class='chip badge'>🎁 {tr('trust3')}</span>"
-                f"<span class='chip badge'>🎯 {tr('trust4')}</span>"
-                f"</div>",
-                unsafe_allow_html=True
-            )
-
-        # ---------- RECHTERKOLOM ----------
         with right:
             st.markdown(f"**{tr('next_best')}**")
             if d is None or d.empty:
@@ -971,46 +852,70 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
             else:
                 best_time = _best_hours(d, n=1)[0]
                 conf = _confidence_from_data(d)
-                st.markdown(
-                    f"<div class='nbabarshell'><div class='nbabar' style='width:{conf}%;'></div>"
-                    f"<div class='nbalabel'>{conf}%</div></div>",
-                    unsafe_allow_html=True
-                )
-                st.markdown(
-                    f"🔥 **Post om {best_time:02d}:00.** Herpost je best scorende video. Test variant A."
-                )
+                st.markdown(f"<div class='nbabarshell'><div class='nbabar' style='width:{conf}%;'></div><div class='nbalabel'>{conf}%</div></div>", unsafe_allow_html=True)
+                st.markdown(f"🔥 **Post om {best_time:02d}:00.** Herpost je best scorende video. Test variant A.")
                 with st.expander("Waarom?"):
-                    st.write("Op basis van mediane views, share rate en je topuren van de afgelopen 14 dagen.")
+                    st.write("Op basis van mediane views, deel-ratio en je topuren van de afgelopen 14 dagen.")
                 st.button("🔥 Voer aanbeveling uit", use_container_width=True)
 
-# ------------------------ Build data for hero/KPI -------------------
+def _confidence_from_data(d: pd.DataFrame) -> int:
+    """Bepaalt de betrouwbaarheid van je dataset op basis van volledigheid, versheid en stabiliteit."""
+    if d is None or d.empty:
+        return 0
+
+    dc = d.copy()
+
+    # Datum parsen én tz strippen (tz-naive) vóór vergelijkingen met 'now'
+    dc["Datum"] = pd.to_datetime(dc.get("Datum"), errors="coerce")
+    try:
+        dc["Datum"] = dc["Datum"].dt.tz_localize(None)
+    except Exception:
+        pass
+
+    v = pd.to_numeric(dc.get("Views"), errors="coerce")
+    n = int(v.notna().sum())
+    size_score = float(np.clip(n / 30.0, 0, 1))
+
+    now = pd.Timestamp.today().normalize()
+    n_recent = int((dc["Datum"] >= (now - pd.Timedelta(days=30))).sum())
+    recency_score = float(np.clip(n_recent / 15.0, 0, 1))
+
+    have = sum(c in dc.columns for c in ["Views", "Likes", "Comments", "Shares", "Datum"])
+    coverage = have / 5.0
+
+    v_clean = v.dropna()
+    if len(v_clean) >= 5 and v_clean.mean() > 0:
+        stability = 1.0 - float(np.clip(v_clean.std() / (v_clean.mean() + 1e-9), 0, 1))
+    else:
+        stability = 0.5  # neutraal bij weinig data
+
+    conf = 100 * (0.4 * size_score + 0.3 * recency_score + 0.2 * coverage + 0.1 * stability)
+    return int(np.clip(conf, 0, 100))
+
+# ============================== Build & Hero ================================
 base_for_hero = normalize_per_post(df_raw)
 d_for_hero = add_kpis(base_for_hero) if not base_for_hero.empty else pd.DataFrame()
-
 try:
     ts = float(SYNC_STATE_FILE.read_text().strip()) if SYNC_STATE_FILE.exists() else 0
     last_sync = datetime.fromtimestamp(ts).strftime("%d-%m %H:%M") if ts else "—"
-except Exception: last_sync = "—"
+except Exception:
+    last_sync = "—"
 bron = "DEMO" if st.session_state.get("demo_active") else ("CSV/XLSX" if LATEST_FILE.exists() else "—")
 
-# ------------------------ HERO ------------------------
 _hero_and_nba(d_for_hero, last_sync, bron)
-
-# ------------------------ KPI-rij boven tabs ------------------------
 _kpi_row(d_for_hero, key_ns="top")
 st.divider()
 
-# ------------------------ Tabs ------------------------
-tab_assist, tab_results, tab_tags, tab_trend, tab_compare, tab_arch, tab_ab, tab_ideas, tab_play, tab_settings = st.tabs(
-    ["Slimme assistent","Resultaten","Hashtags","Wat werkt nu?","Vergelijk 2 periodes","Archief","A/B-planner","Ideeëngenerator","Playbook & Plan","Instellingen"]
-)
+# ================================ Tabs ======================================
+tabs = st.tabs(["🧠 Slimme assistent","📊 Resultaten","🏷️ Hashtags","🔥 Wat werkt nu?","⚖️ Vergelijk","🗃️ Archief","🎯 A/B-planner","💡 Ideeën","📅 Playbook & Plan","⚙️ Instellingen"])
+tab_assist, tab_results, tab_tags, tab_trend, tab_compare, tab_arch, tab_ab, tab_ideas, tab_play, tab_settings = tabs
 
-# ------------------------ Slimme assistent -------------------------
+# ---------------------------- Slimme assistent ------------------------------
 with tab_assist:
-    st.subheader("🧠 Slimme assistent – jouw persoonlijke contentcoach")
+    st.subheader("🧠 Slimme assistent — jouw contentcoach")
     base = normalize_per_post(df_raw)
     if base.empty:
-        st.info(tr("no_data"))
+        st.info("Nog geen data. Upload je CSV/XLSX of laad de demo-set.")
         with st.container(border=True):
             st.markdown("#### Onboarding-checklist")
             st.checkbox("CSV/XLSX geüpload", value=LATEST_FILE.exists(), disabled=True)
@@ -1018,63 +923,52 @@ with tab_assist:
             st.checkbox("Eerste A/B test gepland", value=False, disabled=True)
             st.checkbox("Alerts ingesteld (e-mail)", value=False, disabled=True)
     else:
-        st.markdown("""
-        <div style='background:#f8fafc;padding:16px;border-radius:12px;border:1px solid #e5e7eb;'>
-        🧠 <b>Wat doet dit?</b> Analyseert je 30 laatste video's en voorspelt <b>wat</b> en <b>wanneer</b> je moet posten om sneller te groeien.
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("Deze assistent vertelt je **wat** en **wanneer** je vandaag het best post. Simpel zat 😊")
         st.divider()
-        # Review-wachtrij
         q = _read_queue()
         with st.container(border=True):
             st.markdown(f"### ⏳ {tr('review_queue')}")
-            if not q:
-                st.caption("Nog niets in de wachtrij. Voeg iets toe vanuit A/B of Ideeën.")
+            if not q: st.caption("Nog niets in de wachtrij. Voeg iets toe vanuit A/B of Ideeën.")
             else:
-                for it in q[:3]:
+                for it in q[:4]:
                     l, r = st.columns([6,3])
                     l.markdown(f"**{it['caption'][:54]}…**  \n`{it['hashtags']}` · 🕒 {int(it['hour']):02d}:00")
                     if it["status"] == "pending":
                         if r.button("✅ Goedkeuren & posten", key=f"ap_{it['id']}"):
                             if approve_and_post(it["id"]):
-                                st.session_state["undo_id"] = it["id"]
-                                st.toast("Geplaatst (demo).")
+                                st.session_state["undo_id"] = it["id"]; st.toast("Geplaatst (demo).")
                     else:
                         undo_id = st.session_state.get("undo_id")
                         if undo_id == it["id"]:
                             if r.button("↩️ Ongedaan maken (5s)", key=f"undo_{it['id']}"):
-                                if undo_post(it["id"]):
-                                    st.toast("Ongedaan gemaakt.")
-                                    st.session_state["undo_id"] = None
+                                if undo_post(it["id"]): st.toast("Ongedaan gemaakt."); st.session_state["undo_id"] = None
                         else:
                             r.markdown("✅ Geplaatst")
 
-# ------------------------ Resultaten -------------------------------
+# ------------------------------- Resultaten --------------------------------
 with tab_results:
-    st.subheader("Resultaten")
+    st.subheader("📊 Resultaten")
     base = normalize_per_post(df_raw)
-    if base.empty:
-        st.info(tr("no_data"))
+    if base.empty: st.info(tr("no_data"))
     else:
-        d = add_kpis(base)
-        st.divider()
-        qtxt = st.text_input("Filter op hashtag (bevat)…", placeholder="#love, #darkpsychology, …").strip().lower()
+        d = add_kpis(base); st.caption("Tip: filter op een hashtag om te zien wat wérkt.")
+        qtxt = st.text_input("Filter op hashtag (bijv. #love, #psychology)…").strip().lower()
         filt = d if not qtxt else d[d["Hashtags"].fillna("").str.lower().str.contains(qtxt, regex=False)]
         cols = [c for c in ["Hashtags","Views","Likes","Comments","Shares","Datum","Like rate","Share rate","Velocity","Score","Virality","Video link"] if c in filt.columns]
         st.dataframe(filt[cols], use_container_width=True, hide_index=True)
         st.markdown("#### Export")
         dt_str = pd.Timestamp.today().strftime("%Y-%m-%d")
-        html = filt.to_html(index=False)
-        st.download_button("⬇️ Download data (HTML)",
-                           data=html,
-                           file_name=f"tiktok_data_{dt_str}.html",
-                           mime="text/html")
-        if not IS_PRO: st.caption("🔒 PDF-rapporten zijn PRO.")
-        else: st.caption("PDF-rapport (placeholder) — integratie hier toevoegen.")
+        st.download_button("⬇️ Download data (HTML)", data=filt.to_html(index=False), file_name=f"tiktok_data_{dt_str}.html", mime="text/html")
+        if not IS_PRO:
+            st.caption("🔒 PDF-rapport is onderdeel van PRO.")
+            with st.container(border=True):
+                st.markdown("<div class='locked' style='border-radius:16px; padding:10px;'></div>", unsafe_allow_html=True)
+        else:
+            st.caption("PDF-rapport (placeholder) — integratie hier toevoegen.")
 
-# ------------------------ Hashtags ---------------------------------
+# -------------------------------- Hashtags ----------------------------------
 with tab_tags:
-    st.subheader("Hashtags")
+    st.subheader("🏷️ Hashtags")
     base = normalize_per_post(df_raw)
     if base.empty: st.info(tr("no_data"))
     else:
@@ -1084,31 +978,27 @@ with tab_tags:
         if tags.empty: st.info("Geen hashtags gevonden.")
         else:
             agg = (tags.groupby("_tag", dropna=True)
-                      .agg(freq=("Views","count"),
-                           views=("Views","sum"),
-                           avg_like_rate=("Like rate","mean"),
-                           avg_share_rate=("Share rate","mean"),
-                           avg_score=("Score","mean"),
-                           avg_virality=("Virality","mean"))
+                      .agg(freq=("Views","count"), views=("Views","sum"),
+                           avg_like_rate=("Like rate","mean"), avg_share_rate=("Share rate","mean"),
+                           avg_score=("Score","mean"), avg_virality=("Virality","mean"))
                       .sort_values(["freq","avg_score"], ascending=[False, False]))
             st.dataframe(agg.head(30), use_container_width=True)
 
-# ------------------------ Wat werkt nu? -----------------------------
+# ---------------------------- Wat werkt nu? ---------------------------------
 with tab_trend:
-    st.subheader("Wat werkt nu goed? (14d vs 14d)")
+    st.subheader("🔥 Wat werkt nu goed? (14d vs 14d)")
     base = normalize_per_post(df_raw)
     if base.empty: st.info(tr("no_data"))
     else:
-        d = add_kpis(base)
-        tr_df = trending_hashtags(d, days_window=14)
+        d = add_kpis(base); tr_df = trending_hashtags(d, days_window=14)
         if tr_df is None or tr_df.empty: st.info("Niet genoeg datapunten om trends te berekenen.")
         else:
             st.dataframe(tr_df.head(25), use_container_width=True)
             st.caption("We vergelijken de laatste 14 dagen met de 14 dagen daarvoor.")
 
-# ------------------------ Vergelijk perioden -----------------------
+# ---------------------------- Vergelijk perioden ----------------------------
 with tab_compare:
-    st.subheader("Vergelijk twee perioden")
+    st.subheader("⚖️ Vergelijk twee perioden")
     base = normalize_per_post(df_raw)
     if base.empty: st.info(tr("no_data"))
     else:
@@ -1116,119 +1006,107 @@ with tab_compare:
         colA, colB = st.columns(2)
         with colA: a = st.date_input("Periode A", value=(), format="YYYY-MM-DD", key="pa")
         with colB: b = st.date_input("Periode B", value=(), format="YYYY-MM-DD", key="pb")
-
         def slice_period(rng: tuple) -> pd.DataFrame:
             if not isinstance(rng, (list, tuple)) or len(rng) != 2: return pd.DataFrame()
             start = pd.to_datetime(rng[0]); end = pd.to_datetime(rng[1]) + pd.Timedelta(days=1)
             dt = pd.to_datetime(d["Datum"], errors="coerce"); mask = (dt >= start) & (dt < end)
             return d.loc[mask].copy()
-
         A = slice_period(a); B = slice_period(b)
-
         def kpis(df: pd.DataFrame) -> tuple[int, float, float]:
             if df is None or df.empty: return 0, 0.0, 0.0
             tv = int(pd.to_numeric(df.get("Views", pd.Series(dtype=float)), errors="coerce").sum(skipna=True))
             eng = float(pd.to_numeric(df.get("Engagement %", pd.Series(dtype=float)), errors="coerce").mean(skipna=True) * 100)
             sc  = float(pd.to_numeric(df.get("Score", pd.Series(dtype=float)), errors="coerce").mean(skipna=True))
             return tv, eng, sc
-
         tvA, engA, scA = kpis(A); tvB, engB, scB = kpis(B)
         k1, k2, k3 = st.columns(3)
         k1.markdown(f"<div class='kpi-card'><div class='kpi-label'>Views A / B</div><div class='kpi-value'>👁️ {tvA:,} / {tvB:,}</div></div>".replace(",", "."), unsafe_allow_html=True)
-        k2.markdown(f"<div class='kpi-card'><div class='kpi-label'>Gem. engagement A / B</div><div class='kpi-value'>📈 {engA:.2f}% / {engB:.2f}%</div></div>", unsafe_allow_html=True)
-        k3.markdown(f"<div class='kpi-card'><div class='kpi-label'>Δ Score (B − A)</div><div class='kpi-value'>{(scB - scA):+,.3f}</div></div>".replace(",", "."), unsafe_allow_html=True)
+        k2.markdown(f"<div class='kpi-card'><div class='kpi-label'>Gem. reactie-score</div><div class='kpi-value'>📈 {engA:.2f}% / {engB:.2f}%</div></div>", unsafe_allow_html=True)
+        k3.markdown(f"<div class='kpi-card'><div class='kpi-label'>Δ Virale score (B − A)</div><div class='kpi-value'>{(scB - scA):+,.3f}</div></div>".replace(",", "."), unsafe_allow_html=True)
 
-# ------------------------ Archief ----------------------------------
+# -------------------------------- Archief -----------------------------------
 with tab_arch:
-    st.subheader("Archief")
+    st.subheader("🗃️ Archief")
     files = sorted(DATA_DIR.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
     rows = []
     for p in files:
         try:
             df = _smart_read_any(p)
-            rows.append({"Bestand": p.name, "Grootte (KB)": round(p.stat().st_size/1024, 1), "Rijen": len(df), "Laatste wijziging": datetime.fromtimestamp(p.stat().st_mtime), "Pad": str(p)})
+            rows.append({"Bestand": p.name, "Grootte (KB)": round(p.stat().st_size/1024, 1), "Rijen": len(df), "Laatste wijziging": datetime.fromtimestamp(p.stat().st_mtime)})
         except Exception: pass
     table = pd.DataFrame(rows)
     if table.empty: st.info("Nog geen bestanden in het archief.")
-    else: st.dataframe(table.drop(columns=["Pad"]), use_container_width=True, hide_index=True)
+    else: st.dataframe(table, use_container_width=True, hide_index=True)
 
-# ------------------------ A/B-planner ------------------------------
+# ------------------------------ A/B-planner ---------------------------------
 with tab_ab:
-    st.subheader("A/B-planner")
-    base = normalize_per_post(df_raw)
-    d = add_kpis(base) if not base.empty else pd.DataFrame()
+    st.subheader("🎯 A/B-planner")
+    base = normalize_per_post(df_raw); d = add_kpis(base) if not base.empty else pd.DataFrame()
     if d.empty: st.info("Upload of laad demo-data om te plannen.")
     else:
         col1, col2 = st.columns(2)
         with col1:
-            hook_a = st.text_input("Hook A", value="Wat bijna niemand weet…")
+            hook_a = st.text_input("Hook A (de eerste zin)", value="Wat bijna niemand weet…")
             tags_a = st.text_input("Hashtags A", value="#darkfacts #psychology #tiktoknl")
             hour_a = st.number_input("Uur A", min_value=0, max_value=23, value=19)
         with col2:
             hook_b = st.text_input("Hook B", value="Dit klinkt raar, maar…")
             tags_b = st.text_input("Hashtags B", value="#viral #mindblown #fyp")
             hour_b = st.number_input("Uur B", min_value=0, max_value=23, value=21)
-
         def pvs(hook, tags, hr):
             base_vir = float(d["Virality"].tail(50).mean(skipna=True)) if "Virality" in d and not d["Virality"].empty else 50
-            hook_len = len(hook.split())
-            n_tags   = len([t for t in tags.split() if t.startswith("#")])
-            hook_bonus = np.clip(hook_len*2.2, 0, 22)
-            tags_bonus = np.clip(n_tags*3.0, 0, 18)
-            hr_bonus   = 22 if hr in _best_hours(d, n=3) else 8
-            score = base_vir*0.3 + hook_bonus + tags_bonus + hr_bonus
-            return int(np.clip(score, 0, 100))
-
+            hook_len = len(hook.split()); n_tags = len([t for t in tags.split() if t.startswith("#")])
+            hook_bonus = np.clip(hook_len*2.2, 0, 22); tags_bonus = np.clip(n_tags*3.0, 0, 18); hr_bonus = 22 if hr in _best_hours(d, n=3) else 8
+            return int(np.clip(base_vir*0.3 + hook_bonus + tags_bonus + hr_bonus, 0, 100))
         rows = []
         for label, hook, tags, hr in [("A", hook_a, tags_a, int(hour_a)), ("B", hook_b, tags_b, int(hour_b))]:
             rows.append([label, hook, tags, hr, pvs(hook, tags, hr)])
         combo = pd.DataFrame(rows, columns=["Variant","Hook (tekst)","Hashtag-mix","Uur","PVS"])
         st.dataframe(combo, use_container_width=True, hide_index=True)
-
-        if IS_PRO and SET.get("auto_post_mode") == "review":
+        if IS_PRO and True:
             st.markdown("### In review-wachtrij zetten")
             pick = st.selectbox("Welke variant toevoegen?", ["A","B"])
             if st.button(tr("add_queue")):
                 row = combo.loc[0 if pick=="A" else 1]
                 queue_post(row["Hook (tekst)"], row["Hashtag-mix"], int(row["Uur"]))
                 st.success("Toegevoegd aan wachtrij.")
+        else:
+            with st.container(border=True):
+                st.markdown("<div class='locked' style='border-radius:16px; padding:10px;'></div>", unsafe_allow_html=True)
 
-# ------------------------ Ideeëngenerator --------------------------
+# ---------------------------- Ideeëngenerator -------------------------------
 with tab_ideas:
-    st.subheader("Ideeëngenerator")
-    topic = st.text_input("Onderwerp of thema?", placeholder="Bijv. manipulatie, angst, liefde, brein…")
+    st.subheader("💡 Ideeën")
+    topic = st.text_input("Onderwerp of thema? (bijv. manipulatie, angst, liefde, brein…)", placeholder="Typ hier je onderwerp…")
     if topic:
+        st.caption("We geven je 3 kant-en-klare ideeën. Kort, duidelijk en meteen te filmen.")
         for i in range(1,4):
             st.markdown(f"**Idee {i}** — #{topic}")
             cap = f"{topic}. Volg @Darkestpsycho voor meer dark psych facts."
             tags = "#darkfacts #psychology #creepy #mindblown #tiktoknl"
             prompt = (f"Korte 9:16 video over **{topic}**; donkere stijl; 5–8s; 1) hook shockfact 2) 2–3 beats 3) CTA 'Volg @Darkestpsycho'.")
             st.code(cap); st.code(tags); st.code(prompt)
-            if IS_PRO and SET.get("auto_post_mode") == "review":
+            if IS_PRO:
                 if st.button(tr("add_queue"), key=f"addq_{i}"):
                     queue_post(cap, tags, 19); st.success("Toegevoegd aan wachtrij.")
+            else:
+                st.markdown("<div class='locked' style='border-radius:12px; height:44px;'></div>", unsafe_allow_html=True)
             st.divider()
 
-# ------------------------ Playbook & Plan --------------------------
+# --------------------------- Playbook & Plan -------------------------------
 with tab_play:
-    st.subheader("🧩 Playbook & 7-dagen Postplan")
-    base = normalize_per_post(df_raw)
-    d = add_kpis(base) if not base.empty else pd.DataFrame()
+    st.subheader("📅 Playbook & 7-dagen Plan")
+    base = normalize_per_post(df_raw); d = add_kpis(base) if not base.empty else pd.DataFrame()
     if not IS_PRO:
-        st.warning("🔒 Alleen in PRO. Koop PRO om het Playbook en het 7-dagen plan te gebruiken.")
+        st.warning("🔒 Alleen in PRO. Ontgrendel om je weekplan te zien.")
+        st.markdown("<div class='locked' style='height:220px;'></div>", unsafe_allow_html=True)
     else:
         if d.empty: st.info(tr("no_data"))
         else:
             def generate_playbook(d: pd.DataFrame) -> Dict[str, str]:
-                hours = _best_hours(d, n=3)
-                tr_df = trending_hashtags(d, days_window=14)
-                top_tag = tr_df.head(1).index[0] if tr_df is not None and not tr_df.empty else "#viral"
-                return dict(
-                    beste_tijden=", ".join([f"{h:02d}:00" for h in hours]),
-                    top_hashtag=top_tag,
-                    hook_stijl="shock",
-                    actie="Herpost je best scorende video en maak een vervolg.",
-                )
+                hours = _best_hours(d, n=3); htxt = ", ".join([f"{h:02d}:00" for h in hours])
+                tr_df = trending_hashtags(d, days_window=14); top_tag = tr_df.head(1).index[0] if tr_df is not None and not tr_df.empty else "#viral"
+                return dict(beste_tijden=htxt, top_hashtag=top_tag, hook_stijl="shock", actie="Herpost je best scorende video en maak een vervolg.")
             def generate_week_plan(d: pd.DataFrame) -> pd.DataFrame:
                 hours = _best_hours(d, n=3); h1,h2,h3=(hours+[19,20,18])[:3]
                 tr_df = trending_hashtags(d, days_window=14); trend_tag = tr_df.head(1).index[0] if tr_df is not None and not tr_df.empty else "#darkfacts"
@@ -1243,54 +1121,60 @@ with tab_play:
             pb = generate_playbook(d)
             c1,c2,c3,c4 = st.columns(4)
             c1.markdown(f"<div class='kpi-card'><div class='kpi-label'>Beste tijden</div><div class='kpi-value'>{pb['beste_tijden']}</div></div>", unsafe_allow_html=True)
-            c2.markdown(f"<div class='kpi-card'><div class='kpi-label'>Top hashtag</div><div class='kpi-value'>{pb['top_hashtag']}</div></div>", unsafe_allow_html=True)
+            c2.markdown(f"<div class='kpi-card'><div class='kpi-label'>Top-hashtag</div><div class='kpi-value'>{pb['top_hashtag']}</div></div>", unsafe_allow_html=True)
             c3.markdown(f"<div class='kpi-card'><div class='kpi-label'>Hook-stijl</div><div class='kpi-value'>{pb['hook_stijl']}</div></div>", unsafe_allow_html=True)
             c4.markdown(f"<div class='kpi-card'><div class='kpi-label'>Actie</div><div class='kpi-value'>Nu doen</div></div>", unsafe_allow_html=True)
             st.info(pb["actie"])
-            st.divider()
             st.markdown("### 📅 7-dagen Postplan")
             plan = generate_week_plan(d); st.dataframe(plan, use_container_width=True, hide_index=True)
             colx1, colx2 = st.columns(2)
             with colx1:
                 dt_str = pd.Timestamp.today().strftime("%Y-%m-%d")
-                st.download_button("⬇️ Exporteer plan (CSV)",
-                                   data=plan.to_csv(index=False).encode("utf-8"),
-                                   file_name=f"postplan_7_dagen_{dt_str}.csv",
-                                   mime="text/csv")
+                st.download_button("⬇️ Exporteer plan (CSV)", data=plan.to_csv(index=False).encode("utf-8"), file_name=f"postplan_7_dagen_{dt_str}.csv", mime="text/csv")
             with colx2:
                 txt = io.StringIO(); txt.write("PLAYBOOK\n"); [txt.write(f"{k}: {v}\n") for k,v in pb.items()]
                 st.download_button("⬇️ Exporteer playbook (TXT)", data=txt.getvalue().encode("utf-8"), file_name="playbook.txt", mime="text/plain")
 
-# ------------------------ Instellingen -----------------------------
+# ------------------------------ Instellingen -------------------------------
 with tab_settings:
     st.subheader("⚙️ Instellingen")
+    def _load_settings() -> dict:
+        if SETTINGS_FILE.exists():
+            try: return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+            except Exception: pass
+        return {"auto_experiments": True,"auto_post_mode":"review","alert_channel":"email","lang":"nl","data_retention_days":180}
+    def _save_settings(cfg: dict) -> bool:
+        try: SETTINGS_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8"); return True
+        except Exception: return False
     cfg = _load_settings()
     col1, col2 = st.columns(2)
     with col1:
         cfg["auto_experiments"] = st.toggle("Slimme testen (A/B → bandit)", value=cfg.get("auto_experiments", True))
-        cfg["auto_post_mode"] = st.selectbox("Auto-post modus", ["review","off"], index=["review","off"].index(cfg.get("auto_post_mode","review")))
+        cfg["auto_post_mode"] = st.selectbox("Automatisch posten", ["review","off"], index=["review","off"].index(cfg.get("auto_post_mode","review")))
         cfg["lang"] = st.selectbox("Taal", ["nl","en"], index=["nl","en"].index(cfg.get("lang","nl")))
     with col2:
         cfg["alert_channel"] = st.selectbox("Alerts kanaal", ["email"], index=0)
         cfg["data_retention_days"] = st.number_input("Data-retentie (dagen)", min_value=30, max_value=365, value=int(cfg.get("data_retention_days",180)))
         st.session_state["alert_email"] = st.text_input("Alert e-mail ontvanger", value=st.session_state.get("alert_email",""))
     if st.button("Bewaar instellingen"):
-        if _save_settings(cfg): st.success("Instellingen opgeslagen."); SET.update(cfg)
-        else: st.error("Kon instellingen niet opslaan.")
+        if _save_settings(cfg):
+            st.success("Instellingen opgeslagen.")
+        else:
+            st.error("Kon instellingen niet opslaan.")
     st.markdown("---"); st.markdown("### Branding")
-    bcol1, bcol2 = st.columns([1,1])
-    with bcol1:
+    b1, b2 = st.columns([1,1])
+    with b1:
         color = st.color_picker("Merkkleur", value=THEME_COLOR)
         if st.button("Bewaar kleur"):
             if _save_brand_color(color): st.success("Kleur opgeslagen. Herlaad de pagina.")
-    with bcol2:
+    with b2:
         if LOGO_BYTES:
             st.image(LOGO_BYTES, caption="Logo", width=90)
             if st.button("Logo verwijderen"):
-                if _remove_brand_logo(): st.success("Logo verwijderd. Herlaad de pagina.")
+                if _remove_brand_logo(): st.success("Logo verwijderd. Herladen…")
         else:
             lf = st.file_uploader("Upload logo (png)", type=["png"])
-            if lf is not None and _save_brand_logo(lf): st.success("Logo opgeslagen. Herlaad de pagina.")
+            if lf is not None and _save_brand_logo(lf): st.success("Logo opgeslagen. Herladen…")
     st.markdown("---"); st.markdown("### Licentie")
     if IS_PRO:
         st.success("Je draait **PRO**. Bedankt! 🎉")
@@ -1302,37 +1186,31 @@ with tab_settings:
             if key.strip():
                 if _write_license(key.strip()): st.success("Licentie opgeslagen. Herladen…")
             else: st.warning("Voer een geldige key in.")
-        st.caption("Heb je nog geen licentie? Koop ‘m hieronder.")
+        st.caption("Nog geen licentie? Koop ‘m hieronder.")
         st.link_button("✨ Koop PRO", LEMON_CHECKOUT_URL, use_container_width=True)
-
     st.markdown("---"); st.markdown("### Data opschonen (GDPR)")
     if st.button("🧹 Verwijder lokale data (CSV/archief/state)"):
         try:
-            for p in DATA_DIR.glob("*.csv"):
-                p.unlink(missing_ok=True)
+            for p in DATA_DIR.glob("*.csv"): p.unlink(missing_ok=True)
             for p in [LATEST_FILE, ALERT_STATE_FILE, SYNC_STATE_FILE, POST_QUEUE_FILE]:
                 if p.exists(): p.unlink()
             st.success("Alle lokale data/states zijn verwijderd.")
         except Exception as e:
             st.error(f"Kon data niet verwijderen: {e}")
 
+# ------------------------------ Legal blok -------------------------------
 with st.expander("Legal & TikTok Review Info", expanded=False):
     base = _get_public_base_url() or "https://postai.bouwmijnshop.nl"
     requested_scopes = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
-    st.markdown(
-        f"""
+    st.markdown(f"""
 - **Website (this app):** {base}  
 - **Redirect URI:** {base}/  
 - **Requested scopes:** `{requested_scopes}`  
-- **What we do:** authentication + analytics display only. **No auto-posting.**  
+- **Wat we doen:** inloggen + analytics tonen. **Geen auto-posting.**  
 - **Terms:** <https://www.bouwmijnshop.nl/pages/onze-voorwaarden>  
 - **Privacy:** <https://www.bouwmijnshop.nl/pages/privacy>  
 - **Support:** support@bouwmijnshop.nl
-        """
-    )
+""")
 
-# ------------------------ Footer trust badges ----------------------
-st.markdown(
-    f"<div class='footer-trust'>🛡️ {tr('trust1')} · 📄 {tr('trust2')} · 🎁 {tr('trust3')} · 🎯 {tr('trust4')}</div>",
-    unsafe_allow_html=True
-)
+# ----------------------------- Footer badges -------------------------------
+st.markdown(f"<div class='footer-trust'>🛡️ {tr('trust1')} · 📄 {tr('trust2')} · 🎁 {tr('trust3')} · 🎯 {tr('trust4')}</div>", unsafe_allow_html=True)
