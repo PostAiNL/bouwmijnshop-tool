@@ -1,39 +1,32 @@
-// chat-server/server.js  (CommonJS)
-const express = require("express");
+// chat-server/server.js
 const path = require("path");
+const express = require("express");
+const cors = require("cors");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// CORS & JSON
+// CORS (pas aan als je specifieke origins wilt)
+app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.sendStatus(200);
-  next();
-});
 
-// Statische assets uit ./public
+// statische assets uit /public
 app.use(express.static(path.join(__dirname, "public")));
 
-// Healthcheck
-app.get("/health", (_req, res) => res.json({ ok: true }));
+// healthcheck
+app.get("/health", (req, res) => res.json({ ok: true }));
 
-// Widget pagina (IFRAME-content)
-app.get("/widget", (_req, res) => {
+// widget-pagina
+app.get("/widget", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "widget.html"));
 });
 
-// Dummy endpoint waar de widget zijn bericht naartoe post
-app.post("/api/message", (req, res) => {
-  // Hier kun je later doorsturen naar Slack, e-mail, database, etc.
-  console.log("Nieuw chatbericht:", req.body);
-  res.json({ ok: true, received: req.body });
+// optioneel: root netjes laten antwoorden
+app.get("/", (req, res) => {
+  res.type("text/plain").send("Widget staat op /widget");
 });
 
+// start
 app.listen(PORT, () => {
-  console.log(`Chat server running on :${PORT}`);
+  console.log("Chat server running on port:", PORT);
 });
