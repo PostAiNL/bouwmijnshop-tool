@@ -1,4 +1,4 @@
-/* ===== PostAi Chat 2.0 — JS (werkt met absolute overlay CSS + click-fix) ===== */
+/* ===== PostAi Chat 2.0 — JS (werkt met absolute overlay CSS + click-proxy) ===== */
 (function (global) {
   "use strict";
 
@@ -10,7 +10,7 @@
     console.warn("[PostAi Chat] BMS_CHAT_SERVER ontbreekt — UI werkt, API-calls mogelijk niet.");
   }
 
-  /*** ---------- Safe document (escape uit iframes) ---------- ***/
+  /*** ---------- Safe document ---------- ***/
   var DOC = (function () { try { return global.document; } catch (e) { return global.document; } })();
 
   /*** ---------- Idempotent mount ---------- ***/
@@ -138,7 +138,6 @@
 
   /*** ---------- Typing ---------- ***/
   function showTyping(){
-    // aparte bubble zodat we 'm later makkelijk kunnen vervangen
     var now = new Date().toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
     var row = el("div", { "class":"bms-msg bot typing-row" }, (
       '<div class="bubble"><span class="typing">Sanne is aan het typen</span></div>' +
@@ -214,14 +213,12 @@
     input.value = ""; input.focus();
     showTyping();
 
-    // Meta
     var mode = global.localStorage.getItem("postai_mode") || "DEMO";
     var bestHours = []; var topHashtags = [];
     try { bestHours   = JSON.parse(global.localStorage.getItem("postai_best_hours") || "[]"); } catch(e){}
     var lastUpload = global.localStorage.getItem("postai_last_upload") || "";
     try { topHashtags = JSON.parse(global.localStorage.getItem("postai_top_hashtags") || "[]"); } catch(e){}
 
-    // History → laatste 6
     var history = [];
     try {
       history = JSON.parse(global.localStorage.getItem(HKEY) || "[]")
@@ -233,7 +230,11 @@
       var res = await fetch(SERVER + "/api/chat", {
         method: "POST",
         headers: { "Content-Type":"application/json" },
-        body: JSON.stringify({ message: txt, history: history, meta: { mode: mode, best_hours: bestHours, last_upload: lastUpload, top_hashtags: topHashtags } })
+        body: JSON.stringify({
+          message: txt,
+          history: history,
+          meta: { mode: mode, best_hours: bestHours, last_upload: lastUpload, top_hashtags: topHashtags }
+        })
       });
       var data = {};
       try { data = await res.json(); } catch(e){}
@@ -250,23 +251,23 @@
     }
   }
 
-  /*** ---------- CLICK-FIX: maak hoek vrij ---------- **/
-  function unlockLauncherZone(){
-    try {
-      var x = global.innerWidth  - 30;
-      var y = global.innerHeight - 30;
-      var topEl = DOC.elementFromPoint(x, y);
-      if (!topEl) return;
-      if (topEl.id === "bms-chat-launcher" || topEl.closest("#bms-overlay")) return;
-      // Alles wat boven de knop hangt, klik-doorlaatbaar maken
-      topEl.style.pointerEvents = "none";
-    } catch(e){}
+  /*** ---------- CLICK-PROXY rechtsonder ---------- ***/
+  function installClickProxy(){
+    if (!launcher) return;
+    DOC.addEventListener("click", function(e){
+      try {
+        var r = launcher.getBoundingClientRect();
+        var x = e.clientX, y = e.clientY;
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+          // forceer klik op launcher, blokkeer andere handlers
+          e.stopPropagation();
+          e.preventDefault();
+          launcher.click();
+        }
+      } catch(err){}
+    }, true); // capture-fase
   }
-
-  // Herhaald proberen, want de app rendert na cookies meerdere keren
-  unlockLauncherZone();
-  global.addEventListener("resize", unlockLauncherZone);
-  setInterval(unlockLauncherZone, 1500);
+  installClickProxy();
 
   /*** ---------- Optionele embed-API ---------- **/
   global.initBMS = function(root){
