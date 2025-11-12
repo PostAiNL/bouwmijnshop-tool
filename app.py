@@ -154,7 +154,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-# ============================== Simple routes ================================
+
+# ============================== Simple routes (GEUPDATE) ======================
 def _render_privacy():
     st.markdown("""
 # Privacyverklaring — PostAi
@@ -184,24 +185,6 @@ We **slaan geen wachtwoorden** of privédata op en **posten niets namens jou**.
 
 **Contact**
 support@bouwmijnshop.nl
-""")
-
-# Query params – werkt in zowel nieuwe als oude Streamlit API's
-try:
-    qp = st.query_params           # >=1.30  (dict[str,str])
-    page = qp.get("page", "")
-except Exception:
-    qp = st.experimental_get_query_params()  # <1.30 (dict[str, list[str]])
-    page = (qp.get("page", [""]) or [""])[0]
-
-if (page or "").lower() == "privacy":
-    _render_privacy()
-    st.stop()  # heel belangrijk: voorkom dat de rest van de app rendert
-# ============================== Simple routes ================================
-def _render_privacy():
-    st.markdown("""
-# Privacyverklaring — PostAi
-*(ongewijzigd; staat al in je code)*
 """)
 
 def _render_terms():
@@ -262,6 +245,15 @@ Deze voorwaarden zijn van toepassing op elk gebruik van PostAi en op alle offert
 Vragen? **support@bouwmijnshop.nl**
 """)
 
+def _render_404(slug: str):
+    st.markdown(f"""
+# Pagina niet gevonden
+De pagina `?page={slug}` bestaat niet.
+
+- Ga naar de **[startpagina](/)**  
+- Of bekijk: **[Privacy](?page=privacy)** · **[Voorwaarden](?page=terms)**
+""")
+
 def _route_simple_pages():
     # Werkt in nieuwe én oude Streamlit-versies
     try:
@@ -270,16 +262,45 @@ def _route_simple_pages():
         qp = st.experimental_get_query_params()
         page = (qp.get("page", [""]) or [""])[0]
 
-    p = (page or "").lower()
+    p = (page or "").lower().strip()
     if p == "privacy":
         _render_privacy(); st.stop()
     if p in ("terms", "voorwaarden", "tos"):
         _render_terms(); st.stop()
+    if p not in ("", None):
+        _render_404(p); st.stop()
 
 # Roep de router aan vóór andere logica (zoals OAuth)
 _route_simple_pages()
 
-# OAuth callback (minimal)
+# ============================== Cookie/Consent ===============================
+def _cookie_banner():
+    # Toon de banner alleen als er nog geen keuze is gemaakt
+    if st.session_state.get("consent") in ("accepted", "declined"):
+        return
+
+    with st.container(border=True):
+        c1, c2 = st.columns([4, 2])
+        with c1:
+            st.markdown(
+                "We gebruiken alleen functionele data (login/analytics). "
+                "[Privacy](?page=privacy) · [Voorwaarden](?page=terms)"
+            )
+        with c2:
+            a, b = st.columns(2)
+            with a:
+                if st.button("Accepteer", use_container_width=True, type="primary"):
+                    st.session_state["consent"] = "accepted"
+                    st.toast("Cookies/functional tracking geaccepteerd.")
+            with b:
+                if st.button("Weiger", use_container_width=True):
+                    st.session_state["consent"] = "declined"
+                    st.toast("Functionele tracking geweigerd.")
+
+# >>> BELANGRIJK: roep de banner hier aan
+_cookie_banner()
+
+# ============================== OAuth callback ===============================
 qp = st.query_params
 if "error" in qp:
     st.error(f"❌ TikTok OAuth error: {qp.get('error_description', qp.get('error'))}")
@@ -401,16 +422,14 @@ label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p { color: var(--text) !imp
 .locked { position:relative; filter:blur(1.2px) saturate(.8); }
 .locked::after { content:"🔒 PRO — Ontgrendel om dit te gebruiken"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#111827; background:rgba(255,255,255,.65); border:1px dashed var(--card-border); border-radius:16px; font-weight:700; }
 
-/* ===== Mobile ONLY (≤760px) — stijl gelijk aan desktop, alleen compacter ===== */
+/* ===== Mobile ONLY (≤760px) ===== */
 @media (max-width:760px){
   .block-container{ padding-left:12px; padding-right:12px; }
   .stButton>button, .stLinkButton>a{ width:100% !important; }
   .stButton>button, .stLinkButton>a{
       background:var(--brand) !important; color:#fff !important; border:1px solid var(--brand) !important;
   }
-  /* “Secundaire” knoppen in containers die soft moeten blijven */
   .soft-btn>button{ background:var(--card) !important; color:var(--text) !important; border:1px solid var(--ring) !important; }
-
   .stSelectbox div[role="combobox"],
   .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea{
       font-size:14px !important;
@@ -424,8 +443,6 @@ label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p { color: var(--text) !imp
     st.markdown("<style>" + vars_block + base_css + "</style>", unsafe_allow_html=True)
     st.markdown(f"<div class='pro-badge'>{'PRO' if pro else 'DEMO'}</div>", unsafe_allow_html=True)
 
-
-THEME_COLOR, LOGO_BYTES = _load_branding()
 _inject_css(THEME_COLOR, IS_PRO)
 
 # ============================== Date helpers (FIX) ===========================
@@ -919,6 +936,7 @@ with st.sidebar:
                 st.warning("We missen kolommen: " + ", ".join(need) + ". Gebruik ons sjabloon (zie hoofdscherm).")
         except Exception as e:
             st.error(f"Kon bestand niet verwerken: {e}")
+
 # ============================= Onboarding bar ================================
 def _onboarding_bar(step: int):
     labels = ["Upload", "Check", "A/B test", "Plan", "Resultaat"]
@@ -1397,10 +1415,6 @@ def ai_chat_answer(d: pd.DataFrame, question: str) -> str:
 def locked_section(feature_name: str, pattern: str = "generic", height: int | None = None):
     """
     Toont ghost-UI achter blur EN daarboven een vaste overlay-CTA kaart.
-    Geen extra kaart eronder meer nodig.
-
-    pattern: 'generator' | 'coach' | 'chat' | 'trends' | 'compare' |
-             'exports' | 'branding' | 'queue' | 'generic'
     """
     def bar(h=44, w="100%", cls="ghost-bar", mt=0):
         return f"<div class='{cls}' style='height:{h}px;width:{w};margin-top:{mt}px;'></div>"
@@ -1668,9 +1682,6 @@ with tab_analyse:
                 k2.markdown(f"<div class='kpi-card'><div class='kpi-label'>Gem. reactiescore</div><div class='kpi-value'>📈 {engA:.2f}% / {engB:.2f}%</div></div>", unsafe_allow_html=True)
                 k3.markdown(f"<div class='kpi-card'><div class='kpi-label'>Δ Virale score (B − A)</div><div class='kpi-value'>{(scB - scA):+,.3f}</div></div>".replace(",", "."), unsafe_allow_html=True)
 
-
-
-
 # -------------------------------- Archief -----------------------------------
 with tab_arch:
     st.subheader("🗃️ Archief")
@@ -1877,20 +1888,6 @@ with tab_strategy:
                     txt = io.StringIO(); txt.write("PLAYBOOK\n"); [txt.write(f"{k}: {v}\n") for k,v in pb.items()]
                     st.download_button("⬇️ Exporteer playbook (TXT)", data=txt.getvalue().encode("utf-8"), file_name="playbook.txt", mime="text/plain")
 
-# ------------------------------ Archief -----------------------------------
-with tab_arch:
-    st.subheader("🗃️ Archief")
-    files = sorted(DATA_DIR.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
-    rows = []
-    for p in files:
-        try:
-            df = _smart_read_any(p)
-            rows.append({"Bestand": p.name, "Grootte (KB)": round(p.stat().st_size/1024, 1), "Rijen": len(df), "Laatste wijziging": datetime.fromtimestamp(p.stat().st_mtime)})
-        except Exception: pass
-    table = pd.DataFrame(rows)
-    if table.empty: st.info("Nog geen bestanden in het archief.")
-    else: st.dataframe(table, use_container_width=True, hide_index=True)
-
 # ------------------------------ Instellingen -------------------------------
 with tab_settings:
     st.subheader("⚙️ Instellingen (simpel)")
@@ -1970,13 +1967,45 @@ with st.expander("Legal & TikTok Review Info", expanded=False):
 - **Redirect URI:** {base}/  
 - **Aangevraagde scopes:** `{requested_scopes}`  
 - **Wat we doen:** inloggen + analytics tonen. **Geen auto-posting.**  
-- **Terms:** <https://www.bouwmijnshop.nl/pages/onze-voorwaarden>  
-- **Privacy:** <https://www.bouwmijnshop.nl/pages/privacy>  
-- **Support:** support@bouwmijnshop.nl
+- **Terms (in-app):** [`?page=terms`](?page=terms) · **Privacy (in-app):** [`?page=privacy`](?page=privacy)  
+- **Officiële site:** [Voorwaarden](https://www.bouwmijnshop.nl/pages/onze-voorwaarden) · [Privacy](https://www.bouwmijnshop.nl/pages/privacy)  
+- **Support:** [support@bouwmijnshop.nl](mailto:support@bouwmijnshop.nl)
 """)
 
 # ----------------------------- Footer badges -------------------------------
-st.markdown(f"<div class='footer-trust'>🛡️ {tr('trust1')} · 📄 {tr('trust2')} · 🎁 {tr('trust3')} · 🎯 {tr('trust4')}</div>", unsafe_allow_html=True)
+st.markdown(
+    f"<div class='footer-trust'>🛡️ {tr('trust1')} · 📄 {tr('trust2')} · 🎁 {tr('trust3')} · 🎯 {tr('trust4')}</div>",
+    unsafe_allow_html=True
+)
+
+# ============================== Mini-footer ===============================
+def _mini_footer():
+    year = datetime.now().year
+    st.markdown(f"""
+<style>
+  .mini-footer {{
+    margin: 18px 0 12px;
+    text-align:center;
+    font-size:13px;
+    color:#6b7280;
+  }}
+  .mini-footer a {{
+    color:#374151;
+    text-decoration:none;
+    border-bottom:1px dotted #cbd5e1;
+  }}
+  .mini-footer a:hover {{ border-bottom-style:solid; }}
+  .mini-footer .sep {{ margin:0 .35rem; color:#94a3b8; }}
+</style>
+<div class="mini-footer">
+  © {year} PostAi
+  <span class="sep">·</span><a href="?page=privacy">Privacy</a>
+  <span class="sep">·</span><a href="?page=terms">Voorwaarden</a>
+  <span class="sep">·</span><a href="mailto:support@bouwmijnshop.nl">Support</a>
+</div>
+""", unsafe_allow_html=True)
+
+_mini_footer()
 
 # ----------------------------- Chat widget ---------------------------------
 import streamlit.components.v1 as components
