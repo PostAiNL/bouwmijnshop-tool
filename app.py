@@ -184,7 +184,7 @@ We **slaan geen wachtwoorden** of privédata op en **posten niets namens jou**.
   in **Instellingen**.
 
 **Contact**
-support@bouwmijnshop.nl
+info@bouwmijnshop.nl
 """)
 
 def _render_terms():
