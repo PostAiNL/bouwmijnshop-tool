@@ -73,21 +73,62 @@
   overlay.appendChild(chat);
   DOC.body.appendChild(overlay);
 
-  /*** ---------- Elements & events ---------- ***/
-  var body    = qs("#bms-body");
-  var input   = qs("#bms-input");
-  var sendBtn = qs("#bms-send");
-  var closeBtn= chat.querySelector(".close");
+  /*** ---------- Elements ---------- ***/
+  var body     = qs("#bms-body");
+  var input    = qs("#bms-input");
+  var sendBtn  = qs("#bms-send");
+  var closeBtn = chat.querySelector(".close");
 
-  launcher.addEventListener("click", function(){
+  /*** ---------- Klik-fix afdwingen + blijvend herstellen ---------- ***/
+  function enforceClickFix() {
+    try {
+      // overlay vangt nooit clicks, children wel
+      overlay.style.pointerEvents = "none";
+      [launcher, chat, teaser].forEach(function(n){
+        if (!n) return;
+        n.style.pointerEvents = "auto";
+        if (!n.style.position) n.style.position = "absolute";
+      });
+      // altijd bovenaan
+      launcher.style.zIndex = "2147483647";
+      chat.style.zIndex     = "2147483646";
+    } catch(_) {}
+  }
+  enforceClickFix();
+
+  // Herstel styles na DOM-mutaties (Streamlit reruns / cookie-accept)
+  var mo = new MutationObserver(function(){ enforceClickFix(); });
+  mo.observe(DOC.documentElement, { childList: true, subtree: true, attributes: true });
+
+  /*** ---------- Open/close (robuust) ---------- ***/
+  function openChat(e){
+    try { e && e.preventDefault(); e && e.stopPropagation(); } catch(_){}
     chat.style.display = "block";
-    if (input) input.focus();
-  });
-  closeBtn.addEventListener("click", function(){
+    if (input) setTimeout(function(){ try{ input.focus(); }catch(_){} }, 0);
+  }
+  function closeChat(e){
+    try { e && e.preventDefault(); e && e.stopPropagation(); } catch(_){}
     chat.style.display = "none";
-  });
+  }
 
-  // Teaser show (eenmalig)
+  // Meerdere events voor betere respons (mobiel/desktop)
+  ["click","pointerdown","touchstart"].forEach(function(evt){
+    launcher.addEventListener(evt, openChat, { passive: true });
+  });
+  closeBtn.addEventListener("click", closeChat);
+
+  // Capture-fase fallback: forceer open als er iets bovenop ligt
+  function inRect(x, y, r){ return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom; }
+  function captureOpen(e){
+    try{
+      var r = launcher.getBoundingClientRect();
+      if (inRect(e.clientX, e.clientY, r)) openChat(e);
+    }catch(_){}
+  }
+  global.addEventListener('pointerdown', captureOpen, true);
+  global.addEventListener('click',       captureOpen, true);
+
+  /*** ---------- Teaser show (eenmalig) ---------- ***/
   if (!global.localStorage.getItem("bmsChatTeaseShown")) {
     setTimeout(function(){ teaser.classList.add("show"); }, 600);
     setTimeout(function(){
@@ -99,10 +140,13 @@
   /*** ---------- History ---------- ***/
   var HKEY = "bmsChatHistory";
 
-  function append(role, text){
+  // append met 'raw' optie: alleen voor typing HTML toestaan
+  function append(role, text, opts){
+    var raw = opts && opts.raw;
     var now = new Date().toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
+    var bubbleContent = raw ? text : escapeHtml(text);
     var row = el("div", { "class":"bms-msg "+role }, (
-      '<div class="bubble">' + escapeHtml(text) + ' <button class="copy-btn" title="Kopieer" aria-label="Kopieer">📋</button></div>' +
+      '<div class="bubble">' + bubbleContent + ' <button class="copy-btn" title="Kopieer" aria-label="Kopieer">📋</button></div>' +
       '<div class="time">' + now + '</div>'
     ));
     body.appendChild(row);
@@ -136,8 +180,17 @@
     global.localStorage.setItem("bmsChatWelcomed","1");
   }
 
-  /*** ---------- Typing ---------- ***/
-  function showTyping(){ append("bot","<span class='typing'>Sanne is aan het typen</span>"); }
+  /*** ---------- Typing (HTML raw, antwoorden blijven ge-escaped) ---------- ***/
+  function showTyping(){
+    append("bot","<span class='typing'>Sanne is aan het typen</span>", { raw: true });
+    // copy-knop uit typing-bubble weghalen
+    var t = body.querySelector(".typing");
+    if (t) {
+      var b = t.closest(".bubble");
+      var copy = b && b.querySelector(".copy-btn");
+      if (copy) copy.remove();
+    }
+  }
   function replaceTyping(text){
     var last = body.querySelector(".typing");
     if (last) last.parentElement.innerHTML = escapeHtml(text);
@@ -216,6 +269,7 @@
       });
       var data = {};
       try { data = await res.json(); } catch(e){}
+
       var reply = (data && data.reply) || "Dankje! Ik kijk even met je mee.";
       replaceTyping(reply);
       save("bot", reply);
@@ -230,7 +284,6 @@
   }
 
   /*** ---------- Optionele embed-API ---------- **/
-  // Voor iframes: verplaats overlay in een eigen root (layout blijft via CSS fixed/absolute).
   global.initBMS = function(root){
     if (!root) return;
     if (!overlay.parentNode || overlay.parentNode !== root) {
