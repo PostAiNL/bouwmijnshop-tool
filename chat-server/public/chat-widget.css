@@ -1,4 +1,4 @@
-/* ===== PostAi Chat 2.0 CSS ===== */
+/* ===== PostAi Chat 2.0 CSS (klik-fix) ===== */
 
 /* Overlay die altijd aan de viewport hangt (voorkomt clipping door transform/overflow) */
 #bms-overlay {
@@ -18,7 +18,7 @@
 
 /* Launcher */
 #bms-chat-launcher{
-  right:16px;bottom:16px;z-index:1;width:56px;height:56px;
+  right:16px;bottom:16px;z-index:2147483647;width:56px;height:56px;
   border-radius:50%;background:#111827;color:#fff;border:0;cursor:pointer;
   box-shadow:0 10px 24px rgba(0,0,0,.2);transition:transform .15s ease;
 }
@@ -26,7 +26,7 @@
 
 /* Chatvenster */
 #bms-chat{
-  right:16px;bottom:84px;z-index:1;display:none;width:340px;
+  right:16px;bottom:84px;z-index:2147483646;display:none;width:340px;
   max-height:min(70vh, calc(100dvh - 100px));
   background:#fff;border:1px solid #e5e7eb;border-radius:16px;
   box-shadow:0 20px 48px rgba(0,0,0,.18);overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;
@@ -73,7 +73,7 @@
 
 /* Teaser */
 #bms-chat-teaser{
-  right:84px;bottom:24px;z-index:1;background:#111827;color:#fff;padding:8px 12px;border-radius:12px;opacity:0;transform:translateY(8px);
+  right:84px;bottom:24px;z-index:2147483646;background:#111827;color:#fff;padding:8px 12px;border-radius:12px;opacity:0;transform:translateY(8px);
   transition:all .25s ease;pointer-events:auto;
 }
 #bms-chat-teaser.show{opacity:1;transform:translateY(0);}
@@ -95,8 +95,9 @@
 /* Dark theme toggle */
 :root.dark #bms-chat{background:#111827;color:#f8fafc;}
 :root.dark #bms-chat .bubble{background:#1f2937;color:#f8fafc;}
-/* Klik-fix */
+
+/* === Permanente klik-fix (belangrijk) === */
 #bms-overlay { pointer-events: none !important; }
-#bms-overlay * { pointer-events: auto !important; }  /* forceer clicks op kinderen */
+#bms-overlay * { pointer-events: auto !important; }
 #bms-chat-launcher { z-index: 2147483647 !important; }
 #bms-chat         { z-index: 2147483646 !important; }
