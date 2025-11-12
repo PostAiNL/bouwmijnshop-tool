@@ -210,7 +210,7 @@ def _inject_css(theme_color: str, pro: bool):
 }}
 """
     base_css = """
-html { color-scheme: light; }
+html { color-scheme: light; -webkit-text-size-adjust: 100%; }
 body, [data-testid="stAppViewContainer"] { background: var(--bg) !important; color: var(--text) !important; }
 section[data-testid="stSidebar"] > div:first-child { background: var(--head); border-right:1px solid var(--card-border); }
 .block-container { max-width:1200px; padding-top:14px; }
@@ -225,20 +225,36 @@ h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
 .chip { display:inline-block; padding:4px 10px; border:1px solid var(--ring); border-radius:999px; margin-right:6px; margin-bottom:6px; font-size:.8rem; background: var(--card); color: var(--text); }
 .kpi-gap { margin-top:10px; margin-bottom:14px; }
 
-/* Buttons */
-.stButton>button { transition:transform .12s ease, box-shadow .12s ease, opacity .2s ease; border-radius:12px; font-weight:700; }
-.stButton>button:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.06); }
-.primary-btn>button { background:var(--brand); color:#fff; border:1px solid var(--brand); height:50px; font-size:1.05rem; }
-.soft-btn>button { background:var(--card); border:1px solid var(--ring); color: var(--text); }
+/* Buttons – BASE (desktop & mobile) */
+.stButton>button,
+.stLinkButton>a {
+  border-radius:12px !important;
+  font-weight:700 !important;
+  transition:transform .12s ease, box-shadow .12s ease, opacity .2s ease !important;
+  -webkit-appearance:none !important; appearance:none !important;
+  text-decoration:none !important; outline:none !important;
+}
+.stButton>button:hover,
+.stLinkButton>a:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.06); }
+
+/* Defaults (neutraal) wanneer geen custom class is gebruikt */
+.stButton>button { background:var(--card) !important; color:var(--text) !important; border:1px solid var(--card-border) !important; }
+.stLinkButton>a { background:var(--brand) !important; color:#fff !important; border:1px solid var(--brand) !important; }
+
+/* Optionele varianten (als je ze gebruikt) */
+.primary-btn>button { background:var(--brand) !important; color:#fff !important; border:1px solid var(--brand) !important; }
+.soft-btn>button { background:var(--card) !important; border:1px solid var(--ring) !important; color: var(--text) !important; }
 
 /* Inputs */
-.stSelectbox div[role="combobox"], .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea { background: var(--card) !important; color: var(--text) !important; border:1px solid var(--card-border) !important; border-radius:12px !important; }
+.stSelectbox div[role="combobox"], .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea {
+  background: var(--card) !important; color: var(--text) !important; border:1px solid var(--card-border) !important; border-radius:12px !important;
+}
 label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p { color: var(--text) !important; }
 
 /* Tabs */
 .stTabs [data-baseweb="tab-list"] { position:sticky; top:0; z-index:5; background: var(--head); padding-top:6px; border-bottom:1px solid var(--card-border); }
 
-/* Progress / bars — blijft wit, gebruikt NIET de merkkleur */
+/* Progress / bars */
 .stProgress > div > div { background: #ffffff !important; }
 .stProgress > div { background: var(--track) !important; border-radius:8px; }
 
@@ -256,11 +272,34 @@ label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p { color: var(--text) !imp
 .skeleton::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.25) 50%, rgba(255,255,255,0) 100%); transform:translateX(-100%); animation:shimmer 1.15s infinite; }
 @keyframes shimmer { 100% { transform:translateX(100%); } }
 
-/* Pro badge */
+/* Pro badge & lock preview */
 .pro-badge { position:fixed; top:8px; right:12px; z-index:9999; color:#fff; padding:6px 12px; border-radius:999px; font-weight:700; background:#10b981; }
+.locked { position:relative; filter:blur(1.2px) saturate(.8); }
+.locked::after { content:"🔒 PRO — Ontgrendel om dit te gebruiken"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#111827; background:rgba(255,255,255,.65); border:1px dashed var(--card-border); border-radius:16px; font-weight:700; }
+
+/* ===== Mobile ONLY (≤760px) — stijl gelijk aan desktop, alleen compacter ===== */
+@media (max-width:760px){
+  .block-container{ padding-left:12px; padding-right:12px; }
+  .stButton>button, .stLinkButton>a{ width:100% !important; }
+  .stButton>button, .stLinkButton>a{
+      background:var(--brand) !important; color:#fff !important; border:1px solid var(--brand) !important;
+  }
+  /* “Secundaire” knoppen in containers die soft moeten blijven */
+  .soft-btn>button{ background:var(--card) !important; color:var(--text) !important; border:1px solid var(--ring) !important; }
+
+  .stSelectbox div[role="combobox"],
+  .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea{
+      font-size:14px !important;
+  }
+  .kpi-card{ padding:12px; border-radius:14px; }
+  .kpi-value{ font-size:1.05rem; }
+  .stTabs [data-baseweb="tab-list"]{ padding-top:4px; }
+  .stTabs [data-baseweb="tab"]{ padding:8px 10px; font-size:13px; }
+}
 """
     st.markdown("<style>" + vars_block + base_css + "</style>", unsafe_allow_html=True)
     st.markdown(f"<div class='pro-badge'>{'PRO' if pro else 'DEMO'}</div>", unsafe_allow_html=True)
+
 
 THEME_COLOR, LOGO_BYTES = _load_branding()
 _inject_css(THEME_COLOR, IS_PRO)
