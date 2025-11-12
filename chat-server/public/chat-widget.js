@@ -1,4 +1,4 @@
-/* ===== PostAi Chat 2.0 — JS (werkt met absolute overlay CSS + click-proxy) ===== */
+/* ===== PostAi Chat 2.0 — JS (werkt met absolute overlay CSS) ===== */
 (function (global) {
   "use strict";
 
@@ -10,8 +10,8 @@
     console.warn("[PostAi Chat] BMS_CHAT_SERVER ontbreekt — UI werkt, API-calls mogelijk niet.");
   }
 
-  /*** ---------- Safe document ---------- ***/
-  var DOC = (function () { try { return global.document; } catch (e) { return global.document; } })();
+  /*** ---------- Safe document (escape uit iframes) ---------- ***/
+  var DOC = (function () { try { return global.top.document; } catch (e) { return global.document; } })();
 
   /*** ---------- Idempotent mount ---------- ***/
   if (DOC.getElementById("bms-chat-launcher") || DOC.getElementById("bms-overlay")) return;
@@ -137,31 +137,11 @@
   }
 
   /*** ---------- Typing ---------- ***/
-  function showTyping(){
-    var now = new Date().toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
-    var row = el("div", { "class":"bms-msg bot typing-row" }, (
-      '<div class="bubble"><span class="typing">Sanne is aan het typen</span></div>' +
-      '<div class="time">' + now + '</div>'
-    ));
-    body.appendChild(row);
-    body.scrollTop = body.scrollHeight;
-  }
+  function showTyping(){ append("bot","<span class='typing'>Sanne is aan het typen</span>"); }
   function replaceTyping(text){
-    var row  = body.querySelector(".typing-row");
-    if (row) {
-      var bubble = row.querySelector(".bubble");
-      if (bubble) bubble.innerHTML = escapeHtml(text) + ' <button class="copy-btn" title="Kopieer" aria-label="Kopieer">📋</button>';
-      row.classList.remove("typing-row");
-      var copyBtn = row.querySelector(".copy-btn");
-      if (copyBtn) {
-        copyBtn.onclick = function(){
-          try { navigator.clipboard.writeText(text); copyBtn.textContent="✅"; setTimeout(function(){ copyBtn.textContent="📋"; }, 1500); }
-          catch(e){}
-        };
-      }
-    } else {
-      append("bot", text);
-    }
+    var last = body.querySelector(".typing");
+    if (last) last.parentElement.innerHTML = escapeHtml(text);
+    else append("bot", text);
     body.scrollTop = body.scrollHeight;
   }
 
@@ -213,12 +193,14 @@
     input.value = ""; input.focus();
     showTyping();
 
+    // Meta
     var mode = global.localStorage.getItem("postai_mode") || "DEMO";
     var bestHours = []; var topHashtags = [];
     try { bestHours   = JSON.parse(global.localStorage.getItem("postai_best_hours") || "[]"); } catch(e){}
     var lastUpload = global.localStorage.getItem("postai_last_upload") || "";
     try { topHashtags = JSON.parse(global.localStorage.getItem("postai_top_hashtags") || "[]"); } catch(e){}
 
+    // History → laatste 6
     var history = [];
     try {
       history = JSON.parse(global.localStorage.getItem(HKEY) || "[]")
@@ -251,24 +233,6 @@
     }
   }
 
-  /*** ---------- CLICK-PROXY rechtsonder ---------- ***/
-  function installClickProxy(){
-    if (!launcher) return;
-    DOC.addEventListener("click", function(e){
-      try {
-        var r = launcher.getBoundingClientRect();
-        var x = e.clientX, y = e.clientY;
-        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
-          // forceer klik op launcher, blokkeer andere handlers
-          e.stopPropagation();
-          e.preventDefault();
-          launcher.click();
-        }
-      } catch(err){}
-    }, true); // capture-fase
-  }
-  installClickProxy();
-
   /*** ---------- Optionele embed-API ---------- **/
   global.initBMS = function(root){
     if (!root) return;
@@ -277,22 +241,37 @@
     }
   };
 
-})(window);
-  /*** ---------- Pro-badge / overlay neutraliseren ---------- ***/
-  function disableForeignBadges(){
-    try {
-      // Streamlit / host "pro badge" die in je hoek zit
-      var badge = DOC.querySelector('div.pro-badge');
-      if (badge) {
-        badge.style.pointerEvents = 'none';
-        // desnoods nog extra omlaag duwen
-        badge.style.zIndex = '0';
-      }
-    } catch (e) {}
+  /*** ---------- Altijd bovenaan + blokkades weghalen ---------- ***/
+  function ensureOverlayOnTop(){
+    if (!overlay || !overlay.parentNode) return;
+    // zorg dat overlay altijd de laatste child is
+    if (overlay.parentNode.lastElementChild !== overlay) {
+      overlay.parentNode.appendChild(overlay);
+    }
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "2147483647";
+    overlay.style.pointerEvents = "none"; // kinderen krijgen weer auto in CSS
   }
 
-  // meteen uitvoeren en daarna blijven herhalen (mocht hij terugkomen)
-  disableForeignBadges();
-  setInterval(disableForeignBadges, 1000);
+  function clearObstruction(){
+    try {
+      if (!launcher) return;
+      var rect = launcher.getBoundingClientRect();
+      var x = rect.left + rect.width / 2;
+      var y = rect.top  + rect.height / 2;
+      var topEl = DOC.elementFromPoint(x, y);
+      if (topEl && topEl !== launcher && !launcher.contains(topEl)) {
+        // alles wat precies boven de launcher ligt, kliks laten doorlaten
+        topEl.style.pointerEvents = "none";
+      }
+    } catch(e){}
+  }
+
+  // direct uitvoeren en regelmatig herhalen (voor als cookie-banner de DOM verandert)
+  ensureOverlayOnTop();
+  clearObstruction();
+  setInterval(ensureOverlayOnTop, 1000);
+  setInterval(clearObstruction, 1500);
 
 })(window);
