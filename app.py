@@ -2010,47 +2010,42 @@ def _mini_footer():
 _mini_footer()
 
 # ----------------------------- Chat widget (Optie A) -----------------------------
-# ----------------------------- Chat widget (robust) -----------------------------
-CHAT_SERVER = "https://chatbot-2-0-3v8l.onrender.com"  # jouw server
-
-snippet = f"""
-  <script>
-    console.log("[PostAi] injecting widget (st.html path) …");
-    window.BMS_CHAT_SERVER = "{CHAT_SERVER}";
-    window.BMS_CHAT_CSS_URL = "{CHAT_SERVER}/chat-widget.css";
-  </script>
-
-  <!-- Inline fallback: knop is zichtbaar zelfs zonder externe CSS -->
+# --- INLINE ROOKTEST: toont altijd een knop + paneel, zonder externe bestanden ---
+st.html("""
   <style>
-    #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
-    #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
-    #bms-chat-launcher {{
-      right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
-      background:#111827; color:#fff; border:0; cursor:pointer;
-      box-shadow:0 10px 24px rgba(0,0,0,.2);
-      z-index: 2147483647;
-    }}
-    #bms-chat {{ right:16px; bottom:84px; display:none; z-index:2147483647; background:#fff; }}
+    #bms-overlay{position:fixed;inset:0;z-index:2147483647;pointer-events:none;}
+    #bms-chat-launcher,#bms-chat{position:absolute;pointer-events:auto;}
+    #bms-chat-launcher{
+      right:16px;bottom:16px;width:56px;height:56px;border-radius:50%;
+      background:#111827;color:#fff;border:0;cursor:pointer;box-shadow:0 10px 24px rgba(0,0,0,.2);
+    }
+    #bms-chat{
+      right:16px;bottom:84px;display:none;width:320px;max-height:60vh;overflow:auto;
+      background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 20px 48px rgba(0,0,0,.18);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;
+    }
+    #bms-chat .hdr{display:flex;gap:8px;align-items:center;padding:10px;border-bottom:1px solid #eee;}
+    #bms-chat .hdr .ttl{font-weight:700}
+    #bms-chat .body{padding:10px}
   </style>
-
-  <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css" onload="console.log('[PostAi] CSS loaded')" onerror="console.error('[PostAi] CSS failed')"/>
-  <script src="{CHAT_SERVER}/chat-widget.js" defer onload="console.log('[PostAi] JS loaded')" onerror="console.error('[PostAi] JS failed')"></script>
-"""
-
-try:
-    # Streamlit ≥ 1.38
-    st.html(snippet)
-except Exception as e:
-    # Fallback: older Streamlit → sandboxed iframe (make it tall so the button is in view)
-    import streamlit.components.v1 as components
-    components.html(
-        f"""
-        {snippet}
-        <script>console.log("[PostAi] components.html fallback used")</script>
-        """,
-        height=680,  # important: enough height for the floating UI
-        scrolling=False,
-    )
+  <div id="bms-overlay">
+    <button id="bms-chat-launcher" aria-label="Open chat">💬</button>
+    <div id="bms-chat" role="dialog" aria-modal="true" aria-label="Chat">
+      <div class="hdr"><div class="ttl">Sanne (test)</div><button id="bms-close" aria-label="Sluit">✕</button></div>
+      <div class="body">Als je dit ziet, werkt DOM-injectie ✔️</div>
+    </div>
+  </div>
+  <script>
+    (function(){
+      const btn = document.getElementById('bms-chat-launcher');
+      const modal = document.getElementById('bms-chat');
+      const close = document.getElementById('bms-close');
+      btn.onclick = ()=>{ modal.style.display='block'; };
+      close.onclick = ()=>{ modal.style.display='none'; };
+      console.log('[Rooktest] Ingediend en zichtbaar.');
+    })();
+  </script>
+""")
 
 st.markdown("""
 <style>
