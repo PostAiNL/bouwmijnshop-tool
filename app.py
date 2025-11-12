@@ -154,19 +154,49 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-# ---- Simple route: https://postai.bouwmijnshop.nl/?page=privacy ----
-qp = st.query_params  # mag je opnieuw lezen; is idempotent
-if qp.get("page", [""])[0].lower() == "privacy":
+# ============================== Simple routes ================================
+def _render_privacy():
     st.markdown("""
-# Privacyverklaring – PostAi
-PostAi gebruikt enkel de TikTok-login om jouw profielstatistieken te bekijken.  
-We slaan geen wachtwoorden of privédata op.  
-We posten niets namens jou.  
-Alle gegevens worden alleen lokaal verwerkt voor analyse en advies.  
+# Privacyverklaring — PostAi
 
-**Contact:** support@bouwmijnshop.nl
-    """)
-    st.stop()  # heel belangrijk: rest van de app niet meer renderen
+PostAi gebruikt **alleen** TikTok-login om jouw **profielstatistieken** te bekijken.
+We **slaan geen wachtwoorden** of privédata op en **posten niets namens jou**.
+
+**Wat verzamelen we?**
+- Basisprofiel (naam, avatar) via TikTok OAuth
+- Geüploade CSV/XLSX die jij zelf aanlevert (blijft lokaal op de server van de app)
+
+**Waarvoor gebruiken we dit?**
+- Om je analytics te tonen en je best-tijden te berekenen
+- Voor anonieme, geaggregeerde analyse ter verbetering van advies
+
+**Wat bewaren we niet**
+- Geen wachtwoorden of directe berichten
+- Geen automatische posts zonder expliciete actie
+
+**Bewaartermijn**
+- Gegevens die je uploadt worden lokaal bewaard tot je ze wist via
+  _Instellingen → Data opschonen (privacy)_.
+
+**Je rechten**
+- Je kunt op elk moment je data verwijderen via de knop “🧹 Verwijder lokale data”
+  in **Instellingen**.
+
+**Contact**
+support@bouwmijnshop.nl
+""")
+
+# Query params – werkt in zowel nieuwe als oude Streamlit API's
+try:
+    qp = st.query_params           # >=1.30  (dict[str,str])
+    page = qp.get("page", "")
+except Exception:
+    qp = st.experimental_get_query_params()  # <1.30 (dict[str, list[str]])
+    page = (qp.get("page", [""]) or [""])[0]
+
+if (page or "").lower() == "privacy":
+    _render_privacy()
+    st.stop()  # heel belangrijk: voorkom dat de rest van de app rendert
 
 # OAuth callback (minimal)
 qp = st.query_params
