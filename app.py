@@ -711,6 +711,7 @@ with st.sidebar:
     _login_url = build_tiktok_auth_url()
     if _login_url:
         st.link_button("Log in met TikTok", _login_url, use_container_width=True)
+	st.caption("🔒 Login is beschikbaar zodra TikTok onze app heeft goedgekeurd.")
         with st.popover("Welke data gebruiken we?"):
             st.caption("Alleen **inloggen** en je profielfoto/naam. We posten **niets**. Simpel en veilig.")
     else:
@@ -928,6 +929,7 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
             _login_url_top = build_tiktok_auth_url()
             if _login_url_top:
                 st.link_button("Log in met TikTok", _login_url_top, use_container_width=True)
+		st.caption("🔒 Login komt beschikbaar zodra TikTok onze app heeft goedgekeurd.")
             if st.button("🚀 Start check", key="hero_analyse_btn", use_container_width=True, type="primary", help="We analyseren je recente posts en geven een simpel advies."):
                 with st.spinner("We kijken wat werkt…"):
                     time.sleep(0.7); st.toast("✅ Check klaar — advies geüpdatet.")
