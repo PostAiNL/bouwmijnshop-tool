@@ -197,6 +197,87 @@ except Exception:
 if (page or "").lower() == "privacy":
     _render_privacy()
     st.stop()  # heel belangrijk: voorkom dat de rest van de app rendert
+# ============================== Simple routes ================================
+def _render_privacy():
+    st.markdown("""
+# Privacyverklaring — PostAi
+*(ongewijzigd; staat al in je code)*
+""")
+
+def _render_terms():
+    st.markdown("""
+# Algemene Voorwaarden — PostAi (TikTok Growth Agent)
+
+**Versie:** 1.0 · **Laatst bijgewerkt:** 12-11-2025
+
+## 1. Definities
+- **PostAi**: de software waarin je analytics bekijkt en advies krijgt.
+- **Gebruiker**: iedere natuurlijke of rechtspersoon die PostAi gebruikt.
+- **PRO**: betaalde versie van PostAi.
+
+## 2. Toepasselijkheid
+Deze voorwaarden zijn van toepassing op elk gebruik van PostAi en op alle offertes, abonnementen en leveringen van diensten door ons.
+
+## 3. Dienst & beperkingen
+- PostAi toont analytics en geeft advies. **Geen automatische plaatsing** op TikTok zonder jouw actie.
+- PostAi is **niet gelieerd** aan TikTok. Gebruik is onderworpen aan TikTok’s eigen voorwaarden.
+- Demo-data en schattingen zijn indicatief; resultaten kunnen variëren.
+
+## 4. Accounts & toegang
+- Inloggen gebeurt via **TikTok OAuth**. Wij ontvangen basisprofielgegevens (zoals naam en avatar).
+- Jij bent verantwoordelijk voor je account en voor bestanden die je uploadt.
+
+## 5. Abonnementen & betalingen (PRO)
+- Afhandeling via **Lemon Squeezy**. Prijs zoals in de app getoond.
+- **Proefperiode**: 14 dagen gratis (indien van toepassing).
+- **Opzegging**: kan op elk moment; stopt aan het einde van de lopende termijn.
+- **Terugbetalingen**: geen restitutie voor reeds lopende termijnen, behalve waar wettelijk verplicht. We bieden een **7-dagen geld-terug** garantie op de **eerste** aankoop.
+
+## 6. Gebruik/licentie
+- Je krijgt een **niet-exclusieve, niet-overdraagbare** licentie om PostAi te gebruiken.
+- Het is niet toegestaan de software te kopiëren, reverse-engineeren of door te verkopen.
+
+## 7. Data & privacy
+- We verwerken alleen de data die nodig is voor de dienst. Zie onze **[Privacyverklaring](?page=privacy)**.
+- Je kunt via **Instellingen → Data opschonen** geüploade data verwijderen.
+
+## 8. Fair use & limieten
+- We hanteren redelijke limieten voor verzoeken/exports om misbruik te voorkomen.
+- Bij misbruik kunnen we toegang beperken of beëindigen.
+
+## 9. Aansprakelijkheid
+- De dienst wordt geleverd “zoals hij is”. We garanderen geen specifiek bereik of resultaat.
+- Onze totale aansprakelijkheid is beperkt tot het bedrag dat in de laatste 3 maanden aan abonnementskosten is betaald, voor zover wettelijk toegestaan.
+
+## 10. Beëindiging
+- We kunnen accounts (tijdelijk) blokkeren of beëindigen bij schending van deze voorwaarden of bij veiligheidsrisico’s.
+
+## 11. Wijzigingen
+- We mogen deze voorwaarden wijzigen. Bij materiële wijzigingen informeren we je via de app of per e-mail.
+
+## 12. Toepasselijk recht
+- Nederlands recht is van toepassing. Geschillen worden voorgelegd aan de bevoegde rechter te **Amsterdam**, tenzij dwingend recht anders bepaalt.
+
+## 13. Contact
+Vragen? **support@bouwmijnshop.nl**
+""")
+
+def _route_simple_pages():
+    # Werkt in nieuwe én oude Streamlit-versies
+    try:
+        page = st.query_params.get("page", "")
+    except Exception:
+        qp = st.experimental_get_query_params()
+        page = (qp.get("page", [""]) or [""])[0]
+
+    p = (page or "").lower()
+    if p == "privacy":
+        _render_privacy(); st.stop()
+    if p in ("terms", "voorwaarden", "tos"):
+        _render_terms(); st.stop()
+
+# Roep de router aan vóór andere logica (zoals OAuth)
+_route_simple_pages()
 
 # OAuth callback (minimal)
 qp = st.query_params
