@@ -2010,41 +2010,32 @@ def _mini_footer():
 _mini_footer()
 
 # ----------------------------- Chat widget (Optie A) -----------------------------
+# ----------------------------- Chat widget (robuste iframe-embed) -----------------------------
+import streamlit.components.v1 as components
+
 CHAT_SERVER = "https://chatbot-2-0-3v8l.onrender.com"  # jouw server
 
-try:
-    # Streamlit ≥ 1.38
-    st.html(f"""
-      <!-- minimale CSS fallback (mag blijven; inline CSS wordt zelden door CSP geblokt) -->
-      <style>
-        #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
-        #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
-        #bms-chat-launcher {{ right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
-          background:#111827; color:#fff; border:0; cursor:pointer; box-shadow:0 10px 24px rgba(0,0,0,.2); }}
-        #bms-chat {{ right:16px; bottom:84px; display:none; background:#fff; }}
-      </style>
+components.html(f"""
+  <!-- Fallback CSS (mag inline, CSP blokkeert meestal alleen inline JS) -->
+  <style>
+    #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
+    #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
+    #bms-chat-launcher {{
+      right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
+      background:#111827; color:#fff; border:0; cursor:pointer; box-shadow:0 10px 24px rgba(0,0,0,.2);
+    }}
+    #bms-chat {{ right:16px; bottom:84px; display:none; background:#fff; }}
+  </style>
 
-      <!-- CSP-vriendelijke bootloader: géén inline JS -->
-      <script src="{CHAT_SERVER}/chat-boot.js"
-              data-server="{CHAT_SERVER}"
-              data-css="{CHAT_SERVER}/chat-widget.css"
-              defer></script>
-    """)
-except Exception:
-    # Fallback voor oudere Streamlit: iframe met genoeg hoogte
-    import streamlit.components.v1 as components
-    components.html(f"""
-      <style>
-        #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
-        #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
-        #bms-chat-launcher {{ right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
-          background:#111827; color:#fff; border:0; cursor:pointer; box-shadow:0 10px 24px rgba(0,0,0,.2); }}
-        #bms-chat {{ right:16px; bottom:84px; display:none; background:#fff; }}
-      </style>
-      <script src="{CHAT_SERVER}/chat-boot.js"
-              data-server="{CHAT_SERVER}"
-              data-css="{CHAT_SERVER}/chat-widget.css"></script>
-    """, height=680, scrolling=False)
+  <!-- Laad bestanden EXTERN (geen inline JS i.v.m. CSP) -->
+  <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css">
+  <script src="{CHAT_SERVER}/chat-boot.js"
+          data-server="{CHAT_SERVER}"
+          data-css="{CHAT_SERVER}/chat-widget.css"></script>
+
+  <!-- Debug-beacon zodat je iets in de console ziet -->
+  <script>console.log("[PostAi] iframe path actief")</script>
+""", height=720, scrolling=False)  # hoogte 720 zodat de knop altijd in beeld valt
 
 st.markdown("""
 <style>
