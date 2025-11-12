@@ -650,7 +650,7 @@ def tr(k: str) -> str:
         next_best="Vandaag: beste stap",
         review_queue="Wachtrij om te plaatsen",
         add_queue="Zet in wachtrij",
-        trust1="Privacy-vriendelijk", trust2="CSV/XLSX", trust3="7 dagen gratis", trust4="Gemaakt voor TikTok",
+        trust1="Privacy-vriendelijk", trust2="CSV/XLSX", trust3="14 dagen gratis", trust4="Gemaakt voor TikTok",
     )
     return I18N.get(k, k)
 
@@ -663,14 +663,14 @@ with c1:
 with c2:
     # Één duidelijke titel (2e titel + ondertitel verwijderd)
     st.markdown(f"<h1 style='margin:0;font-size:1.6rem;'><span class='accent'>PostAi</span> — TikTok Growth Agent — {'PRO' if IS_PRO else 'DEMO'}</h1>", unsafe_allow_html=True)
-    st.caption("Maak elke dag een slimme TikTok-post. Zonder vakjargon.")
+    st.caption("Slimmer groeien met data. Dare to know")
 
 # =============================== Sidebar =====================================
 with st.sidebar:
     if IS_PRO:
         st.markdown("<div class='chip' style='background:#ecfdf5;border-color:#a7f3d0;'>✅ PRO geactiveerd 🎉</div>", unsafe_allow_html=True)
     else:
-        st.info("🔓 Je gebruikt **DEMO** (7 dagen). Sommige functies zijn vergrendeld.")
+        st.info("🔓 Je gebruikt **DEMO** (14 dagen). Sommige functies zijn vergrendeld.")
         st.link_button("✨ Ontgrendel PRO", LEMON_CHECKOUT_URL, use_container_width=True)
 
     st.markdown("### 🔗 Koppel TikTok")
