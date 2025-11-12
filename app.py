@@ -154,6 +154,19 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+# ---- Simple route: https://postai.bouwmijnshop.nl/?page=privacy ----
+qp = st.query_params  # mag je opnieuw lezen; is idempotent
+if qp.get("page", [""])[0].lower() == "privacy":
+    st.markdown("""
+# Privacyverklaring – PostAi
+PostAi gebruikt enkel de TikTok-login om jouw profielstatistieken te bekijken.  
+We slaan geen wachtwoorden of privédata op.  
+We posten niets namens jou.  
+Alle gegevens worden alleen lokaal verwerkt voor analyse en advies.  
+
+**Contact:** support@bouwmijnshop.nl
+    """)
+    st.stop()  # heel belangrijk: rest van de app niet meer renderen
 
 # OAuth callback (minimal)
 qp = st.query_params
