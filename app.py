@@ -2009,7 +2009,7 @@ _mini_footer()
 
 # ----------------------------- Chat widget ---------------------------------
 import streamlit.components.v1 as components
-CHAT_SERVER = "https://chat-server.onrender.com"  # vervang met jouw URL
+CHAT_SERVER = "https://chatbot-2-0-3v8l.onrender.com"  # vervang met jouw URL
 components.html(f"""
   <script>window.BMS_CHAT_SERVER = "{CHAT_SERVER}";</script>
   <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css"/>
