@@ -1,142 +1,116 @@
-/* global window, document, localStorage, fetch */
-(() => {
-  const SERVER = window.BMS_CHAT_SERVER || ""; // bijv. https://chatbot-2-0-3v8l.onrender.com
-  if (!SERVER) {
-    console.warn("[BMS-Chat] Geen BMS_CHAT_SERVER gezet.");
-    return;
+/* Minimal floating chat widget
+   Uses window.BMS_CHAT_SERVER set by Streamlit.
+   Saves small state in localStorage (teaser shown + simple history).
+*/
+(function(){
+  const SERVER = window.BMS_CHAT_SERVER || '';
+  if(!SERVER) return;
+
+  // --- helpers
+  const qs = s => document.querySelector(s);
+  const el = (t, attrs={}, html='')=>{
+    const n = document.createElement(t);
+    Object.entries(attrs).forEach(([k,v])=> n.setAttribute(k, v));
+    if(html) n.innerHTML = html;
+    return n;
+  };
+
+  // --- launcher (bubble)
+  const launch = el('button', { id:'bms-chat-launcher', 'aria-label':'Open chat' }, `
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3c5.523 0 10 3.806 10 8.5S17.523 20 12 20a12.8 12.8 0 0 1-3.73-.55L3 21l1.73-4.33A8.63 8.63 0 0 1 2 11.5C2 6.806 6.477 3 12 3Z" stroke="currentColor" stroke-width="1.6"/>
+    </svg>
+  `);
+  document.body.appendChild(launch);
+
+  // teaser
+  const teaser = el('div', { id:'bms-chat-teaser' }, 'Hulp nodig? Chat met PostAi');
+  document.body.appendChild(teaser);
+  const teaserKey = 'bmsChatTeaseShown';
+  const showTeaser = !localStorage.getItem(teaserKey);
+  if(showTeaser){
+    setTimeout(()=> teaser.classList.add('show'), 600);
+    setTimeout(()=>{
+      teaser.classList.remove('show');
+      localStorage.setItem(teaserKey, '1');
+    }, 5500);
   }
 
-  // ---- Helpers
-  const qs = (s, r = document) => r.querySelector(s);
-  const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
-  const load = (k, d) => {
-    try { return JSON.parse(localStorage.getItem(k)) ?? d; }
-    catch { return d; }
-  };
-
-  // ---- UI opbouwen
-  const toggle = document.createElement("button");
-  toggle.id = "bms-chat-toggle";
-  toggle.setAttribute("aria-label", "Open chat");
-  toggle.innerHTML = "💬";
-
-  const panel = document.createElement("div");
-  panel.id = "bms-chat-panel";
-  panel.innerHTML = `
-    <div class="bms-chat-header">
-      <div class="bms-chat-title">PostAi Chat</div>
-      <div class="bms-chat-status" id="bms-status">• checking…</div>
+  // --- chat window
+  const chat = el('div', { id:'bms-chat', role:'dialog', 'aria-label':'PostAi chat' }, `
+    <div class="hdr">
+      <div class="ttl">PostAi Chat<br><span class="sub">• online</span></div>
+      <button class="close" aria-label="Sluiten">✕</button>
     </div>
-    <div id="bms-chat-messages"></div>
-    <div class="bms-chat-input">
-      <input id="bms-chat-text" type="text" placeholder="Typ je bericht..." />
-      <button id="bms-chat-send">Verstuur</button>
+    <div class="body" id="bms-body"></div>
+    <div class="inp">
+      <input type="text" id="bms-input" placeholder="Typ je bericht…" />
+      <button class="send" id="bms-send">Verstuur</button>
     </div>
-  `;
+  `);
+  document.body.appendChild(chat);
 
-  document.body.appendChild(toggle);
-  document.body.appendChild(panel);
+  const body = qs('#bms-body');
+  const input = qs('#bms-input');
+  const sendBtn = qs('#bms-send');
 
-  const statusEl = qs("#bms-status", panel);
-  const messagesEl = qs("#bms-chat-messages", panel);
-  const inputEl = qs("#bms-chat-text", panel);
-  const sendBtn = qs("#bms-chat-send", panel);
+  function openChat(){
+    chat.style.display = 'block';
+    teaser.classList.remove('show');
+    setTimeout(()=> input.focus(), 0);
+  }
+  function closeChat(){ chat.style.display = 'none'; }
+  launch.addEventListener('click', openChat);
+  chat.querySelector('.close').addEventListener('click', closeChat);
 
-  // ---- Status / health
-  const setStatus = (ok) => {
-    statusEl.textContent = ok ? "• online" : "• offline";
-    statusEl.style.color = ok ? "#16a34a" : "#ef4444";
-  };
-  fetch(`${SERVER}/health`).then(r => r.json()).then(d => setStatus(!!d.ok)).catch(() => setStatus(false));
+  // --- history (lightweight)
+  const histKey = 'bmsChatHistory';
+  try {
+    const hist = JSON.parse(localStorage.getItem(histKey) || '[]');
+    hist.forEach(msg => append(msg.role, msg.text));
+  } catch(_) {}
 
-  // ---- Historie
-  const STORE_KEY = "bms-chat-history";
-  const history = load(STORE_KEY, []); // [{role:'user'|'bot', text:'...'}]
-  const append = (role, text) => {
-    const div = document.createElement("div");
-    div.className = `bms-msg ${role}`;
-    div.textContent = text;
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  };
-  history.forEach(m => append(m.role, m.text));
+  function save(role, text){
+    const h = JSON.parse(localStorage.getItem(histKey) || '[]');
+    h.push({role, text}); localStorage.setItem(histKey, JSON.stringify(h.slice(-40)));
+  }
 
-  const pushHistory = (role, text) => {
-    history.push({ role, text });
-    save(STORE_KEY, history.slice(-50)); // bewaar laatste 50
-  };
+  function append(role, text){
+    const row = el('div', { class:`bms-msg ${role}` });
+    row.appendChild(el('div', { class:'bubble' }, escapeHtml(text)));
+    body.appendChild(row);
+    body.scrollTop = body.scrollHeight;
+  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
 
-  // ---- Typing indicator
-  let typingEl = null;
-  const showTyping = () => {
-    typingEl = document.createElement("div");
-    typingEl.className = "bms-typing";
-    typingEl.textContent = "Assistent is aan het typen…";
-    messagesEl.appendChild(typingEl);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  };
-  const hideTyping = () => {
-    if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
-    typingEl = null;
-  };
+  async function send(){
+    const txt = (input.value || '').trim();
+    if(!txt) return;
+    append('user', txt); save('user', txt);
+    input.value = ''; input.focus();
 
-  // ---- Verzenden
-  async function sendMessage() {
-    const text = (inputEl.value || "").trim();
-    if (!text) return;
-
-    append("user", text);
-    pushHistory("user", text);
-    inputEl.value = "";
-    inputEl.focus();
-
-    sendBtn.disabled = true;
-    showTyping();
-
-    try {
-      const r = await fetch(`${SERVER}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text })
+    append('bot', '•••'); // typing
+    try{
+      const r = await fetch(`${SERVER}/api/chat`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ message: txt })
       });
-      const data = await r.json().catch(() => ({}));
-      hideTyping();
-
-      if (!r.ok || !data.ok) {
-        const msg = data?.error || `Er ging iets mis (${r.status})`;
-        append("bot", msg);
-        pushHistory("bot", msg);
-      } else {
-        const reply = (data.reply || "Oké.").toString();
-        append("bot", reply);
-        pushHistory("bot", reply);
-      }
-    } catch (e) {
-      hideTyping();
-      const msg = "Verbinding mislukt. Probeer later opnieuw.";
-      append("bot", msg);
-      pushHistory("bot", msg);
-    } finally {
-      sendBtn.disabled = false;
+      const data = await r.json();
+      const bot = (data && (data.reply || data.message || data.text)) || 'Sorry, er ging iets mis.';
+      body.lastChild.querySelector('.bubble').textContent = bot;
+      save('bot', bot);
+    }catch(e){
+      body.lastChild.querySelector('.bubble').textContent = 'Netwerkfout. Probeer later opnieuw.';
     }
   }
+  sendBtn.addEventListener('click', send);
+  input.addEventListener('keydown', e => { if(e.key === 'Enter') send(); });
 
-  // ---- Events
-  toggle.addEventListener("click", () => {
-    const open = panel.classList.toggle("open");
-    toggle.setAttribute("aria-expanded", open ? "true" : "false");
-    if (open) inputEl.focus();
-  });
-
-  sendBtn.addEventListener("click", sendMessage);
-  inputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") sendMessage();
-  });
-
-  // Optioneel: begroeting 1x
-  if (!history.length) {
-    const hi = "Hi! Stel me je vraag over je TikTok-data, ik denk mee. 😊";
-    append("bot", hi);
-    pushHistory("bot", hi);
+  // Start met korte welkom
+  if(!localStorage.getItem('bmsChatWelcomed')){
+    append('bot', 'Hi! Stel me je vraag over je TikTok-data, ik denk mee. 😊');
+    save('bot','Hi! Stel me je vraag over je TikTok-data, ik denk mee. 😊');
+    localStorage.setItem('bmsChatWelcomed','1');
   }
 })();
