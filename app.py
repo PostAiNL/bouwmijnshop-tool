@@ -1777,8 +1777,15 @@ components.html(f"""
 
 st.markdown("""
 <style>
+/* bestond al */
 #MainMenu {visibility:hidden;}
 footer {visibility:hidden;}
+
+/* NIEUW: haal onzichtbare header/toolbar weg */
+header[data-testid="stHeader"] { height:0; visibility:hidden; }
+div[data-testid="stToolbar"] { display:none; }
+
+/* beetje top-ruimte zodat je logo niet wordt afgekapt */
+div.block-container { padding-top:14px !important; }
 </style>
 """, unsafe_allow_html=True)
-
