@@ -292,10 +292,12 @@ def _cookie_banner():
                 if st.button("Accepteer", use_container_width=True, type="primary"):
                     st.session_state["consent"] = "accepted"
                     st.toast("Cookies/functional tracking geaccepteerd.")
+                    st.rerun()  # ← meteen hertekenen zodat banner verdwijnt
             with b:
                 if st.button("Weiger", use_container_width=True):
                     st.session_state["consent"] = "declined"
                     st.toast("Functionele tracking geweigerd.")
+                    st.rerun()  # ← idem
 
 # >>> BELANGRIJK: roep de banner hier aan
 _cookie_banner()
