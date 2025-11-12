@@ -2012,39 +2012,39 @@ _mini_footer()
 # ----------------------------- Chat widget (Optie A) -----------------------------
 CHAT_SERVER = "https://chatbot-2-0-3v8l.onrender.com"  # jouw server
 
-snippet = f"""
-  <script>
-    window.BMS_CHAT_SERVER = "{CHAT_SERVER}";
-    window.BMS_CHAT_CSS_URL = "{CHAT_SERVER}/chat-widget.css";
-    console.log("[PostAi] inject …");
-  </script>
-
-  <!-- Fallback styles zodat de launcher altijd zichtbaar is -->
-  <style>
-    #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
-    #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
-    #bms-chat-launcher {{
-      right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
-      background:#111827; color:#fff; border:0; cursor:pointer; box-shadow:0 10px 24px rgba(0,0,0,.2);
-      z-index:2147483647;
-    }}
-    #bms-chat {{ right:16px; bottom:84px; display:none; background:#fff; z-index:2147483647; }}
-  </style>
-
-  <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css"
-        onload="console.log('[PostAi] CSS loaded')"
-        onerror="console.error('[PostAi] CSS failed')"/>
-  <script src="{CHAT_SERVER}/chat-widget.js" defer
-          onload="console.log('[PostAi] JS loaded')"
-          onerror="console.error('[PostAi] JS failed')"></script>
-"""
-
 try:
-    st.html(snippet)
+    # Streamlit ≥ 1.38
+    st.html(f"""
+      <!-- minimale CSS fallback (mag blijven; inline CSS wordt zelden door CSP geblokt) -->
+      <style>
+        #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
+        #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
+        #bms-chat-launcher {{ right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
+          background:#111827; color:#fff; border:0; cursor:pointer; box-shadow:0 10px 24px rgba(0,0,0,.2); }}
+        #bms-chat {{ right:16px; bottom:84px; display:none; background:#fff; }}
+      </style>
+
+      <!-- CSP-vriendelijke bootloader: géén inline JS -->
+      <script src="{CHAT_SERVER}/chat-boot.js"
+              data-server="{CHAT_SERVER}"
+              data-css="{CHAT_SERVER}/chat-widget.css"
+              defer></script>
+    """)
 except Exception:
+    # Fallback voor oudere Streamlit: iframe met genoeg hoogte
     import streamlit.components.v1 as components
-    components.html(f"""{snippet}<script>console.log('[PostAi] iframe fallback')</script>""",
-                    height=680, scrolling=False)
+    components.html(f"""
+      <style>
+        #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
+        #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
+        #bms-chat-launcher {{ right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
+          background:#111827; color:#fff; border:0; cursor:pointer; box-shadow:0 10px 24px rgba(0,0,0,.2); }}
+        #bms-chat {{ right:16px; bottom:84px; display:none; background:#fff; }}
+      </style>
+      <script src="{CHAT_SERVER}/chat-boot.js"
+              data-server="{CHAT_SERVER}"
+              data-css="{CHAT_SERVER}/chat-widget.css"></script>
+    """, height=680, scrolling=False)
 
 st.markdown("""
 <style>
