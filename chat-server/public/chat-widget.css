@@ -47,4 +47,17 @@
 /* Input */
 #bms-chat .inp{
   height:56px; display:flex; gap:8px; align-items:center;
-  padding:8px; border-top:1px sol
+  padding:8px; border-top:1px solid #eef2f7; background:#fff;
+}
+#bms-chat input[type="text"]{
+  flex:1; height:40px; border:1px solid #e5e7eb; border-radius:10px; padding:0 12px;
+  font:14px system-ui; outline:none;
+}
+#bms-chat button.send{
+  height:40px; padding:0 14px; border-radius:10px; border:1px solid #2563eb;
+  background:#2563eb; color:#fff; font-weight:700; cursor:pointer;
+}
+#bms-chat .close{
+  border:0; background:transparent; cursor:pointer; padding:8px; border-radius:8px;
+}
+#bms-chat .close:hover{ background:#e5e7eb; }
