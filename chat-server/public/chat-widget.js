@@ -1,48 +1,64 @@
-/* ===== PostAi Chat — Luxury / Trust variant ===== */
+/* ===== PostAi Chat — inject in top document so it's truly floating ===== */
 (function(){
   const SERVER = window.BMS_CHAT_SERVER || '';
   if(!SERVER) return;
 
-  /* Personalisatie */
-  const AGENT_NAME   = 'Sanne van PostAi';
-  const AGENT_INITS  = 'S';
-  const TEASER_TEXT  = 'Hulp nodig? Sanne helpt je graag.';
-  const WELCOME_LINES = [
-    'Hi! Ik ben Sanne. Waar kan ik je vandaag mee helpen?',
-    'Wil je snel weten wanneer je het best post? Deel je vraag gerust.',
-    'Goed om te weten: we bewaren niets zonder jouw actie.'
-  ];
-  const SLA_TEXT     = 'Meestal reageren we binnen enkele minuten.';
-  const PRIVACY_TEXT = '🔒 Privacy-vriendelijk · <a href="?page=privacy" target="_blank" rel="noopener">Privacy</a>';
+  /* ---- Work in the TOP document (outside Streamlit iframe) ---- */
+  const DOC = (function(){
+    try { return (window.top && window.top.document) ? window.top.document : document; }
+    catch(e){ return document; }
+  })();
 
-  /* ===== Helpers */
-  const qs = s => document.querySelector(s);
+  /* Inject CSS in top document once */
+  (function injectCssOnce(){
+    if (DOC.getElementById('bms-chat-css')) return;
+    const link = DOC.createElement('link');
+    link.id   = 'bms-chat-css';
+    link.rel  = 'stylesheet';
+    link.href = SERVER + '/chat-widget.css';
+    DOC.head.appendChild(link);
+  })();
+
+  /* -------- Personalisation (pas aan naar wens) -------- */
+  const AGENT_NAME  = 'Sanne van PostAi';
+  const AGENT_INITS = 'S';
+  const TEASER_TEXT = 'Hulp nodig? Sanne helpt je graag.';
+  const WELCOME     = [
+    'Hi! Ik ben Sanne. Waar kan ik je mee helpen?',
+    'Tip: wil je beste posttijd? Zeg “beste tijd”.',
+    '🔒 We bewaren niets zonder jouw actie.'
+  ];
+  const SLA_TEXT    = 'Meestal reageren we binnen enkele minuten.';
+  const PRIV_TEXT   = '🔒 Privacy · <a href="?page=privacy" target="_blank" rel="noopener">Bekijk</a>';
+
+  /* Helpers */
+  const qs = s => DOC.querySelector(s);
   const el = (t, attrs={}, html='')=>{
-    const n = document.createElement(t);
-    Object.entries(attrs).forEach(([k,v])=> n.setAttribute(k, v));
-    if(html) n.innerHTML = html;
+    const n = DOC.createElement(t);
+    Object.entries(attrs).forEach(([k,v])=> n.setAttribute(k,v));
+    if (html) n.innerHTML = html;
     return n;
   };
-  const escapeHtml = s => String(s).replace(/[&<>"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  const escapeHtml = s => String(s).replace(/[&<>"]/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
-  /* ===== Launcher */
-  const launch = el('button', { id:'bms-chat-launcher', 'aria-label':'Open chat' }, `
+  /* ---- Launcher (blijft rechtsonder, fixed op viewport) ---- */
+  const launcher = el('button', { id:'bms-chat-launcher', 'aria-label':'Open chat' }, `
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M12 3c5.523 0 10 3.806 10 8.5S17.523 20 12 20a12.8 12.8 0 0 1-3.73-.55L3 21l1.73-4.33A8.63 8.63 0 0 1 2 11.5C2 6.806 6.477 3 12 3Z" stroke="currentColor" stroke-width="1.6"/>
     </svg>
   `);
-  document.body.appendChild(launch);
+  DOC.body.appendChild(launcher);
 
-  /* Teaser */
+  /* Teaser-badge (eenmalig tonen) */
   const teaser = el('div', { id:'bms-chat-teaser' }, TEASER_TEXT);
-  document.body.appendChild(teaser);
+  DOC.body.appendChild(teaser);
   const teaserKey='bmsChatTeaseShown';
-  if(!localStorage.getItem(teaserKey)){
+  if(!window.top.localStorage.getItem(teaserKey)){
     setTimeout(()=> teaser.classList.add('show'), 600);
-    setTimeout(()=>{ teaser.classList.remove('show'); localStorage.setItem(teaserKey,'1'); }, 5200);
+    setTimeout(()=>{ teaser.classList.remove('show'); window.top.localStorage.setItem(teaserKey,'1'); }, 5200);
   }
 
-  /* ===== Window */
+  /* ---- Chatwindow (ook fixed) ---- */
   const chat = el('div', { id:'bms-chat', role:'dialog', 'aria-label':'PostAi chat' }, `
     <div class="hdr">
       <div class="id">
@@ -54,14 +70,14 @@
       </div>
       <button class="close" aria-label="Sluiten">✕</button>
     </div>
-    <div id="bms-trust">${SLA_TEXT}<br>${PRIVACY_TEXT}</div>
+    <div id="bms-trust">${SLA_TEXT}<br>${PRIV_TEXT}</div>
     <div class="body" id="bms-body"></div>
     <div class="inp">
       <input type="text" id="bms-input" placeholder="Typ je bericht…" />
       <button class="send" id="bms-send">Verstuur</button>
     </div>
   `);
-  document.body.appendChild(chat);
+  DOC.body.appendChild(chat);
 
   const body   = qs('#bms-body');
   const input  = qs('#bms-input');
@@ -69,38 +85,36 @@
 
   function openChat(){ chat.style.display='block'; teaser.classList.remove('show'); setTimeout(()=>input.focus(),0); }
   function closeChat(){ chat.style.display='none'; }
-  launch.addEventListener('click', openChat);
+  launcher.addEventListener('click', openChat);
   chat.querySelector('.close').addEventListener('click', closeChat);
 
-  /* ===== History */
-  const histKey='bmsChatHistory';
+  /* History in top window (blijft bij navigeren binnen de app) */
+  const store = window.top.localStorage;
+  const HKEY  = 'bmsChatHistory';
   function append(role,text){
     const row = el('div',{ class:`bms-msg ${role}` });
     row.appendChild(el('div',{ class:'bubble' }, escapeHtml(text)));
     body.appendChild(row); body.scrollTop = body.scrollHeight;
   }
   function save(role,text){
-    const h = JSON.parse(localStorage.getItem(histKey)||'[]'); 
-    h.push({role,text}); localStorage.setItem(histKey, JSON.stringify(h.slice(-40)));
+    const h = JSON.parse(store.getItem(HKEY)||'[]');
+    h.push({role,text}); store.setItem(HKEY, JSON.stringify(h.slice(-40)));
   }
-  try{ (JSON.parse(localStorage.getItem(histKey)||'[]')).forEach(m=>append(m.role,m.text)); }catch(_){}
+  try{ (JSON.parse(store.getItem(HKEY)||'[]')).forEach(m=>append(m.role,m.text)); }catch(_){}
 
-  /* Welcome (persoonlijk) – alleen 1e keer */
-  if(!localStorage.getItem('bmsChatWelcomed')){
-    append('bot', WELCOME_LINES[0]); save('bot', WELCOME_LINES[0]);
-    setTimeout(()=>{ append('bot', WELCOME_LINES[1]); save('bot', WELCOME_LINES[1]); }, 400);
-    setTimeout(()=>{ append('bot', WELCOME_LINES[2]); save('bot', WELCOME_LINES[2]); }, 800);
-    localStorage.setItem('bmsChatWelcomed','1');
+  if(!store.getItem('bmsChatWelcomed')){
+    append('bot', WELCOME[0]); save('bot', WELCOME[0]);
+    setTimeout(()=>{ append('bot', WELCOME[1]); save('bot', WELCOME[1]); }, 400);
+    setTimeout(()=>{ append('bot', WELCOME[2]); save('bot', WELCOME[2]); }, 800);
+    store.setItem('bmsChatWelcomed','1');
   }
 
-  /* ===== Send */
   async function send(){
     const txt = (input.value||'').trim();
     if(!txt) return;
     append('user', txt); save('user', txt);
     input.value=''; input.focus();
-    append('bot','•••'); // typing
-
+    append('bot','•••');
     try{
       const r = await fetch(`${SERVER}/api/chat`, {
         method:'POST', headers:{ 'Content-Type':'application/json' },
