@@ -1,32 +1,45 @@
 // chat-server/server.js
-const path = require("path");
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 
-// CORS (pas aan als je specifieke origins wilt)
-app.use(cors());
-app.use(express.json());
-
-// statische assets uit /public
-app.use(express.static(path.join(__dirname, "public")));
-
-// healthcheck
-app.get("/health", (req, res) => res.json({ ok: true }));
-
-// widget-pagina
-app.get("/widget", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "widget.html"));
+// ===== CORS =====
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
+app.use((req, res, next) => {
+  // assets mogen overal vandaan (handig voor testen)
+  if (req.path.startsWith("/chat")) {
+    return cors({ origin: ALLOWED_ORIGIN, credentials: false })(req, res, next);
+  }
+  return cors({ origin: "*" })(req, res, next);
 });
 
-// optioneel: root netjes laten antwoorden
-app.get("/", (req, res) => {
-  res.type("text/plain").send("Widget staat op /widget");
+app.use(express.json({ limit: "1mb" }));
+
+// ===== Healthcheck =====
+app.get("/health", (_req, res) => {
+  res.json({ ok: true });
 });
 
-// start
+// ===== Static voor widget-bestanden =====
+const pub = path.join(__dirname, "public");
+app.use(express.static(pub)); // hiermee werken /chat-widget.css en /chat-widget.js
+
+// ===== Chat endpoint (stub / voorbeeld) =====
+app.post("/chat", async (req, res) => {
+  try {
+    // -> Hier zou je OpenAI aanroepen. Voor nu als proof:
+    const { message } = req.body || {};
+    res.json({ ok: true, reply: `Echo: ${message || "Hallo!"}` });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+// ===== Start =====
 app.listen(PORT, () => {
-  console.log("Chat server running on port:", PORT);
+  console.log(`chat-server listening on :${PORT}`);
 });
