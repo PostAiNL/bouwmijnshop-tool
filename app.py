@@ -1774,3 +1774,11 @@ components.html(f"""
   <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css"/>
   <script src="{CHAT_SERVER}/chat-widget.js" defer></script>
 """, height=0)
+
+st.markdown("""
+<style>
+#MainMenu {visibility:hidden;}
+footer {visibility:hidden;}
+</style>
+""", unsafe_allow_html=True)
+
