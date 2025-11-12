@@ -2014,7 +2014,7 @@ components.html(f"""
   <script>window.BMS_CHAT_SERVER = "{CHAT_SERVER}";</script>
   <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css"/>
   <script src="{CHAT_SERVER}/chat-widget.js" defer></script>
-""", height=0)
+""", height=100)
 
 st.markdown("""
 <style>
