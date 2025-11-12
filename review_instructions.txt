@@ -1,0 +1,5 @@
+1. Ga naar https://postai.bouwmijnshop.nl
+2. Klik op “Log in met TikTok” (indien zichtbaar).
+   Als login nog niet actief is, verschijnt melding "🔒 Login komt beschikbaar zodra TikTok onze app heeft goedgekeurd."
+3. Klik eventueel op “Laad demo-set” om voorbeelddata te zien.
+4. Geen data wordt gedeeld of gepost. Alleen leesrechten.
