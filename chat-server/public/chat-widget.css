@@ -95,3 +95,8 @@
 /* Dark theme toggle */
 :root.dark #bms-chat{background:#111827;color:#f8fafc;}
 :root.dark #bms-chat .bubble{background:#1f2937;color:#f8fafc;}
+/* Klik-fix */
+#bms-overlay { pointer-events: none !important; }
+#bms-overlay * { pointer-events: auto !important; }  /* forceer clicks op kinderen */
+#bms-chat-launcher { z-index: 2147483647 !important; }
+#bms-chat         { z-index: 2147483646 !important; }
