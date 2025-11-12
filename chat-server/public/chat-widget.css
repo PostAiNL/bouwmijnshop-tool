@@ -7,3 +7,5 @@
 #bms-form button { padding:8px 12px; border-radius:8px; background:#2563eb; color:#fff; border:0; }
 .bms-bot { background:#f3f4f6; border-radius:8px; padding:8px 10px; margin-bottom:8px; }
 .bms-user { background:#e0ecff; border-radius:8px; padding:8px 10px; margin-bottom:8px; align-self:flex-end; }
+#bms-chat-toggle,
+#bms-chat-panel { z-index: 999999 !important; }
