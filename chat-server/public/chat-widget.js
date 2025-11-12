@@ -278,3 +278,21 @@
   };
 
 })(window);
+  /*** ---------- Pro-badge / overlay neutraliseren ---------- ***/
+  function disableForeignBadges(){
+    try {
+      // Streamlit / host "pro badge" die in je hoek zit
+      var badge = DOC.querySelector('div.pro-badge');
+      if (badge) {
+        badge.style.pointerEvents = 'none';
+        // desnoods nog extra omlaag duwen
+        badge.style.zIndex = '0';
+      }
+    } catch (e) {}
+  }
+
+  // meteen uitvoeren en daarna blijven herhalen (mocht hij terugkomen)
+  disableForeignBadges();
+  setInterval(disableForeignBadges, 1000);
+
+})(window);
