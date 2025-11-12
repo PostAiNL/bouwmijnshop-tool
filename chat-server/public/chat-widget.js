@@ -1,4 +1,4 @@
-/* ===== PostAi Chat 2.0 — JS (cookie/rerun-proof) ===== */
+/* ===== PostAi Chat 2.0 — JS (rerun/cookie-proof) ===== */
 (function (global) {
   "use strict";
 
@@ -10,9 +10,6 @@
   /*** ---------- Safe window & document ---------- ***/
   var TOP = (function(){ try { return global.top; } catch(_) { return global; } })();
   var DOC = (function(){ try { return TOP.document; } catch(_) { return global.document; } })();
-
-  /*** ---------- Idempotent mount ---------- ***/
-  if (DOC.getElementById("bms-chat-launcher") || DOC.getElementById("bms-overlay")) return;
 
   /*** ---------- Utils ---------- ***/
   var qs = function(sel, root){ return (root || DOC).querySelector(sel); };
@@ -37,41 +34,83 @@
     DOC.head.appendChild(link);
   })();
 
-  /*** ---------- DOM ---------- ***/
-  var overlay = el("div", { id:"bms-overlay", "aria-hidden":"false" });
+  /*** ---------- DOM (hergebruik +/of maken) ---------- ***/
+  var overlay = DOC.getElementById("bms-overlay");
+  var launcher, teaser, chat;
 
-  var launcher = el("button", { id:"bms-chat-launcher", "aria-label":"Open chat" },
-    '<svg viewBox="0 0 24 24" fill="none" width="24" height="24" aria-hidden="true">' +
-      '<path d="M12 3c5.5 0 10 3.8 10 8.5S17.5 20 12 20a13 13 0 0 1-3.7-.5L3 21l1.7-4.3A8.6 8.6 0 0 1 2 11.5C2 6.8 6.5 3 12 3Z" stroke="currentColor" stroke-width="1.6"/>' +
-    '</svg>'
-  );
+  if (!overlay) {
+    // Nog geen overlay → alles nieuw opbouwen
+    overlay = el("div", { id:"bms-overlay", "aria-hidden":"false" });
 
-  var teaser = el("div", { id:"bms-chat-teaser", role:"status" }, "Hulp nodig? Sanne helpt je graag.");
+    launcher = el("button", { id:"bms-chat-launcher", "aria-label":"Open chat" },
+      '<svg viewBox="0 0 24 24" fill="none" width="24" height="24" aria-hidden="true">' +
+        '<path d="M12 3c5.5 0 10 3.8 10 8.5S17.5 20 12 20a13 13 0 0 1-3.7-.5L3 21l1.7-4.3A8.6 8.6 0 0 1 2 11.5C2 6.8 6.5 3 12 3Z" stroke="currentColor" stroke-width="1.6"/>' +
+      '</svg>'
+    );
 
-  var chat = el("div", {
-    id:"bms-chat",
-    role:"dialog",
-    "aria-modal":"true",
-    "aria-label":"Chat met Sanne"
-  }, (
-    '<div class="hdr">' +
-      '<div class="avatar" aria-hidden="true">S</div>' +
-      '<div><div class="ttl">Sanne van PostAi</div><div class="sub">• online</div></div>' +
-      '<button class="close" aria-label="Sluit chat">✕</button>' +
-    '</div>' +
-    '<div id="bms-body"></div>' +
-    '<div class="inp">' +
-      '<input id="bms-input" placeholder="Typ je bericht…" autocomplete="off" aria-label="Bericht"/>' +
-      '<button id="bms-send" aria-label="Verstuur">Verstuur</button>' +
-    '</div>'
-  ));
+    teaser = el("div", { id:"bms-chat-teaser", role:"status" }, "Hulp nodig? Sanne helpt je graag.");
 
-  overlay.appendChild(launcher);
-  overlay.appendChild(teaser);
-  overlay.appendChild(chat);
-  DOC.body.appendChild(overlay);
+    chat = el("div", {
+      id:"bms-chat",
+      role:"dialog",
+      "aria-modal":"true",
+      "aria-label":"Chat met Sanne"
+    }, (
+      '<div class="hdr">' +
+        '<div class="avatar" aria-hidden="true">S</div>' +
+        '<div><div class="ttl">Sanne van PostAi</div><div class="sub">• online</div></div>' +
+        '<button class="close" aria-label="Sluit chat">✕</button>' +
+      '</div>' +
+      '<div id="bms-body"></div>' +
+      '<div class="inp">' +
+        '<input id="bms-input" placeholder="Typ je bericht…" autocomplete="off" aria-label="Bericht"/>' +
+        '<button id="bms-send" aria-label="Verstuur">Verstuur</button>' +
+      '</div>'
+    ));
 
-  /*** ---------- Elements ---------- ***/
+    overlay.appendChild(launcher);
+    overlay.appendChild(teaser);
+    overlay.appendChild(chat);
+    DOC.body.appendChild(overlay);
+  } else {
+    // Overlay bestond al (van een vorige iframe-run) → bestaande elementen hergebruiken
+    launcher = overlay.querySelector("#bms-chat-launcher");
+    teaser   = overlay.querySelector("#bms-chat-teaser");
+    chat     = overlay.querySelector("#bms-chat");
+
+    // Safety: als er toch iets mist, opnieuw aanmaken
+    if (!launcher) {
+      launcher = el("button", { id:"bms-chat-launcher", "aria-label":"Open chat" },
+        '<svg viewBox="0 0 24 24" fill="none" width="24" height="24" aria-hidden="true">' +
+          '<path d="M12 3c5.5 0 10 3.8 10 8.5S17.5 20 12 20a13 13 0 0 1-3.7-.5L3 21l1.7-4.3A8.6 8.6 0 0 1 2 11.5C2 6.8 6.5 3 12 3Z" stroke="currentColor" stroke-width="1.6"/>' +
+        '</svg>'
+      );
+      overlay.appendChild(launcher);
+    }
+    if (!teaser) {
+      teaser = el("div", { id:"bms-chat-teaser", role:"status" }, "Hulp nodig? Sanne helpt je graag.");
+      overlay.appendChild(teaser);
+    }
+    if (!chat) {
+      chat = el("div", {
+        id:"bms-chat", role:"dialog", "aria-modal":"true", "aria-label":"Chat met Sanne"
+      }, (
+        '<div class="hdr">' +
+          '<div class="avatar" aria-hidden="true">S</div>' +
+          '<div><div class="ttl">Sanne van PostAi</div><div class="sub">• online</div></div>' +
+          '<button class="close" aria-label="Sluit chat">✕</button>' +
+        '</div>' +
+        '<div id="bms-body"></div>' +
+        '<div class="inp">' +
+          '<input id="bms-input" placeholder="Typ je bericht…" autocomplete="off" aria-label="Bericht"/>' +
+          '<button id="bms-send" aria-label="Verstuur">Verstuur</button>' +
+        '</div>'
+      ));
+      overlay.appendChild(chat);
+    }
+  }
+
+  /*** ---------- Element refs ---------- ***/
   var body     = qs("#bms-body");
   var input    = qs("#bms-input");
   var sendBtn  = qs("#bms-send");
@@ -93,7 +132,6 @@
   }
   enforceClickFix();
 
-  // Hou dit in stand bij DOM-wijzigingen (Streamlit reruns)
   try {
     var mo = new TOP.MutationObserver(function(){ enforceClickFix(); });
     mo.observe(DOC.documentElement, { childList:true, subtree:true, attributes:true });
@@ -110,29 +148,19 @@
     chat.style.display = "none";
   }
 
-  // Normale listeners op huidige knop
+  // Eerst oude listeners weghalen (als we in een nieuwe iframe-run zitten)
+  try {
+    launcher.replaceWith(launcher.cloneNode(true));
+    launcher = qs("#bms-chat-launcher");
+  } catch(_) {}
+
+  // Nieuwe listeners op de actuele button
   ["click","pointerdown","touchstart"].forEach(function(evt){
     launcher.addEventListener(evt, openChat, { passive:true });
   });
   closeBtn.addEventListener("click", closeChat);
 
-  // 🔥 Delegated listeners op top-window — blijven werken als de knop ooit vervangen wordt
-  function delegatedHandler(e){
-    var t = e.target;
-    if (!t) return;
-    if (t.id === "bms-chat-launcher" || (t.closest && t.closest("#bms-chat-launcher"))) {
-      openChat(e);
-    }
-  }
-  try {
-    TOP.addEventListener("click",       delegatedHandler, true);  // capture-fase
-    TOP.addEventListener("pointerdown", delegatedHandler, true);
-  } catch(_) {
-    global.addEventListener("click", delegatedHandler, true);
-    global.addEventListener("pointerdown", delegatedHandler, true);
-  }
-
-  /*** ---------- Teaser (eenmalig) ---------- ***/
+  /*** ---------- Teaser (eenmalig) ---------- */
   if (!global.localStorage.getItem("bmsChatTeaseShown")) {
     setTimeout(function(){ teaser.classList.add("show"); }, 600);
     setTimeout(function(){
@@ -141,7 +169,7 @@
     }, 5200);
   }
 
-  /*** ---------- History + append ---------- ***/
+  /*** ---------- History helpers ---------- ***/
   function append(role, text, opts){
     var raw = opts && opts.raw;
     var now = new Date().toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
@@ -173,14 +201,13 @@
     } catch(e){}
   }
 
-  // Restore geschiedenis
   try {
     JSON.parse(global.localStorage.getItem(HKEY) || "[]").forEach(function(m){
       append(m.role, m.text);
     });
   } catch(e){}
 
-  /*** ---------- Welkomstberichten ---------- ***/
+  /*** ---------- Welkom ---------- ***/
   if (!global.localStorage.getItem("bmsChatWelcomed")) {
     ["Hi! Ik ben Sanne. Waar kan ik je mee helpen?",
      "Tip: wil je beste posttijd? Zeg “beste tijd”.",
@@ -191,7 +218,7 @@
     global.localStorage.setItem("bmsChatWelcomed","1");
   }
 
-  /*** ---------- Typing indicator (HTML, geen rare <span> tekst) ---------- ***/
+  /*** ---------- Typing indicator ---------- ***/
   function showTyping(){
     append("bot","<span class='typing'>Sanne is aan het typen</span>", { raw:true });
     var t = body.querySelector(".typing");
@@ -258,7 +285,6 @@
     input.focus();
     showTyping();
 
-    // Meta uit localStorage
     var mode = global.localStorage.getItem("postai_mode") || "DEMO";
     var bestHours = []; var topHashtags = [];
     try { bestHours   = JSON.parse(global.localStorage.getItem("postai_best_hours") || "[]"); } catch(e){}
