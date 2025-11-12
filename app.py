@@ -2012,33 +2012,42 @@ _mini_footer()
 # ----------------------------- Chat widget (Optie A) -----------------------------
 CHAT_SERVER = "https://chatbot-2-0-3v8l.onrender.com"  # jouw server
 
-st.html(f"""
-  <script>
-    // Server + expliciet CSS-pad voor de widget (voorkomt 404 op /chat-widget.css)
-    window.BMS_CHAT_SERVER = "{CHAT_SERVER}";
-    window.BMS_CHAT_CSS_URL = "{CHAT_SERVER}/chat-widget.css";
-  </script>
+try:
+    # ✅ Streamlit >= 1.38: geen sandbox, direct in hoofddom
+    st.html(f"""
+      <script>
+        window.BMS_CHAT_SERVER = "{CHAT_SERVER}";
+        window.BMS_CHAT_CSS_URL = "{CHAT_SERVER}/chat-widget.css";
+      </script>
 
-  <!-- Inline fallback CSS: zorgt dat de launcher ALTÍJD zichtbaar is -->
-  <style>
-    #bms-chat-launcher {{
-      position: fixed; right: 18px; bottom: 18px; z-index: 999999;
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 56px; height: 56px; border-radius: 999px;
-      border: none; cursor: pointer;
-      background: #2563eb; color: #fff;
-      box-shadow: 0 8px 24px rgba(0,0,0,.18);
-    }}
-    #bms-overlay {{ position: fixed; inset: 0; z-index: 999998; pointer-events: none; }}
-    #bms-chat {{ pointer-events: auto; }}
-  </style>
+      <!-- Inline fallback styles zodat de knop ALTIJD zichtbaar is -->
+      <style>
+        #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
+        #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
+        #bms-chat-launcher {{
+          right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
+          background:#111827; color:#fff; border:0; cursor:pointer;
+          box-shadow:0 10px 24px rgba(0,0,0,.2);
+          z-index:2147483647;
+        }}
+        #bms-chat {{ right:16px; bottom:84px; display:none; z-index:2147483647; background:#fff; }}
+      </style>
 
-  <!-- (Optioneel) directe CSS include: handig voor first paint -->
-  <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css"/>
-
-  <!-- Jouw widget JS (de code die je net stuurde) -->
-  <script src="{CHAT_SERVER}/chat-widget.js" defer></script>
-""")
+      <!-- Externe CSS + JS -->
+      <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css"/>
+      <script src="{CHAT_SERVER}/chat-widget.js" defer></script>
+    """)
+except Exception:
+    # ✅ Fallback voor oudere Streamlit: iframe, geef genoeg hoogte
+    import streamlit.components.v1 as components
+    components.html(f"""
+      <script>
+        window.BMS_CHAT_SERVER = "{CHAT_SERVER}";
+        window.BMS_CHAT_CSS_URL = "{CHAT_SERVER}/chat-widget.css";
+      </script>
+      <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css"/>
+      <script src="{CHAT_SERVER}/chat-widget.js"></script>
+    """, height=640, scrolling=False)
 
 st.markdown("""
 <style>
