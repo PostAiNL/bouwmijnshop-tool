@@ -702,36 +702,52 @@ with c2:
 # =============================== Sidebar =====================================
 with st.sidebar:
     if IS_PRO:
-        st.markdown("<div class='chip' style='background:#ecfdf5;border-color:#a7f3d0;'>✅ PRO geactiveerd 🎉</div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='chip' style='background:#ecfdf5;border-color:#a7f3d0;'>✅ PRO geactiveerd 🎉</div>",
+            unsafe_allow_html=True
+        )
     else:
         st.info("🔓 Je gebruikt **DEMO** (14 dagen). Sommige functies zijn vergrendeld.")
         st.link_button("✨ Ontgrendel PRO", LEMON_CHECKOUT_URL, use_container_width=True)
 
     st.markdown("### 🔗 Koppel TikTok")
     _login_url = build_tiktok_auth_url()
+
     if _login_url:
+        # Login is mogelijk
         st.link_button("Log in met TikTok", _login_url, use_container_width=True)
-	st.caption("🔒 Login is beschikbaar zodra TikTok onze app heeft goedgekeurd.")
         with st.popover("Welke data gebruiken we?"):
             st.caption("Alleen **inloggen** en je profielfoto/naam. We posten **niets**. Simpel en veilig.")
     else:
+        # Login nog niet mogelijk → disable + uitleg
+        st.button("Log in met TikTok", disabled=True, use_container_width=True, help="Wacht op TikTok review")
+        st.caption("🔒 Login komt beschikbaar zodra TikTok onze app heeft goedgekeurd.")
+
+        # Eventuele setup-warnings (handig tijdens configureren)
         base = getconf("APP_PUBLIC_URL", "").strip() or "(leeg)"
         key  = getconf("TIKTOK_CLIENT_KEY", "").strip()
-        if not base: st.warning("APP_PUBLIC_URL ontbreekt. Lokaal mag `http://localhost:8501`.")
+        if not base:
+            st.warning("APP_PUBLIC_URL ontbreekt. Lokaal mag `http://localhost:8501`.")
         elif not (base.startswith("https://") or (DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://"))):
             st.warning("APP_PUBLIC_URL moet https (of http://localhost bij lokaal testen).")
-        if not key: st.warning("TIKTOK_CLIENT_KEY ontbreekt.")
+        if not key:
+            st.warning("TIKTOK_CLIENT_KEY ontbreekt.")
         st.caption("Zet **APP_PUBLIC_URL** en **TIKTOK_CLIENT_KEY** als env vars of in `.streamlit/secrets.toml`.")
+
     if st.session_state.get("tik_code"):
         st.caption("Status: OAuth code ontvangen ✅ (alleen login & display).")
+
     st.markdown("---")
 
     st.markdown("### 📊 Data")
     if st.button("📥 Haal analytics op", use_container_width=True):
-        res = run_manual_fetch(); st.toast(res["msg"] if res["ok"] else f"❌ {res['msg']}")
+        res = run_manual_fetch()
+        st.toast(res["msg"] if res["ok"] else f"❌ {res['msg']}")
+
     if st.button("🎯 Probeer met demo-data", use_container_width=True):
         rng = pd.date_range(end=pd.Timestamp.today().normalize(), periods=35, freq="D")
-        np.random.seed(42); rows = []
+        np.random.seed(42)
+        rows = []
         tags_pool = [
             "#darkfacts #psychology #fyp",
             "#love #lovestory #bf #bestie",
@@ -745,7 +761,11 @@ with st.sidebar:
             comments = int(views * np.random.uniform(0.003, 0.02))
             shares = int(views * np.random.uniform(0.002, 0.015))
             d_ = d_ + pd.Timedelta(hours=int(np.random.choice([12, 14, 16, 18, 20, 0], p=[.25, .2, .18, .15, .12, .1])))
-            rows.append(dict(caption=np.random.choice(tags_pool), views=views, likes=likes, comments=comments, shares=shares, date=d_, videolink=""))
+            rows.append(dict(
+                caption=np.random.choice(tags_pool),
+                views=views, likes=likes, comments=comments, shares=shares,
+                date=d_, videolink=""
+            ))
         df_demo = pd.DataFrame(rows)
         df_demo.to_csv(LATEST_FILE, index=False)
         st.session_state["df"] = df_demo
@@ -753,21 +773,28 @@ with st.sidebar:
         st.toast("✅ Demo-data geladen")
 
     st.markdown("### 📁 Upload bestand")
-    up = st.file_uploader("Upload je TikTok CSV/XLSX (of gebruik demo)", type=["csv", "xlsx"], help="Sleep je bestand hierheen. Heb je geen bestand? Klik dan op ‘demo-data’.")
+    up = st.file_uploader(
+        "Upload je TikTok CSV/XLSX (of gebruik demo)",
+        type=["csv", "xlsx"],
+        help="Sleep je bestand hierheen. Heb je geen bestand? Klik dan op ‘demo-data’."
+    )
     if up is not None:
         try:
             df_up = _smart_read_any(up)
-            try: up.seek(0)
-            except Exception: pass
+            try:
+                up.seek(0)
+            except Exception:
+                pass
             df_up.to_csv(LATEST_FILE, index=False)
-            st.session_state["df"] = df_up; st.session_state["demo_active"] = False
+            st.session_state["df"] = df_up
+            st.session_state["demo_active"] = False
             st.success(f"✅ Bestand opgeslagen ({up.name}) — {len(df_up):,} rijen")
             base_chk = normalize_per_post(df_up)
-            need = [c for c in ["Views","Likes","Comments","Shares","Datum"] if c not in base_chk.columns]
-            if need: st.warning("We missen kolommen: " + ", ".join(need) + ". Gebruik ons sjabloon (zie hoofdscherm).")
+            need = [c for c in ["Views", "Likes", "Comments", "Shares", "Datum"] if c not in base_chk.columns]
+            if need:
+                st.warning("We missen kolommen: " + ", ".join(need) + ". Gebruik ons sjabloon (zie hoofdscherm).")
         except Exception as e:
             st.error(f"Kon bestand niet verwerken: {e}")
-
 # ============================= Onboarding bar ================================
 def _onboarding_bar(step: int):
     labels = ["Upload", "Check", "A/B test", "Plan", "Resultaat"]
@@ -916,44 +943,98 @@ def _confidence_from_data(d: pd.DataFrame) -> int:
     conf = 100 * (0.4 * size_score + 0.3 * recency_score + 0.2 * coverage + 0.1 * stability)
     return int(np.clip(conf, 0, 100))
 
+
 def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
     with st.container(border=True):
         st.markdown(
             f"<p style='margin:6px 0 0 0;color:#6b5563;'>⏱️ Laatste update: <b>{last_sync}</b> · 📁 Bron: <b>{bron}</b></p>",
             unsafe_allow_html=True
         )
-        left, right = st.columns([3,2])
+        left, right = st.columns([3, 2])
 
         with left:
             _onboarding_bar(1 if (df_raw is None or df_raw.empty) else 2)
+
+            # TikTok login (hero)
             _login_url_top = build_tiktok_auth_url()
             if _login_url_top:
                 st.link_button("Log in met TikTok", _login_url_top, use_container_width=True)
-		st.caption("🔒 Login komt beschikbaar zodra TikTok onze app heeft goedgekeurd.")
-            if st.button("🚀 Start check", key="hero_analyse_btn", use_container_width=True, type="primary", help="We analyseren je recente posts en geven een simpel advies."):
+            else:
+                st.button("Log in met TikTok", disabled=True, use_container_width=True, help="Wacht op TikTok review")
+                st.caption("🔒 Login komt beschikbaar zodra TikTok onze app heeft goedgekeurd.")
+
+            if st.button(
+                "🚀 Start check",
+                key="hero_analyse_btn",
+                use_container_width=True,
+                type="primary",
+                help="We analyseren je recente posts en geven een simpel advies."
+            ):
                 with st.spinner("We kijken wat werkt…"):
-                    time.sleep(0.7); st.toast("✅ Check klaar — advies geüpdatet.")
+                    time.sleep(0.7)
+                    st.toast("✅ Check klaar — advies geüpdatet.")
+
             st.caption("Tip: gebruik eerst demo-data als je nog niets hebt geüpload.")
+
             cc1, cc2 = st.columns(2)
             with cc1:
                 tpl = pd.DataFrame([dict(
                     caption="Voorbeeld caption #hashtag",
                     views=12345, likes=678, comments=12, shares=34,
-                    date=pd.Timestamp.today().normalize(), videolink="", author="@account", videoid="1234567890"
+                    date=pd.Timestamp.today().normalize(),
+                    videolink="", author="@account", videoid="1234567890"
                 )])
-                st.download_button("⬇️ Voorbeeld-CSV", data=tpl.to_csv(index=False).encode("utf-8"), file_name="postai_template.csv", mime="text/csv", use_container_width=True, help="Gebruik dit als sjabloon voor je eigen data.")
+                st.download_button(
+                    "⬇️ Voorbeeld-CSV",
+                    data=tpl.to_csv(index=False).encode("utf-8"),
+                    file_name="postai_template.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    help="Gebruik dit als sjabloon voor je eigen data."
+                )
             with cc2:
-                if st.button("🎯 Laad demo-set", use_container_width=True, key="demo_btn_hero", help="Geen bestand bij de hand? Start met demo-gegevens."):
+                if st.button(
+                    "🎯 Laad demo-set",
+                    use_container_width=True,
+                    key="demo_btn_hero",
+                    help="Geen bestand bij de hand? Start met demo-gegevens."
+                ):
                     rng = pd.date_range(end=pd.Timestamp.today().normalize(), periods=35, freq="D")
-                    np.random.seed(42); rows=[]
-                    tags_pool = ["#darkfacts #psychology #fyp","#love #lovestory #bf #bestie","#viral #mindblown #creepy #tiktoknl","#redthoughts #besties #bff #lovehim","#deepthought #foryou #real #reels"]
+                    np.random.seed(42)
+                    rows = []
+                    tags_pool = [
+                        "#darkfacts #psychology #fyp",
+                        "#love #lovestory #bf #bestie",
+                        "#viral #mindblown #creepy #tiktoknl",
+                        "#redthoughts #besties #bff #lovehim",
+                        "#deepthought #foryou #real #reels"
+                    ]
                     for d_ in rng:
                         v = np.random.randint(20_000, 500_000)
-                        rows.append(dict(caption=np.random.choice(tags_pool), views=v, likes=int(v*np.random.uniform(0.04,0.18)), comments=int(v*np.random.uniform(0.003,0.02)), shares=int(v*np.random.uniform(0.002,0.015)), date=d_+pd.Timedelta(hours=int(np.random.choice([12,14,16,18,20,0], p=[.25,.2,.18,.15,.12,.1]))), videolink=""))
+                        rows.append(dict(
+                            caption=np.random.choice(tags_pool),
+                            views=v,
+                            likes=int(v * np.random.uniform(0.04, 0.18)),
+                            comments=int(v * np.random.uniform(0.003, 0.02)),
+                            shares=int(v * np.random.uniform(0.002, 0.015)),
+                            date=d_ + pd.Timedelta(hours=int(np.random.choice(
+                                [12, 14, 16, 18, 20, 0], p=[.25, .2, .18, .15, .12, .1]))),
+                            videolink=""
+                        ))
                     pd.DataFrame(rows).to_csv(LATEST_FILE, index=False)
-                    st.session_state["df"] = pd.read_csv(LATEST_FILE); st.session_state["demo_active"] = True
+                    st.session_state["df"] = pd.read_csv(LATEST_FILE)
+                    st.session_state["demo_active"] = True
                     st.toast("✅ Demo-data geladen")
-            st.markdown(f"<div class='trust-row'><span class='chip badge'>🛡️ {tr('trust1')}</span><span class='chip badge'>📄 {tr('trust2')}</span><span class='chip badge'>🎁 {tr('trust3')}</span><span class='chip badge'>🎯 {tr('trust4')}</span></div>", unsafe_allow_html=True)
+
+            st.markdown(
+                f"<div class='trust-row'>"
+                f"<span class='chip badge'>🛡️ {tr('trust1')}</span>"
+                f"<span class='chip badge'>📄 {tr('trust2')}</span>"
+                f"<span class='chip badge'>🎁 {tr('trust3')}</span>"
+                f"<span class='chip badge'>🎯 {tr('trust4')}</span>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
 
         with right:
             st.markdown(f"**{tr('next_best')}**")
@@ -962,11 +1043,16 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
             else:
                 best_time = _best_hours(d, n=1)[0]
                 conf = _confidence_from_data(d)
-                st.markdown(f"<div class='nbabarshell'><div class='nbabar' style='width:{conf}%;'></div><div class='nbalabel'>{conf}%</div></div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div class='nbabarshell'><div class='nbabar' style='width:{conf}%;'></div>"
+                    f"<div class='nbalabel'>{conf}%</div></div>",
+                    unsafe_allow_html=True
+                )
                 st.markdown(f"🔥 **Post om {best_time:02d}:00.** Repost je best scorende video. Test variant A.")
                 with st.expander("Waarom? (klik voor uitleg)"):
                     st.write("We zagen dat deze tijd de afgelopen 2 weken het vaakst goede views gaf. Daarom is dit je veiligste keuze voor vandaag.")
                 st.button("🔥 Voer advies uit", use_container_width=True)
+
 
 # ============================== Build & Hero ================================
 if "df" not in st.session_state:
