@@ -1,15 +1,23 @@
-/* ===== PostAi Chat 2.0 — JS (rerun/cookie-proof) ===== */
+/* ===== PostAi Chat 2.0 — JS (werkt met absolute overlay CSS) ===== */
 (function (global) {
   "use strict";
 
   /*** ---------- Config ---------- ***/
   var SERVER  = global.BMS_CHAT_SERVER   || "";
   var CSS_URL = global.BMS_CHAT_CSS_URL  || "/chat-widget.css";
-  if (!SERVER) console.warn("[PostAi Chat] BMS_CHAT_SERVER ontbreekt — UI werkt, API-calls mogelijk niet.");
 
-  /*** ---------- Safe window & document ---------- ***/
-  var TOP = (function(){ try { return global.top; } catch(_) { return global; } })();
-  var DOC = (function(){ try { return TOP.document; } catch(_) { return global.document; } })();
+  if (!SERVER) {
+    console.warn("[PostAi Chat] BMS_CHAT_SERVER ontbreekt — UI werkt, API-calls mogelijk niet.");
+  }
+
+  /*** ---------- Safe document (escape uit iframes) ---------- ***/
+  var DOC = (function () {
+    try { return global.top.document; }
+    catch (e) { return global.document; }
+  })();
+
+  /*** ---------- Idempotent mount ---------- ***/
+  if (DOC.getElementById("bms-chat-launcher") || DOC.getElementById("bms-overlay")) return;
 
   /*** ---------- Utils ---------- ***/
   var qs = function(sel, root){ return (root || DOC).querySelector(sel); };
@@ -21,10 +29,12 @@
     return n;
   };
   var escapeHtml = function(s){
-    return String(s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; });
+    return String(s).replace(/[&<>"]/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];
+    });
   };
 
-  /*** ---------- CSS (1x) ---------- ***/
+  /*** ---------- CSS laden (1x) ---------- ***/
   (function ensureCss(){
     if (DOC.querySelector('link[href="'+CSS_URL+'"]') || DOC.getElementById("bms-chat-css")) return;
     var link = DOC.createElement("link");
@@ -34,133 +44,92 @@
     DOC.head.appendChild(link);
   })();
 
-  /*** ---------- DOM (hergebruik +/of maken) ---------- ***/
-  var overlay = DOC.getElementById("bms-overlay");
-  var launcher, teaser, chat;
+  /*** ---------- DOM structuur ---------- ***/
+  var overlay = el("div", { id:"bms-overlay", "aria-hidden":"false" });
 
-  if (!overlay) {
-    // Nog geen overlay → alles nieuw opbouwen
-    overlay = el("div", { id:"bms-overlay", "aria-hidden":"false" });
+  var launcher = el(
+    "button",
+    { id:"bms-chat-launcher", "aria-label":"Open chat" },
+    '<svg viewBox="0 0 24 24" fill="none" width="24" height="24" aria-hidden="true">' +
+      '<path d="M12 3c5.5 0 10 3.8 10 8.5S17.5 20 12 20a13 13 0 0 1-3.7-.5L3 21l1.7-4.3A8.6 8.6 0 0 1 2 11.5C2 6.8 6.5 3 12 3Z" stroke="currentColor" stroke-width="1.6"/>' +
+    '</svg>'
+  );
 
-    launcher = el("button", { id:"bms-chat-launcher", "aria-label":"Open chat" },
-      '<svg viewBox="0 0 24 24" fill="none" width="24" height="24" aria-hidden="true">' +
-        '<path d="M12 3c5.5 0 10 3.8 10 8.5S17.5 20 12 20a13 13 0 0 1-3.7-.5L3 21l1.7-4.3A8.6 8.6 0 0 1 2 11.5C2 6.8 6.5 3 12 3Z" stroke="currentColor" stroke-width="1.6"/>' +
-      '</svg>'
-    );
+  var teaser = el("div", { id:"bms-chat-teaser", role:"status" }, "Hulp nodig? Sanne helpt je graag.");
 
-    teaser = el("div", { id:"bms-chat-teaser", role:"status" }, "Hulp nodig? Sanne helpt je graag.");
-
-    chat = el("div", {
+  var chat = el(
+    "div",
+    {
       id:"bms-chat",
       role:"dialog",
       "aria-modal":"true",
       "aria-label":"Chat met Sanne"
-    }, (
-      '<div class="hdr">' +
-        '<div class="avatar" aria-hidden="true">S</div>' +
-        '<div><div class="ttl">Sanne van PostAi</div><div class="sub">• online</div></div>' +
-        '<button class="close" aria-label="Sluit chat">✕</button>' +
-      '</div>' +
-      '<div id="bms-body"></div>' +
-      '<div class="inp">' +
-        '<input id="bms-input" placeholder="Typ je bericht…" autocomplete="off" aria-label="Bericht"/>' +
-        '<button id="bms-send" aria-label="Verstuur">Verstuur</button>' +
-      '</div>'
-    ));
+    },
+    '' +
+    '<div class="hdr">' +
+      '<div class="avatar" aria-hidden="true">S</div>' +
+      '<div><div class="ttl">Sanne van PostAi</div><div class="sub">• online</div></div>' +
+      '<button class="close" aria-label="Sluit chat">✕</button>' +
+    '</div>' +
+    '<div id="bms-body"></div>' +
+    '<div class="inp">' +
+      '<input id="bms-input" placeholder="Typ je bericht…" autocomplete="off" aria-label="Bericht"/>' +
+      '<button id="bms-send" aria-label="Verstuur">Verstuur</button>' +
+    '</div>'
+  );
 
-    overlay.appendChild(launcher);
-    overlay.appendChild(teaser);
-    overlay.appendChild(chat);
-    DOC.body.appendChild(overlay);
-  } else {
-    // Overlay bestond al (van een vorige iframe-run) → bestaande elementen hergebruiken
-    launcher = overlay.querySelector("#bms-chat-launcher");
-    teaser   = overlay.querySelector("#bms-chat-teaser");
-    chat     = overlay.querySelector("#bms-chat");
+  overlay.appendChild(launcher);
+  overlay.appendChild(teaser);
+  overlay.appendChild(chat);
+  DOC.body.appendChild(overlay);
 
-    // Safety: als er toch iets mist, opnieuw aanmaken
-    if (!launcher) {
-      launcher = el("button", { id:"bms-chat-launcher", "aria-label":"Open chat" },
-        '<svg viewBox="0 0 24 24" fill="none" width="24" height="24" aria-hidden="true">' +
-          '<path d="M12 3c5.5 0 10 3.8 10 8.5S17.5 20 12 20a13 13 0 0 1-3.7-.5L3 21l1.7-4.3A8.6 8.6 0 0 1 2 11.5C2 6.8 6.5 3 12 3Z" stroke="currentColor" stroke-width="1.6"/>' +
-        '</svg>'
-      );
-      overlay.appendChild(launcher);
-    }
-    if (!teaser) {
-      teaser = el("div", { id:"bms-chat-teaser", role:"status" }, "Hulp nodig? Sanne helpt je graag.");
-      overlay.appendChild(teaser);
-    }
-    if (!chat) {
-      chat = el("div", {
-        id:"bms-chat", role:"dialog", "aria-modal":"true", "aria-label":"Chat met Sanne"
-      }, (
-        '<div class="hdr">' +
-          '<div class="avatar" aria-hidden="true">S</div>' +
-          '<div><div class="ttl">Sanne van PostAi</div><div class="sub">• online</div></div>' +
-          '<button class="close" aria-label="Sluit chat">✕</button>' +
-        '</div>' +
-        '<div id="bms-body"></div>' +
-        '<div class="inp">' +
-          '<input id="bms-input" placeholder="Typ je bericht…" autocomplete="off" aria-label="Bericht"/>' +
-          '<button id="bms-send" aria-label="Verstuur">Verstuur</button>' +
-        '</div>'
-      ));
-      overlay.appendChild(chat);
-    }
-  }
+  /*** ---------- Elements & helpers ---------- ***/
+  var body    = qs("#bms-body");
+  var input   = qs("#bms-input");
+  var sendBtn = qs("#bms-send");
+  var closeBtn= chat.querySelector(".close");
 
-  /*** ---------- Element refs ---------- ***/
-  var body     = qs("#bms-body");
-  var input    = qs("#bms-input");
-  var sendBtn  = qs("#bms-send");
-  var closeBtn = chat.querySelector(".close");
-  var HKEY     = "bmsChatHistory";
-
-  /*** ---------- Klik-fix (pointer-events + z-index) ---------- ***/
-  function enforceClickFix() {
-    try {
-      overlay.style.pointerEvents = "none";
-      [launcher, chat, teaser].forEach(function(n){
-        if (!n) return;
-        n.style.pointerEvents = "auto";
-        if (!n.style.position) n.style.position = "absolute";
-      });
-      launcher.style.zIndex = "2147483647";
-      chat.style.zIndex     = "2147483646";
-    } catch(_) {}
-  }
-  enforceClickFix();
-
-  try {
-    var mo = new TOP.MutationObserver(function(){ enforceClickFix(); });
-    mo.observe(DOC.documentElement, { childList:true, subtree:true, attributes:true });
-  } catch(_) {}
-
-  /*** ---------- Open / close ---------- ***/
-  function openChat(ev){
-    try{ ev && ev.preventDefault(); ev && ev.stopPropagation(); }catch(_){}
+  function openChat() {
     chat.style.display = "block";
-    if (input) setTimeout(function(){ try{ input.focus(); }catch(_){ } }, 0);
+    if (input) input.focus();
   }
-  function closeChat(ev){
-    try{ ev && ev.preventDefault(); ev && ev.stopPropagation(); }catch(_){}
+  function closeChat() {
     chat.style.display = "none";
   }
 
-  // Eerst oude listeners weghalen (als we in een nieuwe iframe-run zitten)
-  try {
-    launcher.replaceWith(launcher.cloneNode(true));
-    launcher = qs("#bms-chat-launcher");
-  } catch(_) {}
-
-  // Nieuwe listeners op de actuele button
-  ["click","pointerdown","touchstart"].forEach(function(evt){
-    launcher.addEventListener(evt, openChat, { passive:true });
+  launcher.addEventListener("click", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    openChat();
   });
-  closeBtn.addEventListener("click", closeChat);
 
-  /*** ---------- Teaser (eenmalig) ---------- */
+  closeBtn.addEventListener("click", function (e) {
+    e.preventDefault();
+    closeChat();
+  });
+
+  // EXTRA: globale click-listener in capture-fase
+  // → zorgt dat de chat-knop blijft werken, zelfs als een ander element erboven hangt.
+  DOC.addEventListener("click", function (ev) {
+    try {
+      if (!launcher || !chat) return;
+      var r = launcher.getBoundingClientRect();
+      if (!r || !r.width || !r.height) return;
+
+      var x = ev.clientX;
+      var y = ev.clientY;
+
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openChat();
+      }
+    } catch (e) {
+      // stil falen
+    }
+  }, true); // capture = true
+
+  // Teaser show (eenmalig)
   if (!global.localStorage.getItem("bmsChatTeaseShown")) {
     setTimeout(function(){ teaser.classList.add("show"); }, 600);
     setTimeout(function(){
@@ -169,15 +138,20 @@
     }, 5200);
   }
 
-  /*** ---------- History helpers ---------- ***/
-  function append(role, text, opts){
-    var raw = opts && opts.raw;
+  /*** ---------- History / berichten ---------- ***/
+  var HKEY = "bmsChatHistory";
+
+  function append(role, text){
     var now = new Date().toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
-    var bubble = raw ? text : escapeHtml(text);
-    var row = el("div", { "class":"bms-msg "+role }, (
-      '<div class="bubble">' + bubble + ' <button class="copy-btn" title="Kopieer" aria-label="Kopieer">📋</button></div>' +
+    var row = el(
+      "div",
+      { "class":"bms-msg "+role },
+      '<div class="bubble">' +
+        escapeHtml(text) +
+        ' <button class="copy-btn" title="Kopieer" aria-label="Kopieer">📋</button>' +
+      '</div>' +
       '<div class="time">' + now + '</div>'
-    ));
+    );
     body.appendChild(row);
     body.scrollTop = body.scrollHeight;
 
@@ -186,8 +160,8 @@
       copyBtn.onclick = function(){
         try {
           navigator.clipboard.writeText(text);
-          copyBtn.textContent = "✅";
-          setTimeout(function(){ copyBtn.textContent = "📋"; }, 1500);
+          copyBtn.textContent="✅";
+          setTimeout(function(){ copyBtn.textContent="📋"; }, 1500);
         } catch(e){}
       };
     }
@@ -201,38 +175,50 @@
     } catch(e){}
   }
 
+  // Vorige sessie herstellen
   try {
-    JSON.parse(global.localStorage.getItem(HKEY) || "[]").forEach(function(m){
-      append(m.role, m.text);
-    });
+    JSON.parse(global.localStorage.getItem(HKEY) || "[]")
+      .forEach(function(m){ append(m.role, m.text); });
   } catch(e){}
-
-  /*** ---------- Welkom ---------- ***/
-  if (!global.localStorage.getItem("bmsChatWelcomed")) {
-    ["Hi! Ik ben Sanne. Waar kan ik je mee helpen?",
-     "Tip: wil je beste posttijd? Zeg “beste tijd”.",
-     "🔒 We bewaren niets zonder jouw actie."]
-      .forEach(function(w,i){
-        setTimeout(function(){ append("bot", w); save("bot", w); }, i*400);
-      });
-    global.localStorage.setItem("bmsChatWelcomed","1");
-  }
 
   /*** ---------- Typing indicator ---------- ***/
   function showTyping(){
-    append("bot","<span class='typing'>Sanne is aan het typen</span>", { raw:true });
-    var t = body.querySelector(".typing");
-    if (t) {
-      var b = t.closest(".bubble");
-      var c = b && b.querySelector(".copy-btn");
-      if (c) c.remove();
-    }
-  }
-  function replaceTyping(text){
-    var last = body.querySelector(".typing");
-    if (last) last.parentElement.innerHTML = escapeHtml(text);
-    else append("bot", text);
+    // voorkom dubbele indicators
+    if (body.querySelector(".typing")) return;
+
+    var now = new Date().toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
+    var row = el(
+      "div",
+      { "class":"bms-msg bot typing-row" },
+      '<div class="bubble"><span class="typing">Sanne is aan het typen</span></div>' +
+      '<div class="time">' + now + '</div>'
+    );
+    body.appendChild(row);
     body.scrollTop = body.scrollHeight;
+  }
+
+  function replaceTyping(text){
+    var typing = body.querySelector(".typing");
+    if (typing) {
+      var row = typing.closest(".bms-msg") || typing.parentNode;
+      if (row && row.parentNode) row.parentNode.removeChild(row);
+    }
+    append("bot", text);
+  }
+
+  /*** ---------- Welcome (éénmalig) ---------- ***/
+  if (!global.localStorage.getItem("bmsChatWelcomed")) {
+    [
+      "Hi! Ik ben Sanne. Waar kan ik je mee helpen?",
+      "Tip: wil je beste posttijd? Zeg “beste tijd”.",
+      "🔒 We bewaren niets zonder jouw actie."
+    ].forEach(function(w,i){
+      setTimeout(function(){
+        append("bot", w);
+        save("bot", w);
+      }, i*400);
+    });
+    global.localStorage.setItem("bmsChatWelcomed","1");
   }
 
   /*** ---------- UX helpers ---------- ***/
@@ -241,7 +227,8 @@
     list.forEach(function(label){
       var btn = el("button", {}, escapeHtml(label));
       btn.onclick = function(){
-        append("user", label); save("user", label);
+        append("user", label);
+        save("user", label);
         wrap.remove();
         sendToAI(label);
       };
@@ -250,8 +237,11 @@
     body.appendChild(wrap);
     body.scrollTop = body.scrollHeight;
   }
+
   function addFeedback(){
-    var fb = el("div", { "class":"bms-feedback" },
+    var fb = el(
+      "div",
+      { "class":"bms-feedback" },
       "<span>Was dit nuttig?</span><button aria-label='Ja'>👍</button><button aria-label='Nee'>👎</button>"
     );
     Array.prototype.forEach.call(fb.querySelectorAll("button"), function(b){
@@ -259,6 +249,7 @@
     });
     body.appendChild(fb);
   }
+
   function addRestart(){
     var btn = el("button", { "class":"bms-restart" }, "🔄 Nieuw gesprek");
     btn.onclick = function(){
@@ -272,7 +263,10 @@
   /*** ---------- Verzenden ---------- ***/
   sendBtn.addEventListener("click", function(){ sendToAI(input.value); });
   input.addEventListener("keydown", function(e){
-    if (e.key === "Enter") { e.preventDefault(); sendToAI(input.value); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendToAI(input.value);
+    }
   });
 
   async function sendToAI(txt){
@@ -283,19 +277,25 @@
     save("user", txt);
     input.value = "";
     input.focus();
+
     showTyping();
 
+    // Meta
     var mode = global.localStorage.getItem("postai_mode") || "DEMO";
-    var bestHours = []; var topHashtags = [];
+    var bestHours = [];
+    var topHashtags = [];
     try { bestHours   = JSON.parse(global.localStorage.getItem("postai_best_hours") || "[]"); } catch(e){}
     var lastUpload = global.localStorage.getItem("postai_last_upload") || "";
     try { topHashtags = JSON.parse(global.localStorage.getItem("postai_top_hashtags") || "[]"); } catch(e){}
 
+    // History → laatste 6
     var history = [];
     try {
       history = JSON.parse(global.localStorage.getItem(HKEY) || "[]")
         .slice(-6)
-        .map(function(m){ return { role:(m.role==="bot" ? "assistant" : "user"), text:m.text }; });
+        .map(function(m){
+          return { role: (m.role==="bot" ? "assistant" : "user"), text: m.text };
+        });
     } catch(e){}
 
     try {
@@ -308,9 +308,11 @@
           meta: { mode: mode, best_hours: bestHours, last_upload: lastUpload, top_hashtags: topHashtags }
         })
       });
+
       var data = {};
       try { data = await res.json(); } catch(e){}
       var reply = (data && data.reply) || "Dankje! Ik kijk even met je mee.";
+
       replaceTyping(reply);
       save("bot", reply);
 
@@ -328,7 +330,6 @@
     if (!root) return;
     if (!overlay.parentNode || overlay.parentNode !== root) {
       try { root.appendChild(overlay); } catch(e){}
-      enforceClickFix();
     }
   };
 
