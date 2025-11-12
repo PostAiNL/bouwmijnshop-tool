@@ -1,45 +1,93 @@
-// chat-server/server.js
-const express = require("express");
-const cors = require("cors");
-const path = require("path");
+import express from "express";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+import morgan from "morgan";
+import { OpenAI } from "openai";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// ===== CORS =====
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
-app.use((req, res, next) => {
-  // assets mogen overal vandaan (handig voor testen)
-  if (req.path.startsWith("/chat")) {
-    return cors({ origin: ALLOWED_ORIGIN, credentials: false })(req, res, next);
-  }
-  return cors({ origin: "*" })(req, res, next);
-});
+// ---- Config via env
+const PORT = process.env.PORT || 10000;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*"; // zet dit in Render op je site-URL
 
+// ---- Middlewares
+app.use(morgan("tiny"));
 app.use(express.json({ limit: "1mb" }));
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin || ALLOWED_ORIGIN === "*" || origin === ALLOWED_ORIGIN) {
+        return cb(null, true);
+      }
+      return cb(new Error("Not allowed by CORS"), false);
+    },
+    credentials: false,
+  })
+);
 
-// ===== Healthcheck =====
-app.get("/health", (_req, res) => {
-  res.json({ ok: true });
-});
+// simpele rate limit
+app.use(
+  "/api/",
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
 
-// ===== Static voor widget-bestanden =====
-const pub = path.join(__dirname, "public");
-app.use(express.static(pub)); // hiermee werken /chat-widget.css en /chat-widget.js
+// static files (widget)
+app.use(express.static("public"));
 
-// ===== Chat endpoint (stub / voorbeeld) =====
-app.post("/chat", async (req, res) => {
+// health
+app.get("/healthz", (req, res) =>
+  res.json({ ok: true, ts: Date.now(), hasKey: Boolean(OPENAI_API_KEY) })
+);
+
+// ---- CHAT endpoint
+app.post("/api/chat", async (req, res) => {
   try {
-    // -> Hier zou je OpenAI aanroepen. Voor nu als proof:
-    const { message } = req.body || {};
-    res.json({ ok: true, reply: `Echo: ${message || "Hallo!"}` });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ ok: false, error: "Server error" });
+    if (!OPENAI_API_KEY) {
+      return res
+        .status(500)
+        .json({ error: "OPENAI_API_KEY ontbreekt op de server." });
+    }
+
+    const { message, meta } = req.body || {};
+    const userText = String(message || "").slice(0, 1000);
+
+    if (!userText) return res.status(400).json({ error: "Lege vraag." });
+
+    const client = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+    const systemPrompt =
+      "Je bent de PostAi Assistent. Je helpt ondernemers met TikTok-analytics. " +
+      "Antwoord kort, helder en vriendelijk. Bied 1 concrete vervolgstap.";
+
+    const metaLine = meta
+      ? `Context: ${JSON.stringify(meta).slice(0, 400)}`
+      : "";
+
+    const resp = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.4,
+      max_tokens: 350,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `${userText}\n\n${metaLine}` },
+      ],
+    });
+
+    const text = resp.choices?.[0]?.message?.content?.trim() || "…";
+    res.json({ reply: text });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Serverfout bij /api/chat." });
   }
 });
 
-// ===== Start =====
+// start
 app.listen(PORT, () => {
-  console.log(`chat-server listening on :${PORT}`);
+  console.log(`Chat server up on :${PORT}`);
 });
