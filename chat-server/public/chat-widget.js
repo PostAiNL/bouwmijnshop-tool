@@ -11,7 +11,10 @@
   }
 
   /*** ---------- Safe document (escape uit iframes) ---------- ***/
-  var DOC = (function () { try { return global.top.document; } catch (e) { return global.document; } })();
+  var DOC = (function () {
+    try { return global.top.document; }
+    catch (e) { return global.document; }
+  })();
 
   /*** ---------- Idempotent mount ---------- ***/
   if (DOC.getElementById("bms-chat-launcher") || DOC.getElementById("bms-overlay")) return;
@@ -26,7 +29,9 @@
     return n;
   };
   var escapeHtml = function(s){
-    return String(s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; });
+    return String(s).replace(/[&<>"]/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];
+    });
   };
 
   /*** ---------- CSS laden (1x) ---------- ***/
@@ -73,19 +78,47 @@
   overlay.appendChild(chat);
   DOC.body.appendChild(overlay);
 
-  /*** ---------- Elements & events ---------- ***/
+  /*** ---------- Elements & basic events ---------- ***/
   var body    = qs("#bms-body");
   var input   = qs("#bms-input");
   var sendBtn = qs("#bms-send");
   var closeBtn= chat.querySelector(".close");
 
-  launcher.addEventListener("click", function(){
+  function openChat(){
     chat.style.display = "block";
     if (input) input.focus();
-  });
-  closeBtn.addEventListener("click", function(){
+  }
+  function closeChat(){
     chat.style.display = "none";
+  }
+
+  launcher.addEventListener("click", function(e){
+    e.stopPropagation();
+    e.preventDefault();
+    openChat();
   });
+
+  closeBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    e.preventDefault();
+    closeChat();
+  });
+
+  // >>> GLOBAL CLICK-CAPTURE: forceer klik op bubbel, ook als er iets overheen ligt
+  DOC.addEventListener("click", function(e){
+    try {
+      if (!launcher) return;
+      var r = launcher.getBoundingClientRect();
+      var x = e.clientX;
+      var y = e.clientY;
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        openChat();
+      }
+    } catch(err){}
+  }, true); // capture = true
 
   // Teaser show (eenmalig)
   if (!global.localStorage.getItem("bmsChatTeaseShown")) {
@@ -110,8 +143,11 @@
     var copyBtn = row.querySelector(".copy-btn");
     if (copyBtn) {
       copyBtn.onclick = function(){
-        try { navigator.clipboard.writeText(text); copyBtn.textContent="✅"; setTimeout(function(){ copyBtn.textContent="📋"; }, 1500); }
-        catch(e){}
+        try {
+          navigator.clipboard.writeText(text);
+          copyBtn.textContent="✅";
+          setTimeout(function(){ copyBtn.textContent="📋"; }, 1500);
+        } catch(e){}
       };
     }
   }
@@ -125,19 +161,26 @@
   }
 
   // Restore vorige sessie
-  try { JSON.parse(global.localStorage.getItem(HKEY) || "[]").forEach(function(m){ append(m.role, m.text); }); } catch(e){}
+  try {
+    JSON.parse(global.localStorage.getItem(HKEY) || "[]")
+      .forEach(function(m){ append(m.role, m.text); });
+  } catch(e){}
 
   /*** ---------- Welcome (éénmalig) ---------- ***/
   if (!global.localStorage.getItem("bmsChatWelcomed")) {
     ["Hi! Ik ben Sanne. Waar kan ik je mee helpen?",
      "Tip: wil je beste posttijd? Zeg “beste tijd”.",
      "🔒 We bewaren niets zonder jouw actie."]
-      .forEach(function(w,i){ setTimeout(function(){ append("bot", w); save("bot", w); }, i*400); });
+      .forEach(function(w,i){
+        setTimeout(function(){ append("bot", w); save("bot", w); }, i*400);
+      });
     global.localStorage.setItem("bmsChatWelcomed","1");
   }
 
   /*** ---------- Typing ---------- ***/
-  function showTyping(){ append("bot","<span class='typing'>Sanne is aan het typen</span>"); }
+  function showTyping(){
+    append("bot","<span class='typing'>Sanne is aan het typen</span>");
+  }
   function replaceTyping(text){
     var last = body.querySelector(".typing");
     if (last) last.parentElement.innerHTML = escapeHtml(text);
@@ -205,7 +248,9 @@
     try {
       history = JSON.parse(global.localStorage.getItem(HKEY) || "[]")
         .slice(-6)
-        .map(function(m){ return { role: (m.role==="bot"?"assistant":"user"), text: m.text }; });
+        .map(function(m){
+          return { role: (m.role==="bot" ? "assistant" : "user"), text: m.text };
+        });
     } catch(e){}
 
     try {
@@ -240,38 +285,5 @@
       try { root.appendChild(overlay); } catch(e){}
     }
   };
-
-  /*** ---------- Altijd bovenaan + blokkades weghalen ---------- ***/
-  function ensureOverlayOnTop(){
-    if (!overlay || !overlay.parentNode) return;
-    // zorg dat overlay altijd de laatste child is
-    if (overlay.parentNode.lastElementChild !== overlay) {
-      overlay.parentNode.appendChild(overlay);
-    }
-    overlay.style.position = "fixed";
-    overlay.style.inset = "0";
-    overlay.style.zIndex = "2147483647";
-    overlay.style.pointerEvents = "none"; // kinderen krijgen weer auto in CSS
-  }
-
-  function clearObstruction(){
-    try {
-      if (!launcher) return;
-      var rect = launcher.getBoundingClientRect();
-      var x = rect.left + rect.width / 2;
-      var y = rect.top  + rect.height / 2;
-      var topEl = DOC.elementFromPoint(x, y);
-      if (topEl && topEl !== launcher && !launcher.contains(topEl)) {
-        // alles wat precies boven de launcher ligt, kliks laten doorlaten
-        topEl.style.pointerEvents = "none";
-      }
-    } catch(e){}
-  }
-
-  // direct uitvoeren en regelmatig herhalen (voor als cookie-banner de DOM verandert)
-  ensureOverlayOnTop();
-  clearObstruction();
-  setInterval(ensureOverlayOnTop, 1000);
-  setInterval(clearObstruction, 1500);
 
 })(window);
