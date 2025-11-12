@@ -1,63 +1,96 @@
-/* --- Floating launcher (bubble) --- */
-#bms-chat-launcher{
-  position:fixed; right:20px; bottom:20px; z-index:99999;
-  width:56px; height:56px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  background:#2563eb; color:#fff; box-shadow:0 10px 30px rgba(0,0,0,.18);
-  cursor:pointer; border:0; outline:0;
+/* ===== PostAi Chat — Luxury / Trust variant ===== */
+:root{
+  --navy:#0b1221;        /* diep marine */
+  --gold:#d4af37;        /* zacht goud */
+  --ink:#111827;         /* primaire tekst */
+  --muted:#6b7280;       /* secundaire tekst */
+  --card:#ffffff;
+  --soft:#f6f7fb;        /* zachte grijs */
+  --ring:#e8ecf3;
 }
+
+/* Launcher (floating bubble) */
+#bms-chat-launcher{
+  position:fixed; right:22px; bottom:22px; z-index:99999;
+  width:58px; height:58px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--navy); color:#fff; cursor:pointer;
+  border:2px solid var(--gold);
+  box-shadow:0 16px 38px rgba(11,18,33,.28);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+#bms-chat-launcher:hover{ transform:translateY(-2px); box-shadow:0 20px 46px rgba(11,18,33,.34); }
 #bms-chat-launcher svg{ width:26px; height:26px; }
 
-/* Teaser pill (verdwijnt na paar sec of na eerste klik) */
+/* Teaser (short helper text) */
 #bms-chat-teaser{
-  position:fixed; right:84px; bottom:28px; z-index:99998;
-  background:#111827; color:#fff; font:500 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-  padding:8px 12px; border-radius:999px; box-shadow:0 8px 24px rgba(0,0,0,.16);
+  position:fixed; right:92px; bottom:30px; z-index:99998;
+  background:#0f172a; color:#fff; border:1px solid var(--ring);
+  font:500 13px/1.2 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+  padding:9px 12px; border-radius:999px; box-shadow:0 14px 30px rgba(0,0,0,.22);
   opacity:0; transform:translateY(8px); pointer-events:none; transition:.25s;
 }
 #bms-chat-teaser.show{ opacity:1; transform:translateY(0); }
 
-/* --- Chat window --- */
+/* Window */
 #bms-chat{
-  position:fixed; right:20px; bottom:88px; z-index:99999;
-  width:360px; max-width:92vw; height:520px; max-height:70vh;
-  background:#fff; border:1px solid #e5e7eb; border-radius:16px;
-  box-shadow:0 18px 60px rgba(0,0,0,.22); display:none; overflow:hidden;
+  position:fixed; right:22px; bottom:92px; z-index:99999;
+  width:380px; max-width:92vw; height:540px; max-height:72vh;
+  background:var(--card); border:1px solid var(--ring); border-radius:18px;
+  box-shadow:0 26px 80px rgba(11,18,33,.35); display:none; overflow:hidden;
 }
 
 /* Header */
 #bms-chat .hdr{
-  height:52px; display:flex; align-items:center; justify-content:space-between;
-  padding:0 12px; background:#f8fafc; border-bottom:1px solid #eef2f7;
+  height:64px; display:flex; align-items:center; justify-content:space-between;
+  padding:0 14px; background:linear-gradient(180deg,#ffffff 0%, #fafbff 100%);
+  border-bottom:1px solid var(--ring);
 }
-#bms-chat .hdr .ttl{ font:700 14px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; color:#111827; }
-#bms-chat .hdr .sub{ font:12px/1 system-ui; color:#16a34a; }
+.hdr .id{
+  display:flex; align-items:center; gap:10px;
+}
+.hdr .avatar{
+  width:36px; height:36px; border-radius:50%;
+  background:var(--navy);
+  border:2px solid var(--gold);
+  color:#fff; display:flex; align-items:center; justify-content:center;
+  font:700 14px/1 ui-sans-serif, system-ui;
+}
+.hdr .ttl{ font:700 15px/1 ui-sans-serif, system-ui; color:var(--ink); }
+.hdr .sub{ font:12px/1 ui-sans-serif, system-ui; color:#16a34a; }
+#bms-chat .close{
+  border:0; background:transparent; cursor:pointer; padding:8px; border-radius:10px; color:#334155;
+}
+#bms-chat .close:hover{ background:#eef2f7; }
 
 /* Body */
-#bms-chat .body{ height:calc(100% - 52px - 56px); overflow:auto; padding:12px; background:#ffffff; }
-.bms-msg{ margin:8px 0; display:flex; gap:8px; }
-.bms-msg.bot .bubble{ background:#f1f5f9; color:#111827; }
-.bms-msg.user{ justify-content:flex-end; }
-.bms-msg.user .bubble{ background:#2563eb; color:#fff; }
+#bms-chat .body{ height:calc(100% - 64px - 70px); overflow:auto; padding:14px; background:#fff; }
+.bms-msg{ margin:10px 0; display:flex; gap:8px; }
 .bms-msg .bubble{
-  max-width:80%; padding:10px 12px; border-radius:12px; font:14px/1.35 system-ui;
-  box-shadow:0 2px 8px rgba(0,0,0,.06);
+  max-width:80%; padding:11px 13px; border-radius:14px;
+  font:14px/1.45 ui-sans-serif, system-ui; box-shadow:0 2px 10px rgba(0,0,0,.06);
 }
+.bms-msg.bot .bubble{ background:var(--soft); color:var(--ink); }
+.bms-msg.user{ justify-content:flex-end; }
+.bms-msg.user .bubble{ background:var(--navy); color:#fff; }
 
-/* Input */
+/* Footer / input */
 #bms-chat .inp{
-  height:56px; display:flex; gap:8px; align-items:center;
-  padding:8px; border-top:1px solid #eef2f7; background:#fff;
+  height:70px; display:flex; gap:8px; align-items:center;
+  padding:10px; border-top:1px solid var(--ring); background:#fff;
 }
 #bms-chat input[type="text"]{
-  flex:1; height:40px; border:1px solid #e5e7eb; border-radius:10px; padding:0 12px;
-  font:14px system-ui; outline:none;
+  flex:1; height:44px; border:1px solid var(--ring); border-radius:12px; padding:0 12px;
+  font:14px ui-sans-serif, system-ui; outline:none;
 }
 #bms-chat button.send{
-  height:40px; padding:0 14px; border-radius:10px; border:1px solid #2563eb;
-  background:#2563eb; color:#fff; font-weight:700; cursor:pointer;
+  height:44px; padding:0 16px; border-radius:12px; border:1px solid var(--gold);
+  background:var(--gold); color:#1b1b1b; font-weight:800; cursor:pointer;
 }
-#bms-chat .close{
-  border:0; background:transparent; cursor:pointer; padding:8px; border-radius:8px;
+
+/* Tiny trust row under input */
+#bms-trust{
+  position:absolute; left:0; right:0; bottom:70px; padding:0 14px 6px 14px;
+  color:var(--muted); font:12px/1.2 ui-sans-serif, system-ui;
 }
-#bms-chat .close:hover{ background:#e5e7eb; }
+#bms-trust a{ color:var(--muted); text-decoration:underline dotted; }
