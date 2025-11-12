@@ -2010,44 +2010,47 @@ def _mini_footer():
 _mini_footer()
 
 # ----------------------------- Chat widget (Optie A) -----------------------------
+# ----------------------------- Chat widget (robust) -----------------------------
 CHAT_SERVER = "https://chatbot-2-0-3v8l.onrender.com"  # jouw server
 
+snippet = f"""
+  <script>
+    console.log("[PostAi] injecting widget (st.html path) …");
+    window.BMS_CHAT_SERVER = "{CHAT_SERVER}";
+    window.BMS_CHAT_CSS_URL = "{CHAT_SERVER}/chat-widget.css";
+  </script>
+
+  <!-- Inline fallback: knop is zichtbaar zelfs zonder externe CSS -->
+  <style>
+    #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
+    #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
+    #bms-chat-launcher {{
+      right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
+      background:#111827; color:#fff; border:0; cursor:pointer;
+      box-shadow:0 10px 24px rgba(0,0,0,.2);
+      z-index: 2147483647;
+    }}
+    #bms-chat {{ right:16px; bottom:84px; display:none; z-index:2147483647; background:#fff; }}
+  </style>
+
+  <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css" onload="console.log('[PostAi] CSS loaded')" onerror="console.error('[PostAi] CSS failed')"/>
+  <script src="{CHAT_SERVER}/chat-widget.js" defer onload="console.log('[PostAi] JS loaded')" onerror="console.error('[PostAi] JS failed')"></script>
+"""
+
 try:
-    # ✅ Streamlit >= 1.38: geen sandbox, direct in hoofddom
-    st.html(f"""
-      <script>
-        window.BMS_CHAT_SERVER = "{CHAT_SERVER}";
-        window.BMS_CHAT_CSS_URL = "{CHAT_SERVER}/chat-widget.css";
-      </script>
-
-      <!-- Inline fallback styles zodat de knop ALTIJD zichtbaar is -->
-      <style>
-        #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
-        #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
-        #bms-chat-launcher {{
-          right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
-          background:#111827; color:#fff; border:0; cursor:pointer;
-          box-shadow:0 10px 24px rgba(0,0,0,.2);
-          z-index:2147483647;
-        }}
-        #bms-chat {{ right:16px; bottom:84px; display:none; z-index:2147483647; background:#fff; }}
-      </style>
-
-      <!-- Externe CSS + JS -->
-      <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css"/>
-      <script src="{CHAT_SERVER}/chat-widget.js" defer></script>
-    """)
-except Exception:
-    # ✅ Fallback voor oudere Streamlit: iframe, geef genoeg hoogte
+    # Streamlit ≥ 1.38
+    st.html(snippet)
+except Exception as e:
+    # Fallback: older Streamlit → sandboxed iframe (make it tall so the button is in view)
     import streamlit.components.v1 as components
-    components.html(f"""
-      <script>
-        window.BMS_CHAT_SERVER = "{CHAT_SERVER}";
-        window.BMS_CHAT_CSS_URL = "{CHAT_SERVER}/chat-widget.css";
-      </script>
-      <link rel="stylesheet" href="{CHAT_SERVER}/chat-widget.css"/>
-      <script src="{CHAT_SERVER}/chat-widget.js"></script>
-    """, height=640, scrolling=False)
+    components.html(
+        f"""
+        {snippet}
+        <script>console.log("[PostAi] components.html fallback used")</script>
+        """,
+        height=680,  # important: enough height for the floating UI
+        scrolling=False,
+    )
 
 st.markdown("""
 <style>
