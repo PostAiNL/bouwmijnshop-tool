@@ -421,6 +421,7 @@ def _inject_css(theme_color: str, pro: bool):
   --hover:#f4f8ff; --track:#e5e7eb; --skeleton:#f1f5f9;
 }}
 """
+
     base_css = """
 html { color-scheme: light; -webkit-text-size-adjust: 100%; }
 body, [data-testid="stAppViewContainer"] { background: var(--bg) !important; color: var(--text) !important; }
@@ -431,15 +432,39 @@ section[data-testid="stSidebar"] { width:260px !important; }
 /* Sidebar altijd open: knop zichtbaar maar NIET klikbaar */
 [data-testid="collapsedControl"] {
   pointer-events: none !important;
-  opacity: 0.4;  /* mag je weghalen, is alleen visueel “disabled” */
+  opacity: 0.4;
 }
 
 /* Sidebar content iets omhoog zodat het gelijk valt met het logo */
 section[data-testid="stSidebar"] .block-container { padding-top:1.5rem; }
-
-
 .accent { color:var(--brand); }
 h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
+
+/* Header */
+.app-header { margin-bottom:10px; }
+.app-title-row {
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.app-title-row h1 {
+  margin:0;
+  font-size:1.6rem;
+}
+.app-pill {
+  font-size:.8rem;
+  padding:4px 10px;
+  border-radius:999px;
+  background:#dcfce7;
+  border:1px solid #bbf7d0;
+  color:#166534;
+  font-weight:600;
+}
+.app-subtitle {
+  margin:2px 0 0;
+  font-size:.9rem;
+  color:#6b7280;
+}
 
 /* Cards */
 .hero-card, .kpi-card {
@@ -452,8 +477,6 @@ h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
 }
 .kpi-label { color:var(--muted); font-size:.85rem; margin-bottom:4px; }
 .kpi-value { font-size:1.35rem; font-weight:700; color: var(--text); }
-
-/* Chip */
 .chip {
   display:inline-block;
   padding:4px 10px;
@@ -466,42 +489,61 @@ h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
   color: var(--text);
 }
 .kpi-gap { margin-top:10px; margin-bottom:14px; }
-/* Home hero mini-KPI's */
+
+/* Home mini-KPI's bovenin */
 .home-mini-row{
   display:flex;
   flex-wrap:wrap;
   gap:10px;
-  margin:4px 0 10px;
+  margin:10px 0 14px;
 }
 .home-mini{
   flex:1 1 0;
-  border-radius:12px;
+  border-radius:16px;
   border:1px solid var(--card-border);
   background:var(--head);
-  padding:8px 10px;
-  font-size:.8rem;
+  padding:10px 12px;
+  font-size:.85rem;
 }
 .home-mini-label{
   color:#6b7280;
   font-size:.75rem;
-  margin-bottom:2px;
+  margin-bottom:4px;
 }
 .home-mini-value{
   font-weight:700;
-  font-size:.95rem;
+  font-size:1rem;
 }
 
-/* Buttons – BASE */
+/* Today card rechts */
+.today-card{
+  border-radius:16px;
+  border:1px solid var(--card-border);
+  padding:14px 16px;
+  background:#ecfdf5;
+}
+.today-title{
+  font-weight:700;
+  margin-bottom:4px;
+}
+.today-sub{
+  color:#4b5563;
+  font-size:.9rem;
+}
+
+/* Buttons – BASE (desktop & mobile) */
 .stButton>button,
 .stLinkButton>a {
   border-radius:12px !important;
   font-weight:700 !important;
   transition:transform .12s ease, box-shadow .12s ease, opacity .2s ease !important;
-  text-decoration:none !important;
+  -webkit-appearance:none !important; appearance:none !important;
+  text-decoration:none !important; outline:none !important;
 }
 .stButton>button:hover,
 .stLinkButton>a:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.06); }
 
+/* Defaults (neutraal) wanneer geen custom class is gebruikt */
 .stButton>button {
   background:var(--card) !important;
   color:var(--text) !important;
@@ -511,6 +553,18 @@ h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
   background:var(--brand) !important;
   color:#fff !important;
   border:1px solid var(--brand) !important;
+}
+
+/* Optionele varianten (als je ze gebruikt) */
+.primary-btn>button {
+  background:var(--brand) !important;
+  color:#fff !important;
+  border:1px solid var(--brand) !important;
+}
+.soft-btn>button {
+  background:var(--card) !important;
+  border:1px solid var(--ring) !important;
+  color: var(--text) !important;
 }
 
 /* Inputs */
@@ -524,7 +578,6 @@ h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
   border:1px solid var(--card-border) !important;
   border-radius:12px !important;
 }
-
 label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p {
   color: var(--text) !important;
 }
@@ -539,7 +592,7 @@ label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p {
   border-bottom:1px solid var(--card-border);
 }
 
-/* Progress bars */
+/* Progress / bars */
 .stProgress > div > div { background: #ffffff !important; }
 .stProgress > div {
   background: var(--track) !important;
@@ -587,20 +640,45 @@ label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p {
   content:"";
   position:absolute;
   inset:0;
-  background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.25) 50%, rgba(255,255,255,0) 100%);
+  background:linear-gradient(
+    90deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,.25) 50%,
+    rgba(255,255,255,0) 100%
+  );
   transform:translateX(-100%);
   animation:shimmer 1.15s infinite;
 }
 @keyframes shimmer { 100% { transform:translateX(100%); } }
 
-/* ===== Mobile ===== */
+/* ===== Mobile ONLY (≤760px) ===== */
 @media (max-width:760px){
   .block-container{ padding-left:12px; padding-right:12px; }
   .stButton>button, .stLinkButton>a{ width:100% !important; }
+  .stButton>button, .stLinkButton>a{
+      background:var(--brand) !important;
+      color:#fff !important;
+      border:1px solid var(--brand) !important;
+  }
+  .soft-btn>button{
+      background:var(--card) !important;
+      color:var(--text) !important;
+      border:1px solid var(--ring) !important;
+  }
+  .stSelectbox div[role="combobox"],
+  .stTextInput input,
+  .stNumberInput input,
+  .stDateInput input,
+  .stTextArea textarea{
+      font-size:14px !important;
+  }
+  .kpi-card{ padding:12px; border-radius:14px; }
+  .kpi-value{ font-size:1.05rem; }
+  .stTabs [data-baseweb="tab-list"]{ padding-top:4px; }
+  .stTabs [data-baseweb="tab"]{ padding:8px 10px; font-size:13px; }
 }
 """
 
-    # Inject CSS
     st.markdown("<style>" + vars_block + base_css + "</style>", unsafe_allow_html=True)
 
     # ❌ PRO-badge = VERWIJDERD
@@ -1022,106 +1100,37 @@ def tr(k: str) -> str:
     return I18N.get(k, k)
 
 # =============================== Header =======================================
-if LOGO_BYTES:
-    b64_logo = base64.b64encode(LOGO_BYTES).decode("ascii")
-else:
-    b64_logo = ""
+c1, c2 = st.columns([1, 6])
 
-st.markdown(
-    f"""
-<style>
-.postai-header-row {{
-  display:flex;
-  align-items:center;
-  gap:18px;
-  margin-bottom:12px;
-}}
+with c1:
+    if LOGO_BYTES:
+        b64 = base64.b64encode(LOGO_BYTES).decode("ascii")
+        st.markdown(
+            f"<img src='data:image/png;base64,{b64}' style='height:64px;border-radius:16px;' />",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            "<div style='height:64px;width:64px;border-radius:16px;"
+            "background:linear-gradient(135deg,#22c55e,#16a34a);"
+            "display:flex;align-items:center;justify-content:center;"
+            "color:white;font-weight:700;font-size:20px;'>PA</div>",
+            unsafe_allow_html=True,
+        )
 
-.postai-header-logo img {{
-  height:82px;
-  border-radius:16px;
-  display:block;
-}}
-
-.postai-header-main {{
-  flex:1 1 auto;
-}}
-
-.postai-header-title {{
-  margin:0;
-  font-size:1.6rem;
-  display:flex;
-  align-items:center;
-  gap:8px;
-}}
-
-.postai-pro-pill {{
-  display:inline-flex;
-  align-items:center;
-  padding:2px 10px;
-  border-radius:999px;
-  font-size:0.8rem;
-  border:1px solid #4ade80;
-  color:#16a34a;
-  background:#ecfdf5;
-  font-weight:600;
-}}
-
-.postai-header-sub {{
-  margin-top:2px;
-  font-size:0.9rem;
-  color:#6b7280;
-}}
-
-.postai-header-help {{
-  flex:0 0 260px;
-}}
-
-.postai-help-pill {{
-  border-radius:12px;
-  border:1px solid var(--card-border);
-  background:var(--head);
-  padding:10px 12px;
-  font-size:0.85rem;
-  line-height:1.35;
-}}
-
-.postai-help-pill-title {{
-  font-weight:700;
-  margin-bottom:2px;
-  color:#111827;
-}}
-</style>
-
-<div class="postai-header-row">
-  <div class="postai-header-logo">
-    {"<img src='data:image/png;base64," + b64_logo + "' />" if b64_logo else ""}
+with c2:
+    st.markdown(
+        f"""
+<div class="app-header">
+  <div class="app-title-row">
+    <h1><span class="accent">PostAi</span> — TikTok Growth Agent</h1>
+    <span class="app-pill">{'PRO' if IS_PRO else 'DEMO'}</span>
   </div>
-
-  <div class="postai-header-main">
-    <div class="postai-header-title">
-      <span class="accent">PostAi</span> — TikTok Growth Agent
-      <span class="postai-pro-pill">{'PRO' if IS_PRO else 'DEMO'}</span>
-    </div>
-    <div class="postai-header-sub">
-      Slimmer groeien met TikTok-data. Dare to know.
-    </div>
-  </div>
-
-  <div class="postai-header-help">
-    <div class="postai-help-pill">
-      <div class="postai-help-pill-title">🚀 Snel starten</div>
-      <div>
-        1. Kies demo-data of upload CSV.<br/>
-        2. Klik <b>Start analyse</b>.<br/>
-        3. Volg het advies bij <b>Stap 2</b>.
-      </div>
-    </div>
-  </div>
+  <p class="app-subtitle">Slimmer groeien met TikTok-data. Dare to know.</p>
 </div>
 """,
-    unsafe_allow_html=True,
-)
+        unsafe_allow_html=True,
+    )
 
 # ============================ Demo-data helper ================================
 def _activate_demo_data() -> None:
@@ -1414,7 +1423,7 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
             unsafe_allow_html=True,
         )
 
-        st.markdown("### 🎯 Vandaag: 1 simpele groeistap")
+        st.markdown("## 🎯 Vandaag: 1 simpele groeistap")
         st.caption("Voor starters en creators: volg de twee stappen hieronder en je bent klaar om te posten.")
 
         # ---------------------- MINI KPI RIJ (alleen met data) ----------------------
@@ -1426,7 +1435,9 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
             cutoff_7d = now_local - pd.Timedelta(days=7)
             recent = dc[dc["Datum"] >= cutoff_7d]
 
-            views7 = int(pd.to_numeric(recent.get("Views", pd.Series(dtype=float)), errors="coerce").sum(skipna=True)) if not recent.empty else 0
+            views7 = int(
+                pd.to_numeric(recent.get("Views", pd.Series(dtype=float)), errors="coerce").sum(skipna=True)
+            ) if not recent.empty else 0
             posts7 = int(recent.shape[0])
 
             best_hour = _best_hours(dc, n=1)[0]
@@ -1457,14 +1468,15 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                 unsafe_allow_html=True,
             )
 
+        # Onboarding progress direct onder KPI's
+        _onboarding_bar(1 if not has_data else 2)
+
         # --------------------------- 2 kolommen: stappen ---------------------------
         left, right = st.columns([3, 2])
 
         # ------------------------- LINKERKANT: STAP 1 -----------------------------
         with left:
-            _onboarding_bar(1 if not has_data else 2)
-
-            st.markdown("#### 1️⃣ Data & analyse klaarzetten")
+            st.markdown("### 1️⃣ Data & analyse klaarzetten")
 
             if not has_data:
                 st.write(
@@ -1512,11 +1524,9 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     key="demo_btn_hero",
                     help="Geen bestand bij de hand? Start met demo-gegevens.",
                 ):
-                    # gebruikt je eigen helper uit de sidebar
                     try:
                         _activate_demo_data()
                     except NameError:
-                        # fallback: oude inline demo-generator
                         rng = pd.date_range(
                             end=pd.Timestamp.today().normalize(), periods=35, freq="D"
                         )
@@ -1584,47 +1594,50 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
 
         # ------------------------- RECHTERKANT: STAP 2 ----------------------------
         with right:
-            st.markdown(f"#### 2️⃣ Vandaag posten")
+            st.markdown("### 2️⃣ Vandaag posten")
 
             if not has_data:
                 st.write("Laad eerst je data of de demo-set om een concreet postadvies te krijgen.")
-            else:
-                best_time = _best_hours(d, n=1)[0]
-                conf = _confidence_from_data(d)
+                return
 
-                # confidence balk
-                st.markdown(
-                    f"<div class='nbabarshell'><div class='nbabar' style='width:{conf}%;'></div>"
-                    f"<div class='nbalabel'>{conf}% dat dit uur goed is</div></div>",
-                    unsafe_allow_html=True,
+            best_time = _best_hours(d, n=1)[0]
+            conf = _confidence_from_data(d)
+
+            # today-card + confidence bar
+            st.markdown(
+                f"""
+<div class="today-card">
+  <div class="today-title">🔥 Post vandaag om <b>{best_time:02d}:00</b></div>
+  <div class="today-sub">
+    Repost je best scorende video en test een kleine variant (bijv. andere hook).
+  </div>
+  <div class="nbabarshell" style="margin-top:10px;">
+    <div class="nbabar" style="width:{conf}%;"></div>
+    <div class="nbalabel">{conf}% dat dit uur goed is</div>
+  </div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+
+            with st.expander("Waarom dit advies?"):
+                st.write(
+                    "We kijken naar welke uren in de laatste weken het vaakst goede views gaven. "
+                    "Daaruit kiezen we het veiligste uur voor vandaag."
                 )
 
-                st.markdown(
-                    f"🔥 **Post vandaag om {best_time:02d}:00.** "
-                    f"Repost je best scorende video en test een kleine variant (bijv. andere hook)."
-                )
+            st.button("🔥 Voer advies uit", use_container_width=True)
 
-                with st.expander("Waarom dit advies?"):
-                    st.write(
-                        "We kijken naar welke uren in de laatste weken het vaakst goede views gaven. "
-                        "Daaruit kiezen we het veiligste uur voor vandaag."
-                    )
+            st.markdown("---")
+            st.markdown("**🎬 Mini-script voor vandaag**")
+            st.caption("Gebruik dit als startpunt voor je video. Pas tekst en stijl gerust aan.")
 
-                st.button("🔥 Voer advies uit", use_container_width=True)
-
-                st.markdown("---")
-                st.markdown("**🎬 Mini-script voor vandaag**")
-                st.caption(
-                    "Gebruik dit als startpunt voor je video. Pas tekst en stijl gerust aan."
-                )
-
-                # heel simpel placeholder script op basis van tijd
-                st.code(
-                    f"Hook: Niemand vertelt je dit, maar {best_time:02d}:00 is NU je kans...\n"
-                    f"Body: Deel 1 snelle tip of dark fact in 2–3 zinnen.\n"
-                    f"CTA: Volg voor meer dagelijkse TikTok hacks.",
-                    language="markdown",
-                )
+            st.code(
+                f"Hook: Niemand vertelt je dit, maar {best_time:02d}:00 is NU je kans...\n"
+                f"Body: Deel 1 snelle tip of dark fact in 2–3 zinnen.\n"
+                f"CTA: Volg voor meer dagelijkse TikTok hacks.",
+                language="markdown",
+            )
 
 # ============================== Build & Hero ================================
 # Basis-dataset uit session of laatste bestand
