@@ -1421,15 +1421,16 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
     has_data = d is not None and not d.empty
 
     # ============ Kleine helper voor "laatste 7 dagen" ============
-    views_7d = 0
-    posts_7d = 0
+    views_7d_str = "—"
+    posts_7d_str = "—"
     best_time_label = "—"
-    trending_label = "—"
+    top_tag_label = "#tiktoknl"
 
     if has_data:
         dfm = d.copy()
         dfm["Datum"] = _to_naive(dfm.get("Datum"))
         dfm = dfm.dropna(subset=["Datum"])
+
         if not dfm.empty:
             today = pd.Timestamp.now(tz=TZ).tz_convert(None).normalize()
             start7 = today - pd.Timedelta(days=6)
@@ -1442,79 +1443,46 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     .sum(skipna=True)
                 )
                 posts_7d = int(len(last7))
+                views_7d_str = f"{views_7d:,}".replace(",", ".")
+                posts_7d_str = str(posts_7d)
 
-            # Beste uur uit volledige dataset
+            # Beste uur
             try:
                 best_hour = _best_hours(dfm, n=1)[0]
                 best_time_label = f"{best_hour:02d}:00"
             except Exception:
                 best_time_label = "—"
 
-            # Trending hashtag (14d)
+            # Trending hashtag
             try:
                 tr_df = trending_hashtags(dfm, days_window=14)
                 if tr_df is not None and not tr_df.empty:
-                    trending_label = str(tr_df.head(1).index[0])
+                    top_tag_label = str(tr_df.head(1).index[0])
             except Exception:
-                trending_label = "—"
-
-    # Formatters
-    views_7d_str = f"{views_7d:,}".replace(",", ".") if views_7d else "—"
-    posts_7d_str = str(posts_7d) if posts_7d else "—"
-    if trending_label == "—":
-        trending_label = "#tiktoknl"
+                pass
 
     confidence = _confidence_from_data(d) if has_data else 0
 
-   # ====================== UI ===========================
-# Veilige labels voor last_sync en bron
-last_sync_label = locals().get("last_sync", "—")
-bron_label = locals().get("bron", "Onbekend")
+    # ====================== UI ===========================
+    with st.container(border=True):
+        # Statusregel
+        st.markdown(
+            f"<p style='margin:4px 0 2px;color:#6b7280;font-size:0.85rem;'>"
+            f"⏱️ Laatste update: <b>{last_sync or '—'}</b> · 📁 Bron: <b>{bron or 'Onbekend'}</b>"
+            f"</p>",
+            unsafe_allow_html=True,
+        )
 
-with st.container(border=True):
-    # Statusregeltje bovenin
-    st.markdown(
-        f"<p style='margin:4px 0 2px;color:#6b7280;font-size:0.85rem;'>"
-        f"⏱️ Laatste update: <b>{last_sync_label}</b> · 📁 Bron: <b>{bron_label}</b>"
-        f"</p>",
-        unsafe_allow_html=True,
-    )
+        # Titel + subtitel
+        st.markdown("### 🎯 Vandaag: 1 simpele groeistap")
+        st.caption(
+            "Voor starters en creators: volg vandaag gewoon deze twee stappen. "
+            "PostAi rekent op de achtergrond met je cijfers mee."
+        )
 
-    # Titel + subtitel
-    st.markdown("### 🎯 Vandaag: 1 simpele groeistap")
-    st.caption(
-        "Voor starters en creators: volg vandaag gewoon deze twee stappen. "
-        "PostAi rekent op de achtergrond met je cijfers mee."
-    )
-
-    # ---------- Data-status ----------
-
-# Zorg dat 'd' altijd bestaat als variabele
-# Gebruik de DataFrame die aan de functie is meegegeven
-d = locals().get("d_for_hero", None)
-
-# Bepaal of er bruikbare data is
-has_data = d is not None and hasattr(d, "empty") and not d.empty
-
-
-# ---------- Mini KPI-rij (4 blokken) ----------
-
-# Zorg dat top_hashtag nooit een NameError geeft
-try:
-    top_tag_label = top_hashtag or "—"
-except NameError:
-    top_tag_label = "—"
-
-with st.container(border=True):
-    # ...
-
-    # Veilige defaults voor KPI-waardes
-    views_7d_str = locals().get("views_7d_str", "—")
-    posts_7d_str = locals().get("posts_7d_str", "—")
-    best_time_label = locals().get("best_time_label", "—")
-
-    st.markdown(
-        f"""
+        # Mini KPI-rij
+        st.markdown(
+            f"""
 <div class="home-mini-row">
 
   <div class="home-mini">
@@ -1539,136 +1507,123 @@ with st.container(border=True):
 
 </div>
 """,
-        unsafe_allow_html=True,
-    )
-
-    # Onboarding / voortgang
-    _onboarding_bar(2 if has_data else 1)
-
-    # Twee kolommen: links stap 1, rechts stap 2
-    col_left, col_right = st.columns([3, 2])
-
-    # ---------------- STAP 1 (LINKS) ----------------
-    with col_left:
-        st.markdown("### 1️⃣ Data & analyse klaarzetten")
-        # ... jouw verdere code voor stap 1
-
-    # ---------------- STAP 2 (RECHTS) ----------------
-    with col_right:
-        st.markdown("### 2️⃣ Vandaag posten")
-        # ... jouw verdere code voor stap 2
-
-
-        if not has_data:
-            st.write(
-                "1. Upload je TikTok CSV/XLSX in de **linker sidebar**\n"
-                "   of gebruik de demo-data.\n\n"
-                "2. Klik daarna op **🚀 Start analyse** om je advies te laten berekenen."
-            )
-        else:
-            st.write(
-                "✅ We hebben al data gevonden. Klik op **🚀 Start analyse** "
-                "om je advies te verversen."
-            )
-
-        # Voorbeeld CSV + demo-knop
-        cc1, cc2 = st.columns(2)
-
-        with cc1:
-            tpl = pd.DataFrame(
-                [
-                    dict(
-                        caption="Voorbeeld caption #hashtag",
-                        views=12345,
-                        likes=678,
-                        comments=12,
-                        shares=34,
-                        date=pd.Timestamp.today().normalize(),
-                        videolink="",
-                        author="@account",
-                        videoid="1234567890",
-                    )
-                ]
-            )
-            st.download_button(
-                "⬇️ Voorbeeld-CSV",
-                data=tpl.to_csv(index=False).encode("utf-8"),
-                file_name="postai_template.csv",
-                mime="text/csv",
-                use_container_width=True,
-                help="Gebruik dit als sjabloon voor je eigen data.",
-            )
-
-        with cc2:
-            if st.button(
-                "🎯 Gebruik demo-data",
-                use_container_width=True,
-                key="hero_demo_btn",
-                help="Geen bestand bij de hand? Start met demo-gegevens.",
-            ):
-                if "_activate_demo_data" in globals():
-                    _activate_demo_data()
-                else:
-                    st.warning(
-                        "Demo-helper `_activate_demo_data` niet gevonden. "
-                        "Gebruik de demo-knop in de sidebar."
-                    )
-
-        # Start analyse-knop
-        if st.button(
-            "🚀 Start analyse",
-            key="hero_analyse_btn",
-            use_container_width=True,
-            type="primary",
-            help="We analyseren je recente posts en updaten het advies.",
-        ):
-            with st.spinner("We kijken wat werkt in je laatste posts..."):
-                time.sleep(0.7)
-                st.toast("✅ Analyse klaar — advies geüpdatet.")
-
-        # TikTok-login uitleg
-        st.caption(
-            "🔑 TikTok-login vind je in de sidebar onder **Koppel TikTok**. "
-            "Niet verplicht voor de basisanalyse."
+            unsafe_allow_html=True,
         )
 
-    # ---------------- STAP 2 (RECHTS) ----------------
-    with col_right:
-        st.markdown("### 2️⃣ Vandaag posten")
+        # Onboarding / voortgang
+        _onboarding_bar(2 if has_data else 1)
 
-        if not has_data:
-            st.info(
-                "Laad eerst echte data of demo-data. "
-                "Daarna krijg je hier een duidelijk postadvies voor vandaag."
+        # Twee kolommen
+        col_left, col_right = st.columns([3, 2])
+
+        # ---------------- STAP 1 (LINKS) ----------------
+        with col_left:
+            st.markdown("### 1️⃣ Data & analyse klaarzetten")
+
+            if not has_data:
+                st.write(
+                    "1. Upload je TikTok CSV/XLSX in de **linker sidebar**\n"
+                    "   of gebruik de demo-data.\n\n"
+                    "2. Klik daarna op **🚀 Start analyse** om je advies te laten berekenen."
+                )
+            else:
+                st.write(
+                    "✅ We hebben al data gevonden. Klik op **🚀 Start analyse** "
+                    "om je advies te verversen."
+                )
+
+            # Voorbeeld CSV + demo-knop
+            cc1, cc2 = st.columns(2)
+
+            with cc1:
+                tpl = pd.DataFrame(
+                    [
+                        dict(
+                            caption="Voorbeeld caption #hashtag",
+                            views=12345,
+                            likes=678,
+                            comments=12,
+                            shares=34,
+                            date=pd.Timestamp.today().normalize(),
+                            videolink="",
+                            author="@account",
+                            videoid="1234567890",
+                        )
+                    ]
+                )
+                st.download_button(
+                    "⬇️ Voorbeeld-CSV",
+                    data=tpl.to_csv(index=False).encode("utf-8"),
+                    file_name="postai_template.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    help="Gebruik dit als sjabloon voor je eigen data.",
+                )
+
+            with cc2:
+                if st.button(
+                    "🎯 Gebruik demo-data",
+                    use_container_width=True,
+                    key="hero_demo_btn",
+                    help="Geen bestand bij de hand? Start met demo-gegevens.",
+                ):
+                    _activate_demo_data()
+
+            # Start analyse-knop
+            if st.button(
+                "🚀 Start analyse",
+                key="hero_analyse_btn",
+                use_container_width=True,
+                type="primary",
+                help="We analyseren je recente posts en updaten het advies.",
+            ):
+                with st.spinner("We kijken wat werkt in je laatste posts..."):
+                    time.sleep(0.7)
+                    st.toast("✅ Analyse klaar — advies geüpdatet.")
+
+            st.caption(
+                "🔑 TikTok-login vind je in de sidebar onder **Koppel TikTok**. "
+                "Niet verplicht voor de basisanalyse."
             )
-        else:
-            # Bepaal het beste uur en de confidence
-            best_hour = _best_hours(d, n=1)[0]
-            conf = confidence
 
-            # Kaart + confidencebalk
-            st.markdown(
-                f"""
+        # ---------------- STAP 2 (RECHTS) ----------------
+        with col_right:
+            st.markdown("### 2️⃣ Vandaag posten")
+
+            if not has_data:
+                st.info(
+                    "Laad eerst echte data of demo-data. "
+                    "Daarna krijg je hier een duidelijk postadvies voor vandaag."
+                )
+            else:
+                best_hour = _best_hours(d, n=1)[0]
+
+                st.markdown(
+                    f"""
 <div class="today-card">
   <div class="today-title">
     🔥 Post vandaag om <strong>{best_hour:02d}:00</strong>
   </div>
-  <!-- hier komt je confidencebalk / extra HTML -->
+  <div class="today-sub">
+    Op basis van je laatste posts en gemiddelden is dit nu het veiligste uur.
+  </div>
+  <div class="nbabarshell">
+    <div class="nbabar" style="width:{confidence}%;"></div>
+    <div class="nbalabel">Vertrouwen: {confidence}%</div>
+  </div>
 </div>
 """,
-                unsafe_allow_html=True,
-            )
-
-            # Uitleg onder het advies
-            with st.expander("Waarom dit advies?"):
-                st.write(
-                    "We kijken naar welke uren in de laatste weken het vaakst goede views haalden. "
-                    "Daaruit kiezen we een veilig, stabiel uur voor vandaag. "
-                    "Als je meer data verzamelt, wordt dit advies automatisch slimmer."
+                    unsafe_allow_html=True,
                 )
 
-            # Call-to-action
-            st.button("🔥 Voer advies uit", use_container_width=True)
+                with st.expander("Waarom dit advies?"):
+                    st.write(
+                        "We kijken naar welke uren in de laatste weken het vaakst goede views haalden. "
+                        "Daaruit kiezen we een veilig, stabiel uur voor vandaag. "
+                        "Als je meer data verzamelt, wordt dit advies automatisch slimmer."
+                    )
+
+                st.button("🔥 Voer advies uit", use_container_width=True)
 
 # ============================== Build & Hero ================================
 # Basis-dataset uit session of laatste bestand
@@ -1703,11 +1658,13 @@ _kpi_row(d_for_hero, key_ns="top")
 st.divider()
 
 # ===== Mini-script voor vandaag ===========================================
-# Bepaal beste uur voor mini-script
-if d is None or d.empty:
+# Bepaal beste uur voor mini-script (gebruik dezelfde data als hero)
+source = d_for_hero
+
+if source is None or source.empty:
     best_hour = 20
 else:
-    best_hour = _best_hours(d, n=1)[0]
+    best_hour = _best_hours(source, n=1)[0]
 
 st.markdown("**🎬 Mini-script voor vandaag**")
 st.caption(
@@ -2061,17 +2018,13 @@ tab_assist, tab_analyse, tab_strategy, tab_settings = tabs
 with tab_assist:
     st.subheader("🧠 Slimme assistent — stap-voor-stap")
 
-# Zorg dat 'base' altijd bestaat als variabele
-base = locals().get("base", None)
+    # Hier gewoon opnieuw uit df_raw opbouwen
+    base = normalize_per_post(df_raw)
+    d = add_kpis(base) if not base.empty else pd.DataFrame()
 
-# Als base None is of geen .empty heeft, behandelen als 'geen data'
-if base is None or not hasattr(base, "empty") or base.empty:
-    st.info("Nog geen data beschikbaar. Upload eerst data of gebruik de demo-data.")
-else:
-    # hier je bestaande code met base
-    # bijvoorbeeld:
-    # st.dataframe(base)
-
+    if d.empty:
+        st.info("Nog geen data beschikbaar. Upload eerst data of gebruik de demo-data.")
+    else:
         st.markdown(
             "Deze assistent vertelt je **wat** en **wanneer** je vandaag het beste kunt posten.  \n"
             "Je krijgt 1 duidelijke actie per dag — PostAi rekent met je cijfers mee, jij houdt de controle."
@@ -2090,21 +2043,28 @@ else:
                 else:
                     for it in q[:4]:
                         l, r = st.columns([6, 3])
-                        l.markdown(f"**{it['caption'][:54]}…**  \n`{it['hashtags']}` · 🕒 {int(it['hour']):02d}:00")
+                        l.markdown(
+                            f"**{it['caption'][:54]}…**  \n`{it['hashtags']}` · 🕒 {int(it['hour']):02d}:00"
+                        )
                         if it["status"] == "pending":
-                            if r.button("✅ Goedkeuren & posten", key=f"ap_{it['id']}", help="Simuleert plaatsen (demo)."):
+                            if r.button(
+                                "✅ Goedkeuren & posten",
+                                key=f"ap_{it['id']}",
+                                help="Simuleert plaatsen (demo).",
+                            ):
                                 if approve_and_post(it["id"]):
                                     st.session_state["undo_id"] = it["id"]
                                     st.toast("Geplaatst (demo).")
                         else:
                             undo_id = st.session_state.get("undo_id")
                             if undo_id == it["id"]:
-                                if r.button("↩️ Ongedaan maken (5s)", key=f"undo_{it['id']}"):
+                                if r.button("↩ Ongedaan maken (5s)", key=f"undo_{it['id']}"):
                                     if undo_post(it["id"]):
                                         st.toast("Ongedaan gemaakt.")
                                         st.session_state["undo_id"] = None
                             else:
                                 r.markdown("✅ Geplaatst")
+
 
 # ---- Analyse ---------------------------------------------------------------
 with tab_analyse:
