@@ -428,13 +428,15 @@ section[data-testid="stSidebar"] > div:first-child { background: var(--head); bo
 .block-container { max-width:1200px; padding-top:14px; }
 section[data-testid="stSidebar"] { width:260px !important; }
 
-/* Sidebar altijd open: knop zichtbaar maar uitgeschakeld */
+/* Sidebar altijd open: knop zichtbaar maar NIET klikbaar */
 [data-testid="collapsedControl"] {
   pointer-events: none !important;
+  opacity: 0.4;  /* mag je weghalen, is alleen visueel “disabled” */
 }
 
 /* Sidebar content iets omhoog zodat het gelijk valt met het logo */
 section[data-testid="stSidebar"] .block-container { padding-top:1.5rem; }
+
 
 .accent { color:var(--brand); }
 h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
@@ -582,6 +584,33 @@ label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p {
 
 
 _inject_css(THEME_COLOR, IS_PRO)
+import streamlit.components.v1 as components  # als dit al ergens staat, hoef je 'm niet nog eens te zetten
+
+# Zorgt dat de sidebar bij laden altijd open staat
+components.html(
+    """
+<script>
+(function() {
+  function ensureSidebarOpen() {
+    try {
+      const root = window.parent.document;
+      const ctrl = root.querySelector('[data-testid="collapsedControl"]');
+      if (!ctrl) return;
+      const expanded = ctrl.getAttribute("aria-expanded");
+      // Als hij dicht is, klik 'm open
+      if (expanded === "false") {
+        ctrl.click();
+      }
+    } catch (e) {}
+  }
+  // kleine delay zodat Streamlit klaar is
+  setTimeout(ensureSidebarOpen, 300);
+})();
+</script>
+""",
+    height=0,
+    width=0,
+)
 
 # ============================== Date helpers (FIX) ===========================
 def _to_naive(series_like) -> pd.Series:
