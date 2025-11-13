@@ -1709,7 +1709,6 @@ if d is None or d.empty:
 else:
     best_hour = _best_hours(d, n=1)[0]
 
-st.markdown("---")
 st.markdown("**🎬 Mini-script voor vandaag**")
 st.caption(
     "Gebruik dit als startpunt voor je video. Je kunt de tekst altijd aanpassen naar jouw onderwerp en stijl."
@@ -1721,7 +1720,7 @@ st.code(
     "CTA: Volg voor meer dagelijkse TikTok-inspiratie.",
     language="markdown",
 )
-
+st.markdown("---")
 # ================================ LLM / AI Core ==============================
 def _has_openai() -> bool:
     return bool(getconf("OPENAI_API_KEY", ""))
