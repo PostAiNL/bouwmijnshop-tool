@@ -1175,13 +1175,11 @@ def _activate_demo_data() -> None:
     st.session_state["demo_active"] = True
     st.toast("✅ Demo-data geactiveerd")
 
-# =============================== Sidebar =====================================
-
-# Zet deze op True als je zelf aan het configureren/debuggen bent
+# ------------------------------ Sidebar -------------------------------
 SHOW_SETUP_WARNINGS = st.session_state.get("show_setup_warnings", False)
 
 with st.sidebar:
-    # --- Plan / status ---
+    # --- PRO / DEMO status ---
     if IS_PRO:
         st.markdown(
             "<div class='chip' style='background:#ecfdf5;border-color:#a7f3d0;'>✅ PRO geactiveerd 🎉</div>",
@@ -1189,46 +1187,49 @@ with st.sidebar:
         )
         st.caption("Je gebruikt alle PostAi-functies zonder limieten.")
     else:
-        st.info("🔓 Je gebruikt **DEMO** (14 dagen). Sommige PRO-functies zijn vergrendeld.")
+        st.markdown(
+            "<div class='chip' style='background:#eff6ff;border-color:#bfdbfe;'>🔓 Je gebruikt de DEMO-versie (14 dagen). "
+            "Sommige extra functies zijn voorlopig vergrendeld.</div>",
+            unsafe_allow_html=True,
+        )
         st.link_button("✨ Upgrade naar PRO", LEMON_CHECKOUT_URL, use_container_width=True)
+
+    st.markdown("---")
 
     # --- Stap 1: TikTok koppelen ---
     st.markdown("### 1️⃣ Koppel TikTok")
     _login_url = build_tiktok_auth_url()
 
     if _login_url:
-        # Login is mogelijk
         st.link_button("Log in met TikTok", _login_url, use_container_width=True)
         with st.popover("Welke data gebruiken we?"):
             st.caption(
-                "We lezen alleen je TikTok-statistieken en profielnaam. "
-                "We posten **nooit** namens jou zonder toestemming."
+                "We lezen jouw TikTok-statistieken (zoals views en likes) en je profielnaam. "
+                "We posten nooit automatisch namens jou zonder dat je dit zelf aanzet."
             )
     else:
-        # Login nog niet mogelijk → disable + uitleg
         st.button(
             "Log in met TikTok",
             disabled=True,
             use_container_width=True,
-            help="Wacht op TikTok review",
+            help="Wacht op TikTok-review",
         )
         st.caption(
-            "🔒 TikTok keurt onze app nog goed. "
-            "Je kunt hier straks met TikTok inloggen."
+            "TikTok keurt onze app op dit moment nog. "
+            "Zodra dit klaar is kun je hier met TikTok inloggen."
         )
 
-        # Eventuele setup-warnings (alleen tonen als je aan het configureren bent)
         if SHOW_SETUP_WARNINGS:
             base = getconf("APP_PUBLIC_URL", "").strip() or "(leeg)"
             key = getconf("TIKTOK_CLIENT_KEY", "").strip()
 
             if not base or base == "(leeg)":
-                st.warning("APP_PUBLIC_URL ontbreekt. Lokaal mag `http://localhost:8501`.")
+                st.warning("APP_PUBLIC_URL ontbreekt. Lokaal mag `http://localhost:8501` zijn.")
             elif not (
                 base.startswith("https://")
                 or (DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://"))
             ):
-                st.warning("APP_PUBLIC_URL moet https (of http://localhost bij lokaal testen).")
+                st.warning("APP_PUBLIC_URL moet https zijn (of `http://localhost` bij lokaal testen).")
             if not key:
                 st.warning("TIKTOK_CLIENT_KEY ontbreekt.")
             st.caption(
@@ -1242,7 +1243,10 @@ with st.sidebar:
 
     # --- Stap 2: Data klaarzetten ---
     st.markdown("### 2️⃣ Data klaarzetten")
-    st.caption("Kies één van de opties hieronder. Daarna start je in het hoofdscherm de analyse.")
+    st.caption(
+        "Kies één van de opties. PostAi gebruikt deze gegevens om persoonlijk advies te geven. "
+        "Je bepaalt altijd zelf welke data je deelt."
+    )
 
     if st.button("📥 Haal analytics op", use_container_width=True):
         res = run_manual_fetch()
@@ -1254,9 +1258,9 @@ with st.sidebar:
     # --- Upload-bestand ---
     st.markdown("### 📁 Upload bestand")
     up = st.file_uploader(
-        "Upload je TikTok CSV/XLSX (of gebruik demo)",
+        "Upload je TikTok CSV/XLSX (of gebruik eerst demo-data om te testen)",
         type=["csv", "xlsx"],
-        help="Sleep je bestand hierheen. Geen bestand? Gebruik de demo-data hierboven.",
+        help="Sleep je bestand hierheen. Geen bestand? Gebruik dan de demo-data hierboven.",
     )
 
     if up is not None:
@@ -1462,174 +1466,209 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
 
     confidence = _confidence_from_data(d) if has_data else 0
 
-    # ====================== UI ===========================
-    with st.container(border=True):
-        # Statusregeltje bovenin
-        st.markdown(
-            f"<p style='margin:4px 0 2px;color:#6b7280;font-size:0.85rem;'>"
-            f"⏱️ Laatste update: <b>{last_sync}</b> · 📁 Bron: <b>{bron}</b>"
-            f"</p>",
-            unsafe_allow_html=True,
-        )
+   # ====================== UI ===========================
+# Veilige labels voor last_sync en bron
+last_sync_label = locals().get("last_sync", "—")
+bron_label = locals().get("bron", "Onbekend")
 
-        # Titel + subtitel
-        st.markdown(
-            """
-<div class="app-header">
-  <div class="app-title-row">
-    <h2 style="margin:0;font-size:1.9rem;">🎯 Vandaag: 1 simpele groeistap</h2>
-  </div>
-  <p class="app-subtitle">
-    Voor starters en creators: volg de twee stappen hieronder en je bent klaar om te posten.
-  </p>
-</div>
-""",
-            unsafe_allow_html=True,
-        )
+with st.container(border=True):
+    # Statusregeltje bovenin
+    st.markdown(
+        f"<p style='margin:4px 0 2px;color:#6b7280;font-size:0.85rem;'>"
+        f"⏱️ Laatste update: <b>{last_sync_label}</b> · 📁 Bron: <b>{bron_label}</b>"
+        f"</p>",
+        unsafe_allow_html=True,
+    )
 
-        # ======= Mini KPI-rij (4 blokken) =======
-        st.markdown(
-            f"""
+    # Titel + subtitel
+    st.markdown("### 🎯 Vandaag: 1 simpele groeistap")
+    st.caption(
+        "Voor starters en creators: volg vandaag gewoon deze twee stappen. "
+        "PostAi rekent op de achtergrond met je cijfers mee."
+    )
+
+    # ---------- Data-status ----------
+
+# Zorg dat 'd' altijd bestaat als variabele
+# Gebruik de DataFrame die aan de functie is meegegeven
+d = locals().get("d_for_hero", None)
+
+# Bepaal of er bruikbare data is
+has_data = d is not None and hasattr(d, "empty") and not d.empty
+
+
+# ---------- Mini KPI-rij (4 blokken) ----------
+
+# Zorg dat top_hashtag nooit een NameError geeft
+try:
+    top_tag_label = top_hashtag or "—"
+except NameError:
+    top_tag_label = "—"
+
+with st.container(border=True):
+    # ...
+
+    # Veilige defaults voor KPI-waardes
+    views_7d_str = locals().get("views_7d_str", "—")
+    posts_7d_str = locals().get("posts_7d_str", "—")
+    best_time_label = locals().get("best_time_label", "—")
+
+    st.markdown(
+        f"""
 <div class="home-mini-row">
+
   <div class="home-mini">
     <div class="home-mini-label">Weergaven laatste 7 dagen</div>
-    <div class="home-mini-value">👁️ {views_7d_str}</div>
+    <div class="home-mini-value">👁 {views_7d_str}</div>
   </div>
+
   <div class="home-mini">
     <div class="home-mini-label">Aantal posts laatste 7 dagen</div>
-    <div class="home-mini-value">🎬 {posts_7d_str}</div>
+    <div class="home-mini-value">📁 {posts_7d_str}</div>
   </div>
+
   <div class="home-mini">
     <div class="home-mini-label">Beste posttijd nu</div>
     <div class="home-mini-value">⏰ {best_time_label}</div>
   </div>
+
   <div class="home-mini">
     <div class="home-mini-label">Trending hashtag</div>
-    <div class="home-mini-value">🏷️ {trending_label}</div>
+    <div class="home-mini-value">🏷 {top_tag_label}</div>
   </div>
+
 </div>
 """,
-            unsafe_allow_html=True,
-        )
+        unsafe_allow_html=True,
+    )
 
-        # Onboarding / voortgang
-        _onboarding_bar(2 if has_data else 1)
+    # Onboarding / voortgang
+    _onboarding_bar(2 if has_data else 1)
 
-        # Twee kolommen: links stap 1, rechts stap 2
-        col_left, col_right = st.columns([3, 2])
+    # Twee kolommen: links stap 1, rechts stap 2
+    col_left, col_right = st.columns([3, 2])
 
-        # ---------------------- STAP 1 (LINKS) ----------------------
-        with col_left:
-            st.markdown("### 1️⃣ Data & analyse klaarzetten")
-            if not has_data:
-                st.write(
-                    "1. Upload je TikTok CSV/XLSX in de **linker sidebar** "
-                    "of gebruik de demo-data.\n\n"
-                    "2. Klik daarna op **🚀 Start analyse** om je advies te laten berekenen."
-                )
-            else:
-                st.write(
-                    "✅ We hebben al data gevonden. Klik op **🚀 Start analyse** om je advies te verversen."
-                )
+    # ---------------- STAP 1 (LINKS) ----------------
+    with col_left:
+        st.markdown("### 1️⃣ Data & analyse klaarzetten")
+        # ... jouw verdere code voor stap 1
 
-            # Voorbeeld CSV + demo-knop
-            cc1, cc2 = st.columns(2)
+    # ---------------- STAP 2 (RECHTS) ----------------
+    with col_right:
+        st.markdown("### 2️⃣ Vandaag posten")
+        # ... jouw verdere code voor stap 2
 
-            with cc1:
-                tpl = pd.DataFrame(
-                    [
-                        dict(
-                            caption="Voorbeeld caption #hashtag",
-                            views=12345,
-                            likes=678,
-                            comments=12,
-                            shares=34,
-                            date=pd.Timestamp.today().normalize(),
-                            videolink="",
-                            author="@account",
-                            videoid="1234567890",
-                        )
-                    ]
-                )
-                st.download_button(
-                    "⬇️ Voorbeeld-CSV",
-                    data=tpl.to_csv(index=False).encode("utf-8"),
-                    file_name="postai_template.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    help="Gebruik dit als sjabloon voor je eigen data.",
-                )
 
-            with cc2:
-                if st.button(
-                    "🎯 Gebruik demo-data",
-                    use_container_width=True,
-                    key="hero_demo_btn",
-                    help="Geen bestand bij de hand? Start met demo-gegevens.",
-                ):
-                    # Gebruik je bestaande helper als die er is
-                    if "_activate_demo_data" in globals():
-                        _activate_demo_data()
-                    else:
-                        # Fallback: simpele melding als de helper niet bestaat
-                        st.warning(
-                            "Demo-helper `_activate_demo_data` niet gevonden. "
-                            "Gebruik de demo-knop in de sidebar."
-                        )
-
-            # Start analyse-knop
-            if st.button(
-                "🚀 Start analyse",
-                key="hero_analyse_btn",
-                use_container_width=True,
-                type="primary",
-                help="We analyseren je recente posts en updaten het advies.",
-            ):
-                with st.spinner("We kijken wat werkt in je laatste posts…"):
-                    time.sleep(0.7)
-                st.toast("✅ Analyse klaar — advies geüpdatet.")
-
-            st.caption(
-                "🔑 TikTok-login vind je in de sidebar onder **Koppel TikTok**. "
-                "Niet verplicht voor de basisanalyse."
+        if not has_data:
+            st.write(
+                "1. Upload je TikTok CSV/XLSX in de **linker sidebar**\n"
+                "   of gebruik de demo-data.\n\n"
+                "2. Klik daarna op **🚀 Start analyse** om je advies te laten berekenen."
+            )
+        else:
+            st.write(
+                "✅ We hebben al data gevonden. Klik op **🚀 Start analyse** "
+                "om je advies te verversen."
             )
 
-        # ---------------------- STAP 2 (RECHTS) ----------------------
-        with col_right:
-            st.markdown("### 2️⃣ Vandaag posten")
+        # Voorbeeld CSV + demo-knop
+        cc1, cc2 = st.columns(2)
 
-            if not has_data:
-                st.info("Laad eerst je data of demo-set om een concreet postadvies te krijgen.")
-            else:
-                best_hour = _best_hours(d, n=1)[0]
-                conf = confidence
+        with cc1:
+            tpl = pd.DataFrame(
+                [
+                    dict(
+                        caption="Voorbeeld caption #hashtag",
+                        views=12345,
+                        likes=678,
+                        comments=12,
+                        shares=34,
+                        date=pd.Timestamp.today().normalize(),
+                        videolink="",
+                        author="@account",
+                        videoid="1234567890",
+                    )
+                ]
+            )
+            st.download_button(
+                "⬇️ Voorbeeld-CSV",
+                data=tpl.to_csv(index=False).encode("utf-8"),
+                file_name="postai_template.csv",
+                mime="text/csv",
+                use_container_width=True,
+                help="Gebruik dit als sjabloon voor je eigen data.",
+            )
 
-                # Confidence balk
-                st.markdown(
-                    f"""
-<div class="today-card">
-  <div class="today-title">🔥 Post vandaag om {best_hour:02d}:00</div>
-  <div class="today-sub">
-    Repost je best scorende video en test een kleine variant (bijv. andere hook).
-  </div>
-  <div class="nbabarshell">
-    <div class="nbabar" style="width:{conf}%;"></div>
-    <div class="nbalabel">{conf}% dat dit uur goed is</div>
-  </div>
-</div>
-""",
-                    unsafe_allow_html=True,
-                )
-
-                with st.expander("Waarom dit advies?"):
-                    st.write(
-                        "We kijken naar welke uren in de laatste weken het vaakst goede views gaven. "
-                        "Daaruit kiezen we het veiligste uur voor vandaag."
+        with cc2:
+            if st.button(
+                "🎯 Gebruik demo-data",
+                use_container_width=True,
+                key="hero_demo_btn",
+                help="Geen bestand bij de hand? Start met demo-gegevens.",
+            ):
+                if "_activate_demo_data" in globals():
+                    _activate_demo_data()
+                else:
+                    st.warning(
+                        "Demo-helper `_activate_demo_data` niet gevonden. "
+                        "Gebruik de demo-knop in de sidebar."
                     )
 
-                st.button("🔥 Voer advies uit", use_container_width=True)
+        # Start analyse-knop
+        if st.button(
+            "🚀 Start analyse",
+            key="hero_analyse_btn",
+            use_container_width=True,
+            type="primary",
+            help="We analyseren je recente posts en updaten het advies.",
+        ):
+            with st.spinner("We kijken wat werkt in je laatste posts..."):
+                time.sleep(0.7)
+                st.toast("✅ Analyse klaar — advies geüpdatet.")
 
-           # ... ergens binnen _hero_and_nba(d, last_sync, bron) of vergelijkbare functie
+        # TikTok-login uitleg
+        st.caption(
+            "🔑 TikTok-login vind je in de sidebar onder **Koppel TikTok**. "
+            "Niet verplicht voor de basisanalyse."
+        )
+
+    # ---------------- STAP 2 (RECHTS) ----------------
+    with col_right:
+        st.markdown("### 2️⃣ Vandaag posten")
+
+        if not has_data:
+            st.info(
+                "Laad eerst echte data of demo-data. "
+                "Daarna krijg je hier een duidelijk postadvies voor vandaag."
+            )
+        else:
+            # Bepaal het beste uur en de confidence
+            best_hour = _best_hours(d, n=1)[0]
+            conf = confidence
+
+            # Kaart + confidencebalk
+            st.markdown(
+                f"""
+<div class="today-card">
+  <div class="today-title">
+    🔥 Post vandaag om <strong>{best_hour:02d}:00</strong>
+  </div>
+  <!-- hier komt je confidencebalk / extra HTML -->
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+
+            # Uitleg onder het advies
+            with st.expander("Waarom dit advies?"):
+                st.write(
+                    "We kijken naar welke uren in de laatste weken het vaakst goede views haalden. "
+                    "Daaruit kiezen we een veilig, stabiel uur voor vandaag. "
+                    "Als je meer data verzamelt, wordt dit advies automatisch slimmer."
+                )
+
+            # Call-to-action
+            st.button("🔥 Voer advies uit", use_container_width=True)
 
 # ============================== Build & Hero ================================
 # Basis-dataset uit session of laatste bestand
@@ -1663,21 +1702,23 @@ _hero_and_nba(d_for_hero, last_sync, bron)
 _kpi_row(d_for_hero, key_ns="top")
 st.divider()
 
-# ========================== Mini-script voor vandaag ==========================
-# Bepaal beste uur voor mini-script op basis van d_for_hero
-if d_for_hero is None or d_for_hero.empty:
-    best_hour = 20  # fallback als er geen data is
+# ===== Mini-script voor vandaag ===========================================
+# Bepaal beste uur voor mini-script
+if d is None or d.empty:
+    best_hour = 20
 else:
-    best_hour = _best_hours(d_for_hero, n=1)[0]
+    best_hour = _best_hours(d, n=1)[0]
 
 st.markdown("---")
-st.markdown("**📼 Mini-script voor vandaag**")
-st.caption("Gebruik dit als startpunt voor je video. Pas tekst en stijl gerust aan.")
+st.markdown("**🎬 Mini-script voor vandaag**")
+st.caption(
+    "Gebruik dit als startpunt voor je video. Je kunt de tekst altijd aanpassen naar jouw onderwerp en stijl."
+)
 
 st.code(
-    f"Hook: Niemand vertelt je dit, maar {best_hour:02d}:00 is NU je kans...\n"
-    f"Body: Deel 1 snelle tip of dark fact in 2–3 zinnen.\n"
-    f"CTA: Volg voor meer dagelijkse TikTok hacks.",
+    f"Hook: Wist je dit? Rond {best_hour:02d}:00 doen jouw video’s het vaak net iets beter.\n"
+    "Body: Deel een korte tip, feit of persoonlijk inzicht in 2–3 zinnen. Houd het persoonlijk en duidelijk.\n"
+    "CTA: Volg voor meer dagelijkse TikTok-inspiratie.",
     language="markdown",
 )
 
@@ -2017,20 +2058,25 @@ def locked_section(feature_name: str, pattern: str = "generic", height: int | No
 tabs = st.tabs(["🧠 Start", "📊 Analyse", "🎯 Strategie", "⚙️ Instellingen"])
 tab_assist, tab_analyse, tab_strategy, tab_settings = tabs
 
-# ---------------------------- Slimme assistent ------------------------------
+# ----------------------------- Slimme assistent -----------------------------
 with tab_assist:
     st.subheader("🧠 Slimme assistent — stap-voor-stap")
-    base = normalize_per_post(df_raw)
-    if base.empty:
-        st.info("Nog geen data. Upload je CSV/XLSX of gebruik de demo-data (links in de sidebar).")
-        with st.container(border=True):
-            st.markdown("#### Checklist")
-            st.checkbox("CSV/XLSX geüpload", value=LATEST_FILE.exists(), disabled=True)
-            st.checkbox("Beste tijden berekend", value=False, disabled=True)
-            st.checkbox("Eerste A/B test gepland", value=False, disabled=True)
-            st.checkbox("Alerts ingesteld (e-mail)", value=False, disabled=True)
-    else:
-        st.markdown("Deze assistent vertelt je **wat** en **wanneer** je vandaag het best post. Simpel 😊")
+
+# Zorg dat 'base' altijd bestaat als variabele
+base = locals().get("base", None)
+
+# Als base None is of geen .empty heeft, behandelen als 'geen data'
+if base is None or not hasattr(base, "empty") or base.empty:
+    st.info("Nog geen data beschikbaar. Upload eerst data of gebruik de demo-data.")
+else:
+    # hier je bestaande code met base
+    # bijvoorbeeld:
+    # st.dataframe(base)
+
+        st.markdown(
+            "Deze assistent vertelt je **wat** en **wanneer** je vandaag het beste kunt posten.  \n"
+            "Je krijgt 1 duidelijke actie per dag — PostAi rekent met je cijfers mee, jij houdt de controle."
+        )
         st.divider()
 
         # Wachtrij-acties achter PRO (teasen met blur + overlay)
@@ -2063,7 +2109,7 @@ with tab_assist:
 
 # ---- Analyse ---------------------------------------------------------------
 with tab_analyse:
-    st.subheader("📊 Analyse (leesbaar voor iedereen)")
+    st.subheader("📊 Analyse — duidelijk voor iedereen")
     base = normalize_per_post(df_raw)
     d = add_kpis(base) if not base.empty else pd.DataFrame()
 
@@ -2125,7 +2171,7 @@ with tab_analyse:
                     st.info("Niet genoeg data om trends te berekenen.")
                 else:
                     st.dataframe(tr_df.head(25), use_container_width=True)
-                    st.caption("We vergelijken de laatste 14 dagen met de 14 dagen daarvoor.")
+                    st.caption("We vergelijken de laatste 14 dagen met de 14 dagen daarvoor op basis van jouw data.")
 
     # Vergelijk perioden (start dicht, achter PRO)
     with st.expander("Vergelijk perioden", expanded=False):
@@ -2200,9 +2246,7 @@ with tab_analyse:
 
 # -------------------------------- STRATEGIE -----------------------------------
 with tab_strategy:
-    st.subheader("🎯 Strategie (makkelijk testen)")
-    st.caption("Bouw een simpele contentstrategie met ideeën, A/B-tests en AI-tools.")
-
+    st.subheader("🎯 Strategie — makkelijk testen")
     base = normalize_per_post(df_raw)
     d = add_kpis(base) if not base.empty else pd.DataFrame()
 
@@ -2218,7 +2262,7 @@ with tab_strategy:
             key="topic_ideas",
         )
         if topic:
-            st.caption("We geven 3 simpele ideeën. Kort en direct te filmen.")
+            st.caption("We geven 3 simpele video-ideeën die je direct kunt opnemen. Pas ze aan naar jouw niche.")
             for i in range(1, 4):
                 st.markdown(f"**Idee {i}** — #{topic}")
                 cap = f"{topic}. Volg @Darkestpsycho voor meer dark psych facts."
@@ -2585,7 +2629,10 @@ with tab_strategy:
 # ------------------------------ Instellingen -------------------------------
 with tab_settings:
     st.subheader("⚙️ Instellingen (simpel)")
-    st.caption("Pas hier je automatisering, branding en licentie-instellingen aan.")
+    st.caption(
+        "Pas hier je test-gedrag, taal, alerts en branding aan. "
+        "Alles is later weer te wijzigen."
+    )
 
     # Algemene settings helpers
     def _load_settings() -> dict:
@@ -2617,6 +2664,7 @@ with tab_settings:
         st.caption("Basisgedrag van PostAi: testen, taal en alerts.")
 
         col1, col2 = st.columns(2)
+
         with col1:
             cfg["auto_experiments"] = st.toggle(
                 "Slim testen (A/B → slimste wint)",
@@ -2627,14 +2675,17 @@ with tab_settings:
                 "Automatisch posten",
                 ["review", "off"],
                 index=["review", "off"].index(cfg.get("auto_post_mode", "review")),
-                help="‘review’: jij keurt eerst goed. ‘off’: nooit automatisch.",
+                help=(
+                    "Bij ‘review’ controleer je alles zelf voordat er iets wordt geplaatst. "
+                    "Bij ‘off’ wordt nooit automatisch gepost."
+                ),
             )
             cfg["lang"] = st.selectbox(
                 "Taal",
                 ["nl", "en"],
                 index=["nl", "en"].index(cfg.get("lang", "nl")),
-                help="Taal van de interface en tips.",
             )
+
         with col2:
             cfg["alert_channel"] = st.selectbox(
                 "Alerts kanaal",
@@ -2649,13 +2700,14 @@ with tab_settings:
                 value=int(cfg.get("data_retention_days", 180)),
                 help="Na deze tijd schonen we oude data op.",
             )
-            st.session_state["alert_email"] = st.text_input(
-                "E-mail voor alerts",
-                value=st.session_state.get("alert_email", ""),
-                help="Krijg een seintje als iets belangrijks gebeurt.",
-            )
 
-        if st.button("💾 Bewaar instellingen"):
+        st.session_state["alert_email"] = st.text_input(
+            "E-mail voor alerts",
+            value=st.session_state.get("alert_email", ""),
+            help="We sturen alleen meldingen als jij dat aanzet.",
+        )
+
+        if st.button("💾 Bewaar instellingen", use_container_width=True):
             if _save_settings(cfg):
                 st.success("Instellingen opgeslagen.")
             else:
@@ -2663,24 +2715,32 @@ with tab_settings:
 
     st.markdown("---")
 
-    # ========================== Card: Branding (PRO) =========================
+    # ====================== Card: Branding (PRO) ======================
     with st.container(border=True):
         st.markdown("### 🎨 Branding")
-        st.caption("Pas je merkkleur en logo aan. Alleen beschikbaar in PRO.")
+        st.caption(
+            "Pas je merkkleur en logo aan. Dit helpt om je exports en interface herkenbaar te maken."
+        )
 
         if not IS_PRO:
             locked_section("Branding", pattern="branding")
         else:
             b1, b2 = st.columns([1, 1])
+
             with b1:
-                color = st.color_picker("Merkkleur", value=THEME_COLOR, help="Kies je hoofdkleur.")
-                if st.button("Bewaar kleur"):
+                color = st.color_picker(
+                    "Merkkleur",
+                    value=THEME_COLOR,
+                    help="Kies de hoofdkleur van je merk of kanaal.",
+                )
+                if st.button("Bewaar kleur", key="save_brand_color"):
                     if _save_brand_color(color):
                         st.success("Kleur opgeslagen. Herlaad de pagina.")
+
             with b2:
                 if LOGO_BYTES:
                     st.image(LOGO_BYTES, caption="Logo", width=90)
-                    if st.button("Logo verwijderen"):
+                    if st.button("Logo verwijderen", key="remove_brand_logo"):
                         if _remove_brand_logo():
                             st.success("Logo verwijderd. Herladen…")
                 else:
@@ -2690,37 +2750,35 @@ with tab_settings:
 
     st.markdown("---")
 
-        # =========================== Card: Licentie ==============================
+    # =========================== Card: Licentie ==============================
     with st.container(border=True):
         st.markdown("### 🔑 Licentie")
-        st.caption("Beheer je PRO-licentie en activatie.")
+        st.caption("Beheer hier je PRO-licentie en activatie.")
 
         if IS_PRO:
-            st.success("Je draait **PRO**. Bedankt! 🎉")
+            st.success("Je draait **PRO**. Bedankt voor je vertrouwen! 🎉")
             if st.button("Deactiveer (verwijder licentie)"):
                 if _remove_license():
-                    st.success("Licentie verwijderd. Herladen…")
-                    # Pagina direct herladen
-                    try:
-                        st.rerun()
-                    except Exception:
-                        st.experimental_rerun()
+                    st.success("Licentie verwijderd. Herlaad de pagina.")
         else:
             key = st.text_input("Licentiesleutel")
             if st.button("Activeer PRO"):
                 if key.strip():
                     if _write_license(key.strip()):
-                        st.success("Licentie opgeslagen. Herladen…")
-                        # Pagina direct herladen
-                        try:
-                            st.rerun()
-                        except Exception:
-                            st.experimental_rerun()
+                        st.success("Licentie opgeslagen. Herlaad de pagina.")
+                    else:
+                        st.error("Kon licentie niet opslaan.")
                 else:
-                    st.warning("Voer een geldige key in.")
-            st.caption("Nog geen licentie? Koop ‘m hieronder.")
-            st.link_button("✨ Koop PRO", LEMON_CHECKOUT_URL, use_container_width=True)
+                    st.warning("Vul eerst een geldige sleutel in.")
 
+            st.caption("Nog geen licentie? Koop ‘m hieronder.")
+            st.link_button(
+                "✨ Upgrade naar PRO",
+                LEMON_CHECKOUT_URL,
+                use_container_width=True,
+            )
+
+    st.markdown("---")
 
     # ====================== Card: Data opschonen =============================
     with st.container(border=True):
@@ -2738,21 +2796,22 @@ with tab_settings:
             except Exception as e:
                 st.error(f"Kon data niet verwijderen: {e}")
 
-
 # ------------------------------ Legal blok -------------------------------
 if REVIEW_MODE:
     with st.expander("Legal & TikTok Review Info", expanded=False):
         base = _get_public_base_url() or "https://postai.bouwmijnshop.nl"
         requested_scopes = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
-        st.markdown(f"""
+        st.markdown(
+    f"""
 - **Website (deze app):** {base}  
 - **Redirect URI:** {base}/  
 - **Aangevraagde scopes:** `{requested_scopes}`  
-- **Wat we doen:** inloggen + analytics tonen. **Geen auto-posting.**  
+- **Wat we doen:** inloggen via TikTok en je eigen analytics tonen. Geen automatische plaatsingen zonder jouw toestemming.  
 - **Terms (in-app):** [`?page=terms`](?page=terms) · **Privacy (in-app):** [`?page=privacy`](?page=privacy)  
 - **Officiële site:** [Voorwaarden](https://www.bouwmijnshop.nl/pages/onze-voorwaarden) · [Privacy](https://www.bouwmijnshop.nl/pages/privacy)  
 - **Support:** [support@bouwmijnshop.nl](mailto:support@bouwmijnshop.nl)
-""")
+"""
+)
 
 # ----------------------------- Footer badges -------------------------------
 st.markdown(
