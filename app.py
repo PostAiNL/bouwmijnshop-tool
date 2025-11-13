@@ -1629,16 +1629,7 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
 
                 st.button("🔥 Voer advies uit", use_container_width=True)
 
-            st.markdown("---")
-            st.markdown("**🎬 Mini-script voor vandaag**")
-            st.caption("Gebruik dit als startpunt voor je video. Pas tekst en stijl gerust aan.")
-
-            st.code(
-                f"Hook: Niemand vertelt je dit, maar {best_time:02d}:00 is NU je kans...\n"
-                f"Body: Deel 1 snelle tip of dark fact in 2–3 zinnen.\n"
-                f"CTA: Volg voor meer dagelijkse TikTok hacks.",
-                language="markdown",
-            )
+           # ... ergens binnen _hero_and_nba(d, last_sync, bron) of vergelijkbare functie
 
 # ============================== Build & Hero ================================
 # Basis-dataset uit session of laatste bestand
@@ -1672,6 +1663,23 @@ _hero_and_nba(d_for_hero, last_sync, bron)
 _kpi_row(d_for_hero, key_ns="top")
 st.divider()
 
+# ========================== Mini-script voor vandaag ==========================
+# Bepaal beste uur voor mini-script op basis van d_for_hero
+if d_for_hero is None or d_for_hero.empty:
+    best_hour = 20  # fallback als er geen data is
+else:
+    best_hour = _best_hours(d_for_hero, n=1)[0]
+
+st.markdown("---")
+st.markdown("**📼 Mini-script voor vandaag**")
+st.caption("Gebruik dit als startpunt voor je video. Pas tekst en stijl gerust aan.")
+
+st.code(
+    f"Hook: Niemand vertelt je dit, maar {best_hour:02d}:00 is NU je kans...\n"
+    f"Body: Deel 1 snelle tip of dark fact in 2–3 zinnen.\n"
+    f"CTA: Volg voor meer dagelijkse TikTok hacks.",
+    language="markdown",
+)
 
 # ================================ LLM / AI Core ==============================
 def _has_openai() -> bool:
