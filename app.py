@@ -969,77 +969,106 @@ def tr(k: str) -> str:
     return I18N.get(k, k)
 
 # =============================== Header =======================================
-c1, c2, c3 = st.columns([1, 6, 3])
+if LOGO_BYTES:
+    b64_logo = base64.b64encode(LOGO_BYTES).decode("ascii")
+else:
+    b64_logo = ""
 
-with c1:
-    if LOGO_BYTES:
-        b64 = base64.b64encode(LOGO_BYTES).decode("ascii")
-        st.markdown(
-            f"<img src='data:image/png;base64,{b64}' style='height:60px;border-radius:12px;' />",
-            unsafe_allow_html=True,
-        )
-
-with c2:
-    # Titel + inline PRO/DEMO-badge
-    st.markdown(
-        f"""
-<div style="margin:0;">
-  <h1 style="margin:0;font-size:1.6rem;">
-    <span class="accent">PostAi</span> — TikTok Growth Agent
-    <span style="
-        display:inline-block;
-        margin-left:8px;
-        padding:3px 10px;
-        border-radius:999px;
-        font-size:0.9rem;
-        font-weight:600;
-        background:#ecfdf5;
-        color:#047857;
-        border:1px solid #6ee7b7;
-        vertical-align:middle;
-    ">
-      {'PRO' if IS_PRO else 'DEMO'}
-    </span>
-  </h1>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-    st.caption("Slimmer groeien met TikTok-data. Dare to know.")
-
-with c3:
-    # Klein, altijd zichtbaar uitlegvakje rechtsboven
-    st.markdown(
-        """
+st.markdown(
+    f"""
 <style>
-.help-pill {
-  border-radius: 12px;
-  border: 1px solid var(--card-border);
-  background: var(--head);
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 1.35;
-}
-.help-pill-title {
-  font-weight: 700;
-  margin-bottom: 2px;
-  color: #111827;
-}
-.help-pill-body {
-  color: #4b5563;
-}
+.postai-header-row {{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  margin-bottom:12px;
+}}
+
+.postai-header-logo img {{
+  height:82px;
+  border-radius:16px;
+  display:block;
+}}
+
+.postai-header-main {{
+  flex:1 1 auto;
+}}
+
+.postai-header-title {{
+  margin:0;
+  font-size:1.6rem;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}}
+
+.postai-pro-pill {{
+  display:inline-flex;
+  align-items:center;
+  padding:2px 10px;
+  border-radius:999px;
+  font-size:0.8rem;
+  border:1px solid #4ade80;
+  color:#16a34a;
+  background:#ecfdf5;
+  font-weight:600;
+}}
+
+.postai-header-sub {{
+  margin-top:2px;
+  font-size:0.9rem;
+  color:#6b7280;
+}}
+
+.postai-header-help {{
+  flex:0 0 260px;
+}}
+
+.postai-help-pill {{
+  border-radius:12px;
+  border:1px solid var(--card-border);
+  background:var(--head);
+  padding:10px 12px;
+  font-size:0.85rem;
+  line-height:1.35;
+}}
+
+.postai-help-pill-title {{
+  font-weight:700;
+  margin-bottom:2px;
+  color:#111827;
+}}
 </style>
-<div class="help-pill">
-  <div class="help-pill-title">🚀 Snel starten</div>
-  <div class="help-pill-body">
-    1. Kies demo-data of upload CSV.<br/>
-    2. Klik <b>Start analyse</b>.<br/>
-    3. Volg het advies bij <b>Stap&nbsp;2</b>.
+
+<div class="postai-header-row">
+  <div class="postai-header-logo">
+    {"<img src='data:image/png;base64," + b64_logo + "' />" if b64_logo else ""}
+  </div>
+
+  <div class="postai-header-main">
+    <div class="postai-header-title">
+      <span class="accent">PostAi</span> — TikTok Growth Agent
+      <span class="postai-pro-pill">{'PRO' if IS_PRO else 'DEMO'}</span>
+    </div>
+    <div class="postai-header-sub">
+      Slimmer groeien met TikTok-data. Dare to know.
+    </div>
+  </div>
+
+  <div class="postai-header-help">
+    <div class="postai-help-pill">
+      <div class="postai-help-pill-title">🚀 Snel starten</div>
+      <div>
+        1. Kies demo-data of upload CSV.<br/>
+        2. Klik <b>Start analyse</b>.<br/>
+        3. Volg het advies bij <b>Stap 2</b>.
+      </div>
+    </div>
   </div>
 </div>
 """,
-        unsafe_allow_html=True,
-    )
+    unsafe_allow_html=True,
+)
 
 # ============================ Demo-data helper ================================
 def _activate_demo_data() -> None:
