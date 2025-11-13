@@ -5,6 +5,7 @@ import os, re, io, json, uuid, base64, time, logging, urllib.parse
 from pathlib import Path
 from datetime import datetime, date
 from typing import Dict, List, Tuple
+from urllib.parse import urlparse
 
 import numpy as np
 import pandas as pd
@@ -28,16 +29,21 @@ if not OPENAI_KEY:
 else:
     client = OpenAI(api_key=OPENAI_KEY)
 
+
 def ai_coach_reply(prompt: str) -> str:
+    """Eenvoudige helper: stuur prompt naar OpenAI en krijg coach-antwoord terug."""
     if client is None:
         return "⚠️ Geen OPENAI_API_KEY gevonden."
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "system", "content": "Je bent een nuchtere TikTok growth coach."},
-                  {"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": "Je bent een nuchtere TikTok growth coach."},
+            {"role": "user", "content": prompt},
+        ],
         temperature=0.3,
     )
     return resp.choices[0].message.content.strip()
+
 
 # --------------------------------- Optioneel ---------------------------------
 try:
@@ -46,38 +52,48 @@ try:
 except Exception:
     HAS_ALTAIR = False
 
-# =============================== Basis / Config ===============================
-APP_NAME  = "PostAi — TikTok Growth Agent"
-APP_DIR   = Path(__file__).resolve().parent
-DATA_DIR  = APP_DIR / "auto"
-BRAND_DIR = APP_DIR / "branding"
-DATA_DIR.mkdir(exist_ok=True); BRAND_DIR.mkdir(exist_ok=True)
 
-LATEST_FILE      = DATA_DIR / "analytics_latest.csv"
-SETTINGS_FILE    = APP_DIR / "settings.json"
-LICENSE_FILE     = APP_DIR / "license.key"
+# =============================== Basis / Config ===============================
+APP_NAME = "PostAi — TikTok Growth Agent"
+APP_DIR = Path(__file__).resolve().parent
+DATA_DIR = APP_DIR / "auto"
+BRAND_DIR = APP_DIR / "branding"
+DATA_DIR.mkdir(exist_ok=True)
+BRAND_DIR.mkdir(exist_ok=True)
+
+LATEST_FILE = DATA_DIR / "analytics_latest.csv"
+SETTINGS_FILE = APP_DIR / "settings.json"
+LICENSE_FILE = APP_DIR / "license.key"
 ALERT_STATE_FILE = APP_DIR / "last_alert.txt"
-SYNC_STATE_FILE  = APP_DIR / "last_sync.txt"
-POST_QUEUE_FILE  = DATA_DIR / "post_queue.json"
+SYNC_STATE_FILE = APP_DIR / "last_sync.txt"
+POST_QUEUE_FILE = DATA_DIR / "post_queue.json"
 COACH_STATE_FILE = DATA_DIR / "coach_state.json"
 
-LEMON_CHECKOUT_URL = "https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2"  # vervang
+LEMON_CHECKOUT_URL = (
+    "https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2"  # vervang
+)
 
 TZ = "Europe/Amsterdam"
 REVIEW_MODE = os.getenv("REVIEW_MODE", "0").strip() == "1"
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
 log = logging.getLogger("postai")
 
+
 def getconf(key: str, default: str = "") -> str:
+    """Config ophalen uit Streamlit secrets of env var."""
     try:
         return st.secrets.get(key, os.getenv(key, default))
     except Exception:
         return os.getenv(key, default)
 
+
 # ------------------------------- Dev helpers ---------------------------------
-from urllib.parse import urlparse
 DEV_ALLOW_HTTP_LOCAL = True
+
 
 def _is_local_url(url: str) -> bool:
     try:
@@ -86,27 +102,38 @@ def _is_local_url(url: str) -> bool:
     except Exception:
         return False
 
+
 def _get_public_base_url() -> str:
     url = getconf("APP_PUBLIC_URL", "").strip().rstrip("/")
-    if not url: return ""
-    if url.startswith("https://"): return url
+    if not url:
+        return ""
+    if url.startswith("https://"):
+        return url
     if DEV_ALLOW_HTTP_LOCAL and _is_local_url(url) and url.startswith("http://"):
         return url
-    st.error("Misconfiguratie: **APP_PUBLIC_URL** moet https zijn (of http://localhost bij lokaal testen).")
+    st.error(
+        "Misconfiguratie: **APP_PUBLIC_URL** moet https zijn "
+        "(of http://localhost bij lokaal testen)."
+    )
     return ""
+
 
 def has_oauth_config() -> bool:
     base = getconf("APP_PUBLIC_URL", "").strip()
-    key  = getconf("TIKTOK_CLIENT_KEY", "").strip()
-    if not base or not key: return False
-    if base.startswith("https://"): return True
+    key = getconf("TIKTOK_CLIENT_KEY", "").strip()
+    if not base or not key:
+        return False
+    if base.startswith("https://"):
+        return True
     return DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://")
+
 
 def build_tiktok_auth_url() -> str:
     client_key = getconf("TIKTOK_CLIENT_KEY", "").strip()
-    scopes     = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
-    base_url   = _get_public_base_url()
-    if not client_key or not base_url: return ""
+    scopes = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
+    base_url = _get_public_base_url()
+    if not client_key or not base_url:
+        return ""
     redirect_uri = f"{base_url}/"
     state = st.session_state.get("_tiktok_state") or uuid.uuid4().hex
     st.session_state["_tiktok_state"] = state
@@ -117,33 +144,45 @@ def build_tiktok_auth_url() -> str:
         "scope": scopes,
         "state": state,
     }
-    return "https://www.tiktok.com/v2/auth/authorize/?" + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+    return (
+        "https://www.tiktok.com/v2/auth/authorize/?"
+        + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+    )
+
 
 # --------------------------- Licentie / PRO status ----------------------------
 def _read_license() -> Tuple[str, bool]:
     try:
         if LICENSE_FILE.exists():
             key = LICENSE_FILE.read_text(encoding="utf-8").strip()
-            if key and key.upper() != "DEMO": return key, True
+            if key and key.upper() != "DEMO":
+                return key, True
     except Exception:
         pass
     return "", False
 
+
 def _write_license(key: str) -> bool:
     try:
-        LICENSE_FILE.write_text(key.strip(), encoding="utf-8"); return True
+        LICENSE_FILE.write_text(key.strip(), encoding="utf-8")
+        return True
     except Exception:
         return False
+
 
 def _remove_license() -> bool:
     try:
-        if LICENSE_FILE.exists(): LICENSE_FILE.unlink(); return True
+        if LICENSE_FILE.exists():
+            LICENSE_FILE.unlink()
+            return True
     except Exception:
         return False
 
+
 ENV_LICENSE = getconf("LICENSE_KEY", "").strip()
 if ENV_LICENSE:
-    LICENSE_KEY = ENV_LICENSE; IS_PRO = True
+    LICENSE_KEY = ENV_LICENSE
+    IS_PRO = True
 else:
     LICENSE_KEY, IS_PRO = _read_license()
 
@@ -157,7 +196,8 @@ st.set_page_config(
 
 # ============================== Simple routes (GEUPDATE) ======================
 def _render_privacy():
-    st.markdown("""
+    st.markdown(
+        """
 # Privacyverklaring — PostAi
 
 PostAi gebruikt **alleen** TikTok-login om jouw **profielstatistieken** te bekijken.
@@ -185,10 +225,13 @@ We **slaan geen wachtwoorden** of privédata op en **posten niets namens jou**.
 
 **Contact**
 info@bouwmijnshop.nl
-""")
+"""
+    )
+
 
 def _render_terms():
-    st.markdown("""
+    st.markdown(
+        """
 # Algemene Voorwaarden — PostAi (TikTok Growth Agent)
 
 **Versie:** 1.0 · **Laatst bijgewerkt:** 12-11-2025
@@ -243,16 +286,21 @@ Deze voorwaarden zijn van toepassing op elk gebruik van PostAi en op alle offert
 
 ## 13. Contact
 Vragen? **support@bouwmijnshop.nl**
-""")
+"""
+    )
+
 
 def _render_404(slug: str):
-    st.markdown(f"""
+    st.markdown(
+        f"""
 # Pagina niet gevonden
 De pagina `?page={slug}` bestaat niet.
 
 - Ga naar de **[startpagina](/)**  
 - Of bekijk: **[Privacy](?page=privacy)** · **[Voorwaarden](?page=terms)**
-""")
+"""
+    )
+
 
 def _route_simple_pages():
     # Werkt in nieuwe én oude Streamlit-versies
@@ -264,11 +312,15 @@ def _route_simple_pages():
 
     p = (page or "").lower().strip()
     if p == "privacy":
-        _render_privacy(); st.stop()
+        _render_privacy()
+        st.stop()
     if p in ("terms", "voorwaarden", "tos"):
-        _render_terms(); st.stop()
+        _render_terms()
+        st.stop()
     if p not in ("", None):
-        _render_404(p); st.stop()
+        _render_404(p)
+        st.stop()
+
 
 # Roep de router aan vóór andere logica (zoals OAuth)
 _route_simple_pages()
@@ -292,14 +344,15 @@ def _cookie_banner():
                 if st.button("Accepteer", use_container_width=True, type="primary"):
                     st.session_state["consent"] = "accepted"
                     st.toast("Cookies/functional tracking geaccepteerd.")
-                    st.rerun()  # ← meteen hertekenen zodat banner verdwijnt
+                    st.rerun()
             with b:
                 if st.button("Weiger", use_container_width=True):
                     st.session_state["consent"] = "declined"
                     st.toast("Functionele tracking geweigerd.")
-                    st.rerun()  # ← idem
+                    st.rerun()
 
-# >>> BELANGRIJK: roep de banner hier aan
+
+# Banner direct tonen
 _cookie_banner()
 
 # ============================== OAuth callback ===============================
@@ -307,7 +360,7 @@ qp = st.query_params
 if "error" in qp:
     st.error(f"❌ TikTok OAuth error: {qp.get('error_description', qp.get('error'))}")
 elif "code" in qp:
-    state_ok = (qp.get("state", "") == st.session_state.get("_tiktok_state"))
+    state_ok = qp.get("state", "") == st.session_state.get("_tiktok_state")
     if REVIEW_MODE:
         st.success(f"✅ TikTok OAuth code ontvangen (state ok: {state_ok}).")
         st.session_state["tik_code"] = qp.get("code")
@@ -315,38 +368,50 @@ elif "code" in qp:
         st.success("✅ Ingelogd via TikTok.")
     st.session_state["tik_state_ok"] = state_ok
 
-# ================================ Branding ====================================
+# ================================ Branding ===================================
 def _load_branding():
     color = st.session_state.get("brand_color", "#2563eb")
     p = BRAND_DIR / "color.txt"
     if p.exists():
-        try: color = p.read_text(encoding="utf-8").strip() or color
-        except Exception: pass
+        try:
+            color = p.read_text(encoding="utf-8").strip() or color
+        except Exception:
+            pass
     logo_path = BRAND_DIR / "logo.png"
     logo_bytes = logo_path.read_bytes() if logo_path.exists() else None
     return color, logo_bytes
 
+
 def _save_brand_color(color_hex: str) -> bool:
     try:
         (BRAND_DIR / "color.txt").write_text(color_hex.strip(), encoding="utf-8")
-        st.session_state["brand_color"] = color_hex.strip(); return True
+        st.session_state["brand_color"] = color_hex.strip()
+        return True
     except Exception:
         return False
 
+
 def _save_brand_logo(file) -> bool:
-    try: (BRAND_DIR / "logo.png").write_bytes(file.read()); return True
-    except Exception: return False
+    try:
+        (BRAND_DIR / "logo.png").write_bytes(file.read())
+        return True
+    except Exception:
+        return False
+
 
 def _remove_brand_logo() -> bool:
     try:
         p = BRAND_DIR / "logo.png"
-        if p.exists(): p.unlink(); return True
+        if p.exists():
+            p.unlink()
+            return True
     except Exception:
         return False
 
+
 THEME_COLOR, LOGO_BYTES = _load_branding()
 
-# ================================== CSS =======================================
+# ================================== CSS ======================================
 def _inject_css(theme_color: str, pro: bool):
     vars_block = f"""
 :root {{
@@ -362,88 +427,159 @@ body, [data-testid="stAppViewContainer"] { background: var(--bg) !important; col
 section[data-testid="stSidebar"] > div:first-child { background: var(--head); border-right:1px solid var(--card-border); }
 .block-container { max-width:1200px; padding-top:14px; }
 section[data-testid="stSidebar"] { width:260px !important; }
+
+/* Sidebar altijd open: knop zichtbaar maar uitgeschakeld */
+[data-testid="collapsedControl"] {
+  pointer-events: none !important;
+}
+
+/* Sidebar content iets omhoog zodat het gelijk valt met het logo */
+section[data-testid="stSidebar"] .block-container { padding-top:1.5rem; }
+
 .accent { color:var(--brand); }
 h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
 
 /* Cards */
-.hero-card, .kpi-card { border:1px solid var(--card-border); border-radius:16px; padding:14px 16px; background: var(--card); box-shadow:0 6px 18px rgba(0,0,0,.06); color: var(--text); }
+.hero-card, .kpi-card {
+  border:1px solid var(--card-border);
+  border-radius:16px;
+  padding:14px 16px;
+  background: var(--card);
+  box-shadow:0 6px 18px rgba(0,0,0,.06);
+  color: var(--text);
+}
 .kpi-label { color:var(--muted); font-size:.85rem; margin-bottom:4px; }
 .kpi-value { font-size:1.35rem; font-weight:700; color: var(--text); }
-.chip { display:inline-block; padding:4px 10px; border:1px solid var(--ring); border-radius:999px; margin-right:6px; margin-bottom:6px; font-size:.8rem; background: var(--card); color: var(--text); }
+
+/* Chip */
+.chip {
+  display:inline-block;
+  padding:4px 10px;
+  border:1px solid var(--ring);
+  border-radius:999px;
+  margin-right:6px;
+  margin-bottom:6px;
+  font-size:.8rem;
+  background: var(--card);
+  color: var(--text);
+}
 .kpi-gap { margin-top:10px; margin-bottom:14px; }
 
-/* Buttons – BASE (desktop & mobile) */
+/* Buttons – BASE */
 .stButton>button,
 .stLinkButton>a {
   border-radius:12px !important;
   font-weight:700 !important;
   transition:transform .12s ease, box-shadow .12s ease, opacity .2s ease !important;
-  -webkit-appearance:none !important; appearance:none !important;
-  text-decoration:none !important; outline:none !important;
+  text-decoration:none !important;
 }
 .stButton>button:hover,
 .stLinkButton>a:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.06); }
 
-/* Defaults (neutraal) wanneer geen custom class is gebruikt */
-.stButton>button { background:var(--card) !important; color:var(--text) !important; border:1px solid var(--card-border) !important; }
-.stLinkButton>a { background:var(--brand) !important; color:#fff !important; border:1px solid var(--brand) !important; }
-
-/* Optionele varianten (als je ze gebruikt) */
-.primary-btn>button { background:var(--brand) !important; color:#fff !important; border:1px solid var(--brand) !important; }
-.soft-btn>button { background:var(--card) !important; border:1px solid var(--ring) !important; color: var(--text) !important; }
+.stButton>button {
+  background:var(--card) !important;
+  color:var(--text) !important;
+  border:1px solid var(--card-border) !important;
+}
+.stLinkButton>a {
+  background:var(--brand) !important;
+  color:#fff !important;
+  border:1px solid var(--brand) !important;
+}
 
 /* Inputs */
-.stSelectbox div[role="combobox"], .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea {
-  background: var(--card) !important; color: var(--text) !important; border:1px solid var(--card-border) !important; border-radius:12px !important;
+.stSelectbox div[role="combobox"],
+.stTextInput input,
+.stNumberInput input,
+.stDateInput input,
+.stTextArea textarea {
+  background: var(--card) !important;
+  color: var(--text) !important;
+  border:1px solid var(--card-border) !important;
+  border-radius:12px !important;
 }
-label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p { color: var(--text) !important; }
+
+label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p {
+  color: var(--text) !important;
+}
 
 /* Tabs */
-.stTabs [data-baseweb="tab-list"] { position:sticky; top:0; z-index:5; background: var(--head); padding-top:6px; border-bottom:1px solid var(--card-border); }
+.stTabs [data-baseweb="tab-list"] {
+  position:sticky;
+  top:0;
+  z-index:5;
+  background: var(--head);
+  padding-top:6px;
+  border-bottom:1px solid var(--card-border);
+}
 
-/* Progress / bars */
+/* Progress bars */
 .stProgress > div > div { background: #ffffff !important; }
-.stProgress > div { background: var(--track) !important; border-radius:8px; }
+.stProgress > div {
+  background: var(--track) !important;
+  border-radius:8px;
+}
 
 /* Dataframes */
-.stDataFrame, .stTable { background: var(--card) !important; color: var(--text) !important; }
+.stDataFrame, .stTable {
+  background: var(--card) !important;
+  color: var(--text) !important;
+}
 .dataframe td, .dataframe th { border-color: var(--card-border) !important; }
 
 /* Confidence bar */
-.nbabarshell { margin:8px 0;height:8px;background:var(--track);border-radius:8px; position:relative; }
-.nbabar { height:100%;background:#22c55e;border-radius:8px; }
-.nbalabel { position:absolute; right:8px; top:-18px; font-size:.8rem; color:#6b7280; }
+.nbabarshell {
+  margin:8px 0;
+  height:8px;
+  background:var(--track);
+  border-radius:8px;
+  position:relative;
+}
+.nbabar {
+  height:100%;
+  background:#22c55e;
+  border-radius:8px;
+}
+.nbalabel {
+  position:absolute;
+  right:8px;
+  top:-18px;
+  font-size:.8rem;
+  color:#6b7280;
+}
 
 /* Skeleton */
-.skeleton { position:relative; overflow:hidden; background:var(--skeleton); border-radius:14px; min-height:64px; border:1px solid var(--ring); }
-.skeleton::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.25) 50%, rgba(255,255,255,0) 100%); transform:translateX(-100%); animation:shimmer 1.15s infinite; }
+.skeleton {
+  position:relative;
+  overflow:hidden;
+  background:var(--skeleton);
+  border-radius:14px;
+  min-height:64px;
+  border:1px solid var(--ring);
+}
+.skeleton::after {
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.25) 50%, rgba(255,255,255,0) 100%);
+  transform:translateX(-100%);
+  animation:shimmer 1.15s infinite;
+}
 @keyframes shimmer { 100% { transform:translateX(100%); } }
 
-/* Pro badge & lock preview */
-.pro-badge { position:fixed; top:8px; right:12px; z-index:9999; color:#fff; padding:6px 12px; border-radius:999px; font-weight:700; background:#10b981; }
-.locked { position:relative; filter:blur(1.2px) saturate(.8); }
-.locked::after { content:"🔒 PRO — Ontgrendel om dit te gebruiken"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#111827; background:rgba(255,255,255,.65); border:1px dashed var(--card-border); border-radius:16px; font-weight:700; }
-
-/* ===== Mobile ONLY (≤760px) ===== */
+/* ===== Mobile ===== */
 @media (max-width:760px){
   .block-container{ padding-left:12px; padding-right:12px; }
   .stButton>button, .stLinkButton>a{ width:100% !important; }
-  .stButton>button, .stLinkButton>a{
-      background:var(--brand) !important; color:#fff !important; border:1px solid var(--brand) !important;
-  }
-  .soft-btn>button{ background:var(--card) !important; color:var(--text) !important; border:1px solid var(--ring) !important; }
-  .stSelectbox div[role="combobox"],
-  .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea{
-      font-size:14px !important;
-  }
-  .kpi-card{ padding:12px; border-radius:14px; }
-  .kpi-value{ font-size:1.05rem; }
-  .stTabs [data-baseweb="tab-list"]{ padding-top:4px; }
-  .stTabs [data-baseweb="tab"]{ padding:8px 10px; font-size:13px; }
 }
 """
+
+    # Inject CSS
     st.markdown("<style>" + vars_block + base_css + "</style>", unsafe_allow_html=True)
-    st.markdown(f"<div class='pro-badge'>{'PRO' if pro else 'DEMO'}</div>", unsafe_allow_html=True)
+
+    # ❌ PRO-badge = VERWIJDERD
+    # st.markdown(f"<div class='pro-badge'>{'PRO' if pro else 'DEMO'}</div>", unsafe_allow_html=True)
+
 
 _inject_css(THEME_COLOR, IS_PRO)
 
@@ -820,6 +956,7 @@ def undo_post(item_id: str) -> bool:
         if it["id"] == item_id and it["status"] == "posted":
             it["status"] = "pending"; _write_queue(items); return True
     return False
+
 # =============================== I18N / Tekst ================================
 def tr(k: str) -> str:
     I18N = dict(
@@ -832,97 +969,205 @@ def tr(k: str) -> str:
     return I18N.get(k, k)
 
 # =============================== Header =======================================
-c1, c2 = st.columns([1, 8])
+c1, c2, c3 = st.columns([1, 6, 3])
+
 with c1:
     if LOGO_BYTES:
         b64 = base64.b64encode(LOGO_BYTES).decode("ascii")
-        st.markdown(f"<img src='data:image/png;base64,{b64}' style='height:60px;border-radius:12px;' />", unsafe_allow_html=True)
+        st.markdown(
+            f"<img src='data:image/png;base64,{b64}' style='height:60px;border-radius:12px;' />",
+            unsafe_allow_html=True,
+        )
+
 with c2:
+    # Titel + inline PRO/DEMO-badge
     st.markdown(
-        f"<h1 style='margin:0;font-size:1.6rem;'><span class='accent'>PostAi</span> — TikTok Growth Agent — {'PRO' if IS_PRO else 'DEMO'}</h1>",
-        unsafe_allow_html=True
+        f"""
+<div style="margin:0;">
+  <h1 style="margin:0;font-size:1.6rem;">
+    <span class="accent">PostAi</span> — TikTok Growth Agent
+    <span style="
+        display:inline-block;
+        margin-left:8px;
+        padding:3px 10px;
+        border-radius:999px;
+        font-size:0.9rem;
+        font-weight:600;
+        background:#ecfdf5;
+        color:#047857;
+        border:1px solid #6ee7b7;
+        vertical-align:middle;
+    ">
+      {'PRO' if IS_PRO else 'DEMO'}
+    </span>
+  </h1>
+</div>
+""",
+        unsafe_allow_html=True,
     )
-    st.caption("Slimmer groeien met data. Dare to know")
+    st.caption("Slimmer groeien met TikTok-data. Dare to know.")
+
+with c3:
+    # Klein, altijd zichtbaar uitlegvakje rechtsboven
+    st.markdown(
+        """
+<style>
+.help-pill {
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: var(--head);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.help-pill-title {
+  font-weight: 700;
+  margin-bottom: 2px;
+  color: #111827;
+}
+.help-pill-body {
+  color: #4b5563;
+}
+</style>
+<div class="help-pill">
+  <div class="help-pill-title">🚀 Snel starten</div>
+  <div class="help-pill-body">
+    1. Kies demo-data of upload CSV.<br/>
+    2. Klik <b>Start analyse</b>.<br/>
+    3. Volg het advies bij <b>Stap&nbsp;2</b>.
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+# ============================ Demo-data helper ================================
+def _activate_demo_data() -> None:
+    """Genereer voorbeelddata en zet deze actief in de sessie."""
+    rng = pd.date_range(end=pd.Timestamp.today().normalize(), periods=35, freq="D")
+    np.random.seed(42)
+    rows = []
+    tags_pool = [
+        "#darkfacts #psychology #fyp",
+        "#love #lovestory #bf #bestie",
+        "#viral #mindblown #creepy #tiktoknl",
+        "#redthoughts #besties #bff #lovehim",
+        "#deepthought #foryou #real #reels",
+    ]
+    for d_ in rng:
+        views = np.random.randint(20_000, 500_000)
+        likes = int(views * np.random.uniform(0.04, 0.18))
+        comments = int(views * np.random.uniform(0.003, 0.02))
+        shares = int(views * np.random.uniform(0.002, 0.015))
+        d_ = d_ + pd.Timedelta(
+            hours=int(
+                np.random.choice(
+                    [12, 14, 16, 18, 20, 0],
+                    p=[0.25, 0.2, 0.18, 0.15, 0.12, 0.1],
+                )
+            )
+        )
+        rows.append(
+            dict(
+                caption=np.random.choice(tags_pool),
+                views=views,
+                likes=likes,
+                comments=comments,
+                shares=shares,
+                date=d_,
+                videolink="",
+            )
+        )
+    df_demo = pd.DataFrame(rows)
+    df_demo.to_csv(LATEST_FILE, index=False)
+    st.session_state["df"] = df_demo
+    st.session_state["demo_active"] = True
+    st.toast("✅ Demo-data geactiveerd")
 
 # =============================== Sidebar =====================================
+
+# Zet deze op True als je zelf aan het configureren/debuggen bent
+SHOW_SETUP_WARNINGS = st.session_state.get("show_setup_warnings", False)
+
 with st.sidebar:
+    # --- Plan / status ---
     if IS_PRO:
         st.markdown(
             "<div class='chip' style='background:#ecfdf5;border-color:#a7f3d0;'>✅ PRO geactiveerd 🎉</div>",
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
+        st.caption("Je gebruikt alle PostAi-functies zonder limieten.")
     else:
-        st.info("🔓 Je gebruikt **DEMO** (14 dagen). Sommige functies zijn vergrendeld.")
-        st.link_button("✨ Ontgrendel PRO", LEMON_CHECKOUT_URL, use_container_width=True)
+        st.info("🔓 Je gebruikt **DEMO** (14 dagen). Sommige PRO-functies zijn vergrendeld.")
+        st.link_button("✨ Upgrade naar PRO", LEMON_CHECKOUT_URL, use_container_width=True)
 
-    st.markdown("### 🔗 Koppel TikTok")
+    # --- Stap 1: TikTok koppelen ---
+    st.markdown("### 1️⃣ Koppel TikTok")
     _login_url = build_tiktok_auth_url()
 
     if _login_url:
         # Login is mogelijk
         st.link_button("Log in met TikTok", _login_url, use_container_width=True)
         with st.popover("Welke data gebruiken we?"):
-            st.caption("Alleen **inloggen** en je profielfoto/naam. We posten **niets**. Simpel en veilig.")
+            st.caption(
+                "We lezen alleen je TikTok-statistieken en profielnaam. "
+                "We posten **nooit** namens jou zonder toestemming."
+            )
     else:
         # Login nog niet mogelijk → disable + uitleg
-        st.button("Log in met TikTok", disabled=True, use_container_width=True, help="Wacht op TikTok review")
-        st.caption("🔒 Login komt beschikbaar zodra TikTok onze app heeft goedgekeurd.")
+        st.button(
+            "Log in met TikTok",
+            disabled=True,
+            use_container_width=True,
+            help="Wacht op TikTok review",
+        )
+        st.caption(
+            "🔒 TikTok keurt onze app nog goed. "
+            "Je kunt hier straks met TikTok inloggen."
+        )
 
-        # Eventuele setup-warnings (handig tijdens configureren)
-        base = getconf("APP_PUBLIC_URL", "").strip() or "(leeg)"
-        key  = getconf("TIKTOK_CLIENT_KEY", "").strip()
-        if not base:
-            st.warning("APP_PUBLIC_URL ontbreekt. Lokaal mag `http://localhost:8501`.")
-        elif not (base.startswith("https://") or (DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://"))):
-            st.warning("APP_PUBLIC_URL moet https (of http://localhost bij lokaal testen).")
-        if not key:
-            st.warning("TIKTOK_CLIENT_KEY ontbreekt.")
-        st.caption("Zet **APP_PUBLIC_URL** en **TIKTOK_CLIENT_KEY** als env vars of in `.streamlit/secrets.toml`.")
+        # Eventuele setup-warnings (alleen tonen als je aan het configureren bent)
+        if SHOW_SETUP_WARNINGS:
+            base = getconf("APP_PUBLIC_URL", "").strip() or "(leeg)"
+            key = getconf("TIKTOK_CLIENT_KEY", "").strip()
+
+            if not base or base == "(leeg)":
+                st.warning("APP_PUBLIC_URL ontbreekt. Lokaal mag `http://localhost:8501`.")
+            elif not (
+                base.startswith("https://")
+                or (DEV_ALLOW_HTTP_LOCAL and _is_local_url(base) and base.startswith("http://"))
+            ):
+                st.warning("APP_PUBLIC_URL moet https (of http://localhost bij lokaal testen).")
+            if not key:
+                st.warning("TIKTOK_CLIENT_KEY ontbreekt.")
+            st.caption(
+                "Zet **APP_PUBLIC_URL** en **TIKTOK_CLIENT_KEY** als env vars of in `.streamlit/secrets.toml`."
+            )
 
     if st.session_state.get("tik_code"):
-        st.caption("Status: OAuth code ontvangen ✅ (alleen login & display).")
+        st.caption("Status: TikTok-login geslaagd ✅")
 
     st.markdown("---")
 
-    st.markdown("### 📊 Data")
+    # --- Stap 2: Data klaarzetten ---
+    st.markdown("### 2️⃣ Data klaarzetten")
+    st.caption("Kies één van de opties hieronder. Daarna start je in het hoofdscherm de analyse.")
+
     if st.button("📥 Haal analytics op", use_container_width=True):
         res = run_manual_fetch()
         st.toast(res["msg"] if res["ok"] else f"❌ {res['msg']}")
 
-    if st.button("🎯 Probeer met demo-data", use_container_width=True):
-        rng = pd.date_range(end=pd.Timestamp.today().normalize(), periods=35, freq="D")
-        np.random.seed(42)
-        rows = []
-        tags_pool = [
-            "#darkfacts #psychology #fyp",
-            "#love #lovestory #bf #bestie",
-            "#viral #mindblown #creepy #tiktoknl",
-            "#redthoughts #besties #bff #lovehim",
-            "#deepthought #foryou #real #reels",
-        ]
-        for d_ in rng:
-            views = np.random.randint(20_000, 500_000)
-            likes = int(views * np.random.uniform(0.04, 0.18))
-            comments = int(views * np.random.uniform(0.003, 0.02))
-            shares = int(views * np.random.uniform(0.002, 0.015))
-            d_ = d_ + pd.Timedelta(hours=int(np.random.choice([12, 14, 16, 18, 20, 0], p=[.25, .2, .18, .15, .12, .1])))
-            rows.append(dict(
-                caption=np.random.choice(tags_pool),
-                views=views, likes=likes, comments=comments, shares=shares,
-                date=d_, videolink=""
-            ))
-        df_demo = pd.DataFrame(rows)
-        df_demo.to_csv(LATEST_FILE, index=False)
-        st.session_state["df"] = df_demo
-        st.session_state["demo_active"] = True
-        st.toast("✅ Demo-data geladen")
+    if st.button("🎯 Gebruik demo-data", use_container_width=True):
+        _activate_demo_data()
 
+    # --- Upload-bestand ---
     st.markdown("### 📁 Upload bestand")
     up = st.file_uploader(
         "Upload je TikTok CSV/XLSX (of gebruik demo)",
         type=["csv", "xlsx"],
-        help="Sleep je bestand hierheen. Heb je geen bestand? Klik dan op ‘demo-data’."
+        help="Sleep je bestand hierheen. Geen bestand? Gebruik de demo-data hierboven.",
     )
+
     if up is not None:
         try:
             df_up = _smart_read_any(up)
@@ -934,10 +1179,13 @@ with st.sidebar:
             st.session_state["df"] = df_up
             st.session_state["demo_active"] = False
             st.success(f"✅ Bestand opgeslagen ({up.name}) — {len(df_up):,} rijen")
+
             base_chk = normalize_per_post(df_up)
             need = [c for c in ["Views", "Likes", "Comments", "Shares", "Datum"] if c not in base_chk.columns]
             if need:
-                st.warning("We missen kolommen: " + ", ".join(need) + ". Gebruik ons sjabloon (zie hoofdscherm).")
+                st.warning(
+                    "We missen kolommen: " + ", ".join(need) + ". Gebruik ons sjabloon (zie hoofdscherm)."
+                )
         except Exception as e:
             st.error(f"Kon bestand niet verwerken: {e}")
 
@@ -947,17 +1195,6 @@ def _onboarding_bar(step: int):
     filled = min(step, len(labels))
     frac = filled / len(labels)
     st.progress(frac, text=" ➜ ".join([("✅ "+l) if i < filled else l for i,l in enumerate(labels)]))
-
-# ============================== Uitleg =======================================
-with st.expander("Uitleg in 1 minuut (altijd zichtbaar)", expanded=False):
-    st.markdown("""
-**Zo werkt het:**
-1) **Upload** je CSV/XLSX of kies **Demo-data**.  
-2) Klik **Start check** — we kijken: *wat werkt en wanneer posten?*  
-3) **A/B-test**: test 2 hooks, 2 hashtagsets en 2 tijden.  
-4) **Plan**: eenvoudig weekplan met beste tijden.  
-5) *(PRO)* **AI Coach**, **Caption generator**, **Chat**, **Export**.
-""")
 
 # =============================== Data load ===================================
 if "df" not in st.session_state:
@@ -1085,87 +1322,94 @@ def _confidence_from_data(d: pd.DataFrame) -> int:
 
 
 def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
+    has_data = d is not None and not d.empty
+
     with st.container(border=True):
+        # kleine statusregel bovenin
         st.markdown(
-            f"<p style='margin:6px 0 0 0;color:#6b5563;'>⏱️ Laatste update: <b>{last_sync}</b> · 📁 Bron: <b>{bron}</b></p>",
-            unsafe_allow_html=True
+            f"<p style='margin:6px 0 4px 0;color:#6b5563;'>⏱️ Laatste update: "
+            f"<b>{last_sync}</b> · 📁 Bron: <b>{bron}</b></p>",
+            unsafe_allow_html=True,
         )
+
+        st.markdown("### 👋 Welkom bij PostAi")
+        st.caption("Nieuw? Volg stap 1 en stap 2 hieronder, dan ben je klaar om te posten.")
+
         left, right = st.columns([3, 2])
 
+        # ------------------------- LINKERKANT: STAP 1 -------------------------
         with left:
-            _onboarding_bar(1 if (df_raw is None or df_raw.empty) else 2)
+            _onboarding_bar(1 if not has_data else 2)
 
-            # TikTok login (hero)
-            _login_url_top = build_tiktok_auth_url()
-            if _login_url_top:
-                st.link_button("Log in met TikTok", _login_url_top, use_container_width=True)
+            st.markdown("#### 1️⃣ Stap 1 — Zet je data klaar")
+
+            if not has_data:
+                st.write(
+                    "1. Upload je TikTok CSV/XLSX in de **linker sidebar** of "
+                    "klik hieronder op **Gebruik demo-data**.\n"
+                    "2. Klik daarna op **🚀 Start analyse** zodat PostAi je posts kan lezen."
+                )
             else:
-                st.button("Log in met TikTok", disabled=True, use_container_width=True, help="Wacht op TikTok review")
-                st.caption("🔒 Login komt beschikbaar zodra TikTok onze app heeft goedgekeurd.")
-
-            if st.button(
-                "🚀 Start check",
-                key="hero_analyse_btn",
-                use_container_width=True,
-                type="primary",
-                help="We analyseren je recente posts en geven een simpel advies."
-            ):
-                with st.spinner("We kijken wat werkt…"):
-                    time.sleep(0.7)
-                    st.toast("✅ Check klaar — advies geüpdatet.")
-
-            st.caption("Tip: gebruik eerst demo-data als je nog niets hebt geüpload.")
+                st.write(
+                    "✅ We hebben al data gevonden. Klik op **🚀 Start analyse** om je advies te verversen."
+                )
 
             cc1, cc2 = st.columns(2)
+
+            # Voorbeeld-CSV
             with cc1:
-                tpl = pd.DataFrame([dict(
-                    caption="Voorbeeld caption #hashtag",
-                    views=12345, likes=678, comments=12, shares=34,
-                    date=pd.Timestamp.today().normalize(),
-                    videolink="", author="@account", videoid="1234567890"
-                )])
+                tpl = pd.DataFrame(
+                    [
+                        dict(
+                            caption="Voorbeeld caption #hashtag",
+                            views=12345,
+                            likes=678,
+                            comments=12,
+                            shares=34,
+                            date=pd.Timestamp.today().normalize(),
+                            videolink="",
+                            author="@account",
+                            videoid="1234567890",
+                        )
+                    ]
+                )
                 st.download_button(
                     "⬇️ Voorbeeld-CSV",
                     data=tpl.to_csv(index=False).encode("utf-8"),
                     file_name="postai_template.csv",
                     mime="text/csv",
                     use_container_width=True,
-                    help="Gebruik dit als sjabloon voor je eigen data."
+                    help="Gebruik dit als sjabloon voor je eigen data.",
                 )
+
+            # Demo-set (zelfde terminologie als sidebar)
             with cc2:
                 if st.button(
-                    "🎯 Laad demo-set",
+                    "🎯 Gebruik demo-data",
                     use_container_width=True,
                     key="demo_btn_hero",
-                    help="Geen bestand bij de hand? Start met demo-gegevens."
+                    help="Geen bestand bij de hand? Start met demo-gegevens.",
                 ):
-                    rng = pd.date_range(end=pd.Timestamp.today().normalize(), periods=35, freq="D")
-                    np.random.seed(42)
-                    rows = []
-                    tags_pool = [
-                        "#darkfacts #psychology #fyp",
-                        "#love #lovestory #bf #bestie",
-                        "#viral #mindblown #creepy #tiktoknl",
-                        "#redthoughts #besties #bff #lovehim",
-                        "#deepthought #foryou #real #reels"
-                    ]
-                    for d_ in rng:
-                        v = np.random.randint(20_000, 500_000)
-                        rows.append(dict(
-                            caption=np.random.choice(tags_pool),
-                            views=v,
-                            likes=int(v * np.random.uniform(0.04, 0.18)),
-                            comments=int(v * np.random.uniform(0.003, 0.02)),
-                            shares=int(v * np.random.uniform(0.002, 0.015)),
-                            date=d_ + pd.Timedelta(hours=int(np.random.choice(
-                                [12, 14, 16, 18, 20, 0], p=[.25, .2, .18, .15, .12, .1]))),
-                            videolink=""
-                        ))
-                    pd.DataFrame(rows).to_csv(LATEST_FILE, index=False)
-                    st.session_state["df"] = pd.read_csv(LATEST_FILE)
-                    st.session_state["demo_active"] = True
-                    st.toast("✅ Demo-data geladen")
+                    _activate_demo_data()
 
+            # Start analyse-knop
+            if st.button(
+                "🚀 Start analyse",
+                key="hero_analyse_btn",
+                use_container_width=True,
+                type="primary",
+                help="We analyseren je recente posts en geven een simpel advies.",
+            ):
+                with st.spinner("We kijken wat werkt in je laatste posts…"):
+                    time.sleep(0.7)
+                    st.toast("✅ Analyse klaar — advies geüpdatet.")
+
+            st.caption(
+                "🔑 TikTok-login vind je links onder **Koppel TikTok**. "
+                "Niet verplicht voor de basisanalyse."
+            )
+
+            # trust badges
             st.markdown(
                 f"<div class='trust-row'>"
                 f"<span class='chip badge'>🛡️ {tr('trust1')}</span>"
@@ -1173,40 +1417,64 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                 f"<span class='chip badge'>🎁 {tr('trust3')}</span>"
                 f"<span class='chip badge'>🎯 {tr('trust4')}</span>"
                 f"</div>",
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
 
+        # ------------------------- RECHTERKANT: STAP 2 ------------------------
         with right:
-            st.markdown(f"**{tr('next_best')}**")
+            st.markdown(f"#### 2️⃣ Stap 2 — {tr('next_best')}")
             if d is None or d.empty:
-                st.write("Upload data of laad demo om advies te krijgen.")
+                st.write("Laad eerst je data of de demo-data om een concreet postadvies te krijgen.")
             else:
                 best_time = _best_hours(d, n=1)[0]
                 conf = _confidence_from_data(d)
+
+                # confidence balk
                 st.markdown(
                     f"<div class='nbabarshell'><div class='nbabar' style='width:{conf}%;'></div>"
                     f"<div class='nbalabel'>{conf}%</div></div>",
-                    unsafe_allow_html=True
+                    unsafe_allow_html=True,
                 )
-                st.markdown(f"🔥 **Post om {best_time:02d}:00.** Repost je best scorende video. Test variant A.")
-                with st.expander("Waarom? (klik voor uitleg)"):
-                    st.write("We zagen dat deze tijd de afgelopen 2 weken het vaakst goede views gaf. Daarom is dit je veiligste keuze voor vandaag.")
+
+                st.markdown(
+                    f"🔥 **Post vandaag om {best_time:02d}:00.** "
+                    "Repost je best scorende video en test een kleine variant (bijv. andere hook)."
+                )
+                with st.expander("Waarom dit advies?"):
+                    st.write(
+                        "We kijken naar welke uren in de laatste weken het vaakst goede views gaven. "
+                        "Daaruit kiezen we het veiligste uur voor vandaag."
+                    )
+
                 st.button("🔥 Voer advies uit", use_container_width=True)
 
-
 # ============================== Build & Hero ================================
+# Basis-dataset uit session of laatste bestand
 if "df" not in st.session_state:
     st.session_state["df"] = _smart_read_any(LATEST_FILE)
+
+# Zorg dat demo-flag altijd bestaat
+st.session_state.setdefault("demo_active", False)
+
 df_raw = st.session_state.get("df", pd.DataFrame())
 
 base_for_hero = normalize_per_post(df_raw)
 d_for_hero = add_kpis(base_for_hero) if not base_for_hero.empty else pd.DataFrame()
+
+# Laatste sync-tijd mooi tonen
 try:
     ts = float(SYNC_STATE_FILE.read_text().strip()) if SYNC_STATE_FILE.exists() else 0
     last_sync = datetime.fromtimestamp(ts).strftime("%d-%m %H:%M") if ts else "—"
 except Exception:
     last_sync = "—"
-bron = "DEMO" if st.session_state.get("demo_active") else ("CSV/XLSX" if LATEST_FILE.exists() else "—")
+
+# Bron-label duidelijker maken
+if st.session_state.get("demo_active"):
+    bron = "DEMO-data"
+elif LATEST_FILE.exists():
+    bron = "Eigen CSV/XLSX"
+else:
+    bron = "—"
 
 _hero_and_nba(d_for_hero, last_sync, bron)
 _kpi_row(d_for_hero, key_ns="top")
@@ -1546,15 +1814,15 @@ def locked_section(feature_name: str, pattern: str = "generic", height: int | No
     st.markdown(html, unsafe_allow_html=True)
 
 # ================================ Tabs ======================================
-tabs = st.tabs(["🧠 Assistent", "📊 Analyse", "🎯 Strategie", "🗃️ Archief", "⚙️ Instellingen"])
-tab_assist, tab_analyse, tab_strategy, tab_arch, tab_settings = tabs
+tabs = st.tabs(["🧠 Start", "📊 Analyse", "🎯 Strategie", "⚙️ Instellingen"])
+tab_assist, tab_analyse, tab_strategy, tab_settings = tabs
 
 # ---------------------------- Slimme assistent ------------------------------
 with tab_assist:
     st.subheader("🧠 Slimme assistent — stap-voor-stap")
     base = normalize_per_post(df_raw)
     if base.empty:
-        st.info("Nog geen data. Upload je CSV/XLSX of laad de demo-set.")
+        st.info("Nog geen data. Upload je CSV/XLSX of gebruik de demo-data (links in de sidebar).")
         with st.container(border=True):
             st.markdown("#### Checklist")
             st.checkbox("CSV/XLSX geüpload", value=LATEST_FILE.exists(), disabled=True)
@@ -1728,42 +1996,49 @@ with tab_analyse:
                 )
 
 # -------------------------------- Archief -----------------------------------
-with tab_arch:
-    st.subheader("🗃️ Archief")
-    files = sorted(DATA_DIR.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
-    rows = []
-    for p in files:
-        try:
-            df = _smart_read_any(p)
-            rows.append(
-                {
-                    "Bestand": p.name,
-                    "Grootte (KB)": round(p.stat().st_size / 1024, 1),
-                    "Rijen": len(df),
-                    "Laatste wijziging": datetime.fromtimestamp(p.stat().st_mtime),
-                }
-            )
-        except Exception:
-            pass
-    table = pd.DataFrame(rows)
-    if table.empty:
-        st.info("Nog geen bestanden in het archief.")
-    else:
-        st.dataframe(table, use_container_width=True, hide_index=True)
+
 
 # -------------------------------- STRATEGIE -----------------------------------
 with tab_strategy:
     st.subheader("🎯 Strategie (makkelijk testen)")
+    st.caption("Bouw een simpele contentstrategie met ideeën, A/B-tests en AI-tools.")
+
     base = normalize_per_post(df_raw)
     d = add_kpis(base) if not base.empty else pd.DataFrame()
 
+    # ===================== Blok 1: Ideeën & testen ============================
+    st.markdown("### 🧪 Ideeën & testen")
+
+    # Ideeën (gratis teaser)
+    with st.expander("💡 Ideeëngenerator (gratis)", expanded=False):
+        topic = st.text_input(
+            "Onderwerp of thema",
+            placeholder="Bijv. manipulatie, angst, liefde…",
+            help="Waar gaat je video over?",
+            key="topic_ideas",
+        )
+        if topic:
+            st.caption("We geven 3 simpele ideeën. Kort en direct te filmen.")
+            for i in range(1, 4):
+                st.markdown(f"**Idee {i}** — #{topic}")
+                cap = f"{topic}. Volg @Darkestpsycho voor meer dark psych facts."
+                tags = "#darkfacts #psychology #creepy #mindblown #tiktoknl"
+                prompt = (
+                    f"Korte 9:16 video over **{topic}**; donkere stijl; 5–8s; "
+                    "1) hook shockfact 2) 2–3 beats 3) CTA 'Volg @Darkestpsycho'."
+                )
+                st.code(cap, language="text")
+                st.code(tags, language="text")
+                st.code(prompt, language="text")
+                st.divider()
+
     # A/B-planner → PRO (overlay)
-    with st.expander("A/B-test planner", expanded=False):
+    with st.expander("🔁 A/B-test planner (PRO)", expanded=False):
         if not IS_PRO:
             locked_section("A/B-test planner", pattern="generator")
         else:
             if d.empty:
-                st.info("Upload of laad demo-data om te plannen.")
+                st.info("Upload een CSV/XLSX of gebruik de demo-data om te plannen.")
             else:
                 col1, col2 = st.columns(2)
                 with col1:
@@ -1832,30 +2107,13 @@ with tab_strategy:
                     queue_post(row["Hook (tekst)"], row["Hashtag-mix"], int(row["Uur"]))
                     st.success("Toegevoegd aan wachtrij.")
 
-    # Ideeën (gratis teaser)
-    with st.expander("Ideeëngenerator", expanded=False):
-        topic = st.text_input(
-            "Onderwerp of thema",
-            placeholder="Bijv. manipulatie, angst, liefde…",
-            help="Waar gaat je video over?",
-        )
-        if topic:
-            st.caption("We geven 3 simpele ideeën. Kort en direct te filmen.")
-            for i in range(1, 4):
-                st.markdown(f"**Idee {i}** — #{topic}")
-                cap = f"{topic}. Volg @Darkestpsycho voor meer dark psych facts."
-                tags = "#darkfacts #psychology #creepy #mindblown #tiktoknl"
-                prompt = (
-                    f"Korte 9:16 video over **{topic}**; donkere stijl; 5–8s; "
-                    "1) hook shockfact 2) 2–3 beats 3) CTA 'Volg @Darkestpsycho'."
-                )
-                st.code(cap)
-                st.code(tags)
-                st.code(prompt)
-                st.divider()
+    st.markdown("---")
+
+    # ===================== Blok 2: AI-tools (PRO) =============================
+    st.markdown("### 🤖 AI-tools (PRO)")
 
     # AI Coach — PRO
-    with st.expander("🤖 AI Coach — persoonlijk advies", expanded=False):
+    with st.expander("🧠 AI Coach — persoonlijk advies", expanded=False):
         if not _has_openai():
             st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om de AI Coach te gebruiken.")
         else:
@@ -1863,7 +2121,7 @@ with tab_strategy:
                 locked_section("AI Coach — persoonlijk advies", pattern="coach")
             else:
                 if d.empty:
-                    st.info("Nog geen data. Upload of laad de demo-set.")
+                    st.info("Nog geen data. Upload of gebruik demo-data voor persoonlijk advies.")
                 else:
                     with st.expander("📚 Coach leren (eigen regels)", expanded=False):
                         kb_txt = st.text_area(
@@ -1936,7 +2194,7 @@ with tab_strategy:
                 locked_section("Caption & Hook generator", pattern="generator")
             else:
                 if d.empty:
-                    st.info("Nog geen data. Je kunt toch genereren, maar mét data wordt het beter.")
+                    st.info("Nog geen data. Je kunt wel genereren, maar met data wordt het beter.")
                 topic = st.text_input(
                     "Onderwerp/video-idee",
                     placeholder="Bijv. Waarom 90% dit fout doet…",
@@ -1961,7 +2219,7 @@ with tab_strategy:
                         for i, var in enumerate(out, 1):
                             st.markdown(f"**Variant {i}**")
                             st.code(var)
-                        st.caption("Tip: voeg je favoriete variant direct toe in de A/B-test.")
+                        st.caption("Tip: zet je favoriete variant in de A/B-test.")
 
     # Chat — PRO
     with st.expander("💬 Chat met PostAi", expanded=False):
@@ -1972,7 +2230,7 @@ with tab_strategy:
                 locked_section("Chat", pattern="chat")
             else:
                 if d.empty:
-                    st.info("Nog geen data. Upload of laad demo voor gerichtere antwoorden.")
+                    st.info("Nog geen data. Upload of gebruik demo-data voor gerichtere antwoorden.")
                 question = st.text_input(
                     "Stel je vraag",
                     placeholder="Bijv. ‘Wat is mijn beste posttijd?’ of ‘Wat verbeteren aan mijn captions?’",
@@ -1985,8 +2243,12 @@ with tab_strategy:
                             ans = ai_chat_answer(d if not d.empty else pd.DataFrame(), question)
                         st.markdown(ans)
 
-    # Playbook & Plan — PRO
-    with st.expander("📅 Playbook & 7-dagen Plan", expanded=False):
+    st.markdown("---")
+
+    # ===================== Blok 3: Playbook & Plan (PRO) ======================
+    st.markdown("### 📅 Playbook & 7-dagen Plan (PRO)")
+
+    with st.expander("📅 Plan & exports", expanded=False):
         if not IS_PRO:
             locked_section("Playbook & Exports", pattern="exports")
         else:
@@ -2123,8 +2385,9 @@ with tab_strategy:
 # ------------------------------ Instellingen -------------------------------
 with tab_settings:
     st.subheader("⚙️ Instellingen (simpel)")
+    st.caption("Pas hier je automatisering, branding en licentie-instellingen aan.")
 
-    # Algemene settings
+    # Algemene settings helpers
     def _load_settings() -> dict:
         if SETTINGS_FILE.exists():
             try:
@@ -2147,107 +2410,141 @@ with tab_settings:
             return False
 
     cfg = _load_settings()
-    col1, col2 = st.columns(2)
-    with col1:
-        cfg["auto_experiments"] = st.toggle(
-            "Slim testen (A/B → slimste wint)",
-            value=cfg.get("auto_experiments", True),
-            help="We sturen automatisch bij naar wat het beste werkt.",
-        )
-        cfg["auto_post_mode"] = st.selectbox(
-            "Automatisch posten",
-            ["review", "off"],
-            index=["review", "off"].index(cfg.get("auto_post_mode", "review")),
-            help="‘review’: jij keurt eerst goed. ‘off’: nooit automatisch.",
-        )
-        cfg["lang"] = st.selectbox(
-            "Taal",
-            ["nl", "en"],
-            index=["nl", "en"].index(cfg.get("lang", "nl")),
-        )
-    with col2:
-        cfg["alert_channel"] = st.selectbox(
-            "Alerts kanaal",
-            ["email"],
-            index=0,
-            help="Waar wil je meldingen ontvangen?",
-        )
-        cfg["data_retention_days"] = st.number_input(
-            "Data bewaren (dagen)",
-            min_value=30,
-            max_value=365,
-            value=int(cfg.get("data_retention_days", 180)),
-            help="Na deze tijd schonen we oude data op.",
-        )
-        st.session_state["alert_email"] = st.text_input(
-            "E-mail voor alerts",
-            value=st.session_state.get("alert_email", ""),
-            help="Krijg een seintje als iets belangrijks gebeurt.",
-        )
-    if st.button("Bewaar instellingen"):
-        if _save_settings(cfg):
-            st.success("Instellingen opgeslagen.")
+
+    # ====================== Card: Algemene instellingen ======================
+    with st.container(border=True):
+        st.markdown("### ⚙️ Algemene instellingen")
+        st.caption("Basisgedrag van PostAi: testen, taal en alerts.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            cfg["auto_experiments"] = st.toggle(
+                "Slim testen (A/B → slimste wint)",
+                value=cfg.get("auto_experiments", True),
+                help="We sturen automatisch bij naar wat het beste werkt.",
+            )
+            cfg["auto_post_mode"] = st.selectbox(
+                "Automatisch posten",
+                ["review", "off"],
+                index=["review", "off"].index(cfg.get("auto_post_mode", "review")),
+                help="‘review’: jij keurt eerst goed. ‘off’: nooit automatisch.",
+            )
+            cfg["lang"] = st.selectbox(
+                "Taal",
+                ["nl", "en"],
+                index=["nl", "en"].index(cfg.get("lang", "nl")),
+                help="Taal van de interface en tips.",
+            )
+        with col2:
+            cfg["alert_channel"] = st.selectbox(
+                "Alerts kanaal",
+                ["email"],
+                index=0,
+                help="Waar wil je meldingen ontvangen?",
+            )
+            cfg["data_retention_days"] = st.number_input(
+                "Data bewaren (dagen)",
+                min_value=30,
+                max_value=365,
+                value=int(cfg.get("data_retention_days", 180)),
+                help="Na deze tijd schonen we oude data op.",
+            )
+            st.session_state["alert_email"] = st.text_input(
+                "E-mail voor alerts",
+                value=st.session_state.get("alert_email", ""),
+                help="Krijg een seintje als iets belangrijks gebeurt.",
+            )
+
+        if st.button("💾 Bewaar instellingen"):
+            if _save_settings(cfg):
+                st.success("Instellingen opgeslagen.")
+            else:
+                st.error("Kon instellingen niet opslaan.")
+
+    st.markdown("---")
+
+    # ========================== Card: Branding (PRO) =========================
+    with st.container(border=True):
+        st.markdown("### 🎨 Branding")
+        st.caption("Pas je merkkleur en logo aan. Alleen beschikbaar in PRO.")
+
+        if not IS_PRO:
+            locked_section("Branding", pattern="branding")
         else:
-            st.error("Kon instellingen niet opslaan.")
+            b1, b2 = st.columns([1, 1])
+            with b1:
+                color = st.color_picker("Merkkleur", value=THEME_COLOR, help="Kies je hoofdkleur.")
+                if st.button("Bewaar kleur"):
+                    if _save_brand_color(color):
+                        st.success("Kleur opgeslagen. Herlaad de pagina.")
+            with b2:
+                if LOGO_BYTES:
+                    st.image(LOGO_BYTES, caption="Logo", width=90)
+                    if st.button("Logo verwijderen"):
+                        if _remove_brand_logo():
+                            st.success("Logo verwijderd. Herladen…")
+                else:
+                    lf = st.file_uploader("Upload logo (png)", type=["png"])
+                    if lf is not None and _save_brand_logo(lf):
+                        st.success("Logo opgeslagen. Herladen…")
 
     st.markdown("---")
-    st.markdown("### Branding")
-    if not IS_PRO:
-        locked_section("Branding", pattern="branding")
-    else:
-        b1, b2 = st.columns([1, 1])
-        with b1:
-            color = st.color_picker("Merkkleur", value=THEME_COLOR, help="Kies je hoofdkleur.")
-            if st.button("Bewaar kleur"):
-                if _save_brand_color(color):
-                    st.success("Kleur opgeslagen. Herlaad de pagina.")
-        with b2:
-            if LOGO_BYTES:
-                st.image(LOGO_BYTES, caption="Logo", width=90)
-                if st.button("Logo verwijderen"):
-                    if _remove_brand_logo():
-                        st.success("Logo verwijderd. Herladen…")
-            else:
-                lf = st.file_uploader("Upload logo (png)", type=["png"])
-                if lf is not None and _save_brand_logo(lf):
-                    st.success("Logo opgeslagen. Herladen…")
 
-    st.markdown("---")
-    st.markdown("### Licentie")
-    if IS_PRO:
-        st.success("Je draait **PRO**. Bedankt! 🎉")
-        if st.button("Deactiveer (verwijder licentie)"):
-            if _remove_license():
-                st.success("Licentie verwijderd. Herladen…")
-    else:
-        key = st.text_input("Licentiesleutel")
-        if st.button("Activeer PRO"):
-            if key.strip():
-                if _write_license(key.strip()):
-                    st.success("Licentie opgeslagen. Herladen…")
-            else:
-                st.warning("Voer een geldige key in.")
-        st.caption("Nog geen licentie? Koop ‘m hieronder.")
-        st.link_button("✨ Koop PRO", LEMON_CHECKOUT_URL, use_container_width=True)
+        # =========================== Card: Licentie ==============================
+    with st.container(border=True):
+        st.markdown("### 🔑 Licentie")
+        st.caption("Beheer je PRO-licentie en activatie.")
 
-    st.markdown("---")
-    st.markdown("### Data opschonen (privacy)")
-    if st.button("🧹 Verwijder lokale data (CSV/archief/state)"):
-        try:
-            for p in DATA_DIR.glob("*.csv"):
-                p.unlink(missing_ok=True)
-            for p in [LATEST_FILE, ALERT_STATE_FILE, SYNC_STATE_FILE, POST_QUEUE_FILE, COACH_STATE_FILE]:
-                if p.exists():
-                    p.unlink()
-            st.success("Alle lokale data/states zijn verwijderd.")
-        except Exception as e:
-            st.error(f"Kon data niet verwijderen: {e}")
+        if IS_PRO:
+            st.success("Je draait **PRO**. Bedankt! 🎉")
+            if st.button("Deactiveer (verwijder licentie)"):
+                if _remove_license():
+                    st.success("Licentie verwijderd. Herladen…")
+                    # Pagina direct herladen
+                    try:
+                        st.rerun()
+                    except Exception:
+                        st.experimental_rerun()
+        else:
+            key = st.text_input("Licentiesleutel")
+            if st.button("Activeer PRO"):
+                if key.strip():
+                    if _write_license(key.strip()):
+                        st.success("Licentie opgeslagen. Herladen…")
+                        # Pagina direct herladen
+                        try:
+                            st.rerun()
+                        except Exception:
+                            st.experimental_rerun()
+                else:
+                    st.warning("Voer een geldige key in.")
+            st.caption("Nog geen licentie? Koop ‘m hieronder.")
+            st.link_button("✨ Koop PRO", LEMON_CHECKOUT_URL, use_container_width=True)
+
+
+    # ====================== Card: Data opschonen =============================
+    with st.container(border=True):
+        st.markdown("### 🧹 Data opschonen (privacy)")
+        st.caption("Verwijder alle lokale CSV’s en app-state van deze PostAi-installatie.")
+
+        if st.button("🧹 Verwijder lokale data (CSV/archief/state)"):
+            try:
+                for p in DATA_DIR.glob("*.csv"):
+                    p.unlink(missing_ok=True)
+                for p in [LATEST_FILE, ALERT_STATE_FILE, SYNC_STATE_FILE, POST_QUEUE_FILE, COACH_STATE_FILE]:
+                    if p.exists():
+                        p.unlink()
+                st.success("Alle lokale data/states zijn verwijderd.")
+            except Exception as e:
+                st.error(f"Kon data niet verwijderen: {e}")
+
 
 # ------------------------------ Legal blok -------------------------------
-with st.expander("Legal & TikTok Review Info", expanded=False):
-    base = _get_public_base_url() or "https://postai.bouwmijnshop.nl"
-    requested_scopes = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
-    st.markdown(f"""
+if REVIEW_MODE:
+    with st.expander("Legal & TikTok Review Info", expanded=False):
+        base = _get_public_base_url() or "https://postai.bouwmijnshop.nl"
+        requested_scopes = getconf("TIKTOK_SCOPES", "user.info.basic").strip()
+        st.markdown(f"""
 - **Website (deze app):** {base}  
 - **Redirect URI:** {base}/  
 - **Aangevraagde scopes:** `{requested_scopes}`  
