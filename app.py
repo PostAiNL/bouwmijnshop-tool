@@ -466,6 +466,30 @@ h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
   color: var(--text);
 }
 .kpi-gap { margin-top:10px; margin-bottom:14px; }
+/* Home hero mini-KPI's */
+.home-mini-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin:4px 0 10px;
+}
+.home-mini{
+  flex:1 1 0;
+  border-radius:12px;
+  border:1px solid var(--card-border);
+  background:var(--head);
+  padding:8px 10px;
+  font-size:.8rem;
+}
+.home-mini-label{
+  color:#6b7280;
+  font-size:.75rem;
+  margin-bottom:2px;
+}
+.home-mini-value{
+  font-weight:700;
+  font-size:.95rem;
+}
 
 /* Buttons – BASE */
 .stButton>button,
@@ -1385,26 +1409,66 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
     with st.container(border=True):
         # kleine statusregel bovenin
         st.markdown(
-            f"<p style='margin:6px 0 4px 0;color:#6b5563;'>⏱️ Laatste update: "
+            f"<p style='margin:6px 0 4px 0;color:#6b7280;'>⏱️ Laatste update: "
             f"<b>{last_sync}</b> · 📁 Bron: <b>{bron}</b></p>",
             unsafe_allow_html=True,
         )
 
-        st.markdown("### 👋 Welkom bij PostAi")
-        st.caption("Nieuw? Volg stap 1 en stap 2 hieronder, dan ben je klaar om te posten.")
+        st.markdown("### 🎯 Vandaag: 1 simpele groeistap")
+        st.caption("Voor starters en creators: volg de twee stappen hieronder en je bent klaar om te posten.")
 
+        # ---------------------- MINI KPI RIJ (alleen met data) ----------------------
+        if has_data:
+            dc = d.copy()
+            dc["Datum"] = _to_naive(dc.get("Datum"))
+
+            now_local = pd.Timestamp.now(tz=TZ).tz_convert(None).normalize()
+            cutoff_7d = now_local - pd.Timedelta(days=7)
+            recent = dc[dc["Datum"] >= cutoff_7d]
+
+            views7 = int(pd.to_numeric(recent.get("Views", pd.Series(dtype=float)), errors="coerce").sum(skipna=True)) if not recent.empty else 0
+            posts7 = int(recent.shape[0])
+
+            best_hour = _best_hours(dc, n=1)[0]
+            tr_df = trending_hashtags(dc, days_window=14)
+            top_tag = tr_df.head(1).index[0] if tr_df is not None and not tr_df.empty else "#tiktoknl"
+
+            st.markdown(
+                f"""
+<div class="home-mini-row">
+  <div class="home-mini">
+    <div class="home-mini-label">Weergaven laatste 7 dagen</div>
+    <div class="home-mini-value">👁️ {views7:,}</div>
+  </div>
+  <div class="home-mini">
+    <div class="home-mini-label">Aantal posts laatste 7 dagen</div>
+    <div class="home-mini-value">🎬 {posts7}</div>
+  </div>
+  <div class="home-mini">
+    <div class="home-mini-label">Beste posttijd nu</div>
+    <div class="home-mini-value">⏰ {best_hour:02d}:00</div>
+  </div>
+  <div class="home-mini">
+    <div class="home-mini-label">Trending hashtag</div>
+    <div class="home-mini-value">🏷️ {top_tag}</div>
+  </div>
+</div>
+""".replace(",", "."),
+                unsafe_allow_html=True,
+            )
+
+        # --------------------------- 2 kolommen: stappen ---------------------------
         left, right = st.columns([3, 2])
 
-        # ------------------------- LINKERKANT: STAP 1 -------------------------
+        # ------------------------- LINKERKANT: STAP 1 -----------------------------
         with left:
             _onboarding_bar(1 if not has_data else 2)
 
-            st.markdown("#### 1️⃣ Stap 1 — Zet je data klaar")
+            st.markdown("#### 1️⃣ Data & analyse klaarzetten")
 
             if not has_data:
                 st.write(
-                    "1. Upload je TikTok CSV/XLSX in de **linker sidebar** of "
-                    "klik hieronder op **Gebruik demo-data**.\n"
+                    "1. Upload je TikTok CSV/XLSX in de **linker sidebar** of klik op **Gebruik demo-data**.\n"
                     "2. Klik daarna op **🚀 Start analyse** zodat PostAi je posts kan lezen."
                 )
             else:
@@ -1440,7 +1504,7 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     help="Gebruik dit als sjabloon voor je eigen data.",
                 )
 
-            # Demo-set (zelfde terminologie als sidebar)
+            # Demo-set
             with cc2:
                 if st.button(
                     "🎯 Gebruik demo-data",
@@ -1448,7 +1512,48 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     key="demo_btn_hero",
                     help="Geen bestand bij de hand? Start met demo-gegevens.",
                 ):
-                    _activate_demo_data()
+                    # gebruikt je eigen helper uit de sidebar
+                    try:
+                        _activate_demo_data()
+                    except NameError:
+                        # fallback: oude inline demo-generator
+                        rng = pd.date_range(
+                            end=pd.Timestamp.today().normalize(), periods=35, freq="D"
+                        )
+                        np.random.seed(42)
+                        rows = []
+                        tags_pool = [
+                            "#darkfacts #psychology #fyp",
+                            "#love #lovestory #bf #bestie",
+                            "#viral #mindblown #creepy #tiktoknl",
+                            "#redthoughts #besties #bff #lovehim",
+                            "#deepthought #foryou #real #reels",
+                        ]
+                        for d_ in rng:
+                            v = np.random.randint(20_000, 500_000)
+                            rows.append(
+                                dict(
+                                    caption=np.random.choice(tags_pool),
+                                    views=v,
+                                    likes=int(v * np.random.uniform(0.04, 0.18)),
+                                    comments=int(v * np.random.uniform(0.003, 0.02)),
+                                    shares=int(v * np.random.uniform(0.002, 0.015)),
+                                    date=d_
+                                    + pd.Timedelta(
+                                        hours=int(
+                                            np.random.choice(
+                                                [12, 14, 16, 18, 20, 0],
+                                                p=[0.25, 0.2, 0.18, 0.15, 0.12, 0.1],
+                                            )
+                                        )
+                                    ),
+                                    videolink="",
+                                )
+                            )
+                        pd.DataFrame(rows).to_csv(LATEST_FILE, index=False)
+                        st.session_state["df"] = pd.read_csv(LATEST_FILE)
+                        st.session_state["demo_active"] = True
+                    st.toast("✅ Demo-data geladen")
 
             # Start analyse-knop
             if st.button(
@@ -1463,8 +1568,7 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     st.toast("✅ Analyse klaar — advies geüpdatet.")
 
             st.caption(
-                "🔑 TikTok-login vind je links onder **Koppel TikTok**. "
-                "Niet verplicht voor de basisanalyse."
+                "🔑 TikTok-login vind je links onder **Koppel TikTok**. Niet verplicht voor de basisanalyse."
             )
 
             # trust badges
@@ -1478,11 +1582,12 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                 unsafe_allow_html=True,
             )
 
-        # ------------------------- RECHTERKANT: STAP 2 ------------------------
+        # ------------------------- RECHTERKANT: STAP 2 ----------------------------
         with right:
-            st.markdown(f"#### 2️⃣ Stap 2 — {tr('next_best')}")
-            if d is None or d.empty:
-                st.write("Laad eerst je data of de demo-data om een concreet postadvies te krijgen.")
+            st.markdown(f"#### 2️⃣ Vandaag posten")
+
+            if not has_data:
+                st.write("Laad eerst je data of de demo-set om een concreet postadvies te krijgen.")
             else:
                 best_time = _best_hours(d, n=1)[0]
                 conf = _confidence_from_data(d)
@@ -1490,14 +1595,15 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                 # confidence balk
                 st.markdown(
                     f"<div class='nbabarshell'><div class='nbabar' style='width:{conf}%;'></div>"
-                    f"<div class='nbalabel'>{conf}%</div></div>",
+                    f"<div class='nbalabel'>{conf}% dat dit uur goed is</div></div>",
                     unsafe_allow_html=True,
                 )
 
                 st.markdown(
                     f"🔥 **Post vandaag om {best_time:02d}:00.** "
-                    "Repost je best scorende video en test een kleine variant (bijv. andere hook)."
+                    f"Repost je best scorende video en test een kleine variant (bijv. andere hook)."
                 )
+
                 with st.expander("Waarom dit advies?"):
                     st.write(
                         "We kijken naar welke uren in de laatste weken het vaakst goede views gaven. "
@@ -1505,6 +1611,20 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     )
 
                 st.button("🔥 Voer advies uit", use_container_width=True)
+
+                st.markdown("---")
+                st.markdown("**🎬 Mini-script voor vandaag**")
+                st.caption(
+                    "Gebruik dit als startpunt voor je video. Pas tekst en stijl gerust aan."
+                )
+
+                # heel simpel placeholder script op basis van tijd
+                st.code(
+                    f"Hook: Niemand vertelt je dit, maar {best_time:02d}:00 is NU je kans...\n"
+                    f"Body: Deel 1 snelle tip of dark fact in 2–3 zinnen.\n"
+                    f"CTA: Volg voor meer dagelijkse TikTok hacks.",
+                    language="markdown",
+                )
 
 # ============================== Build & Hero ================================
 # Basis-dataset uit session of laatste bestand
