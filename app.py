@@ -1413,84 +1413,128 @@ def _confidence_from_data(d: pd.DataFrame) -> int:
 
 
 def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
+    """Hoofdblok op het startscherm: 'Vandaag: 1 simpele groeistap' + 2 stappen."""
     has_data = d is not None and not d.empty
 
+    # ============ Kleine helper voor "laatste 7 dagen" ============
+    views_7d = 0
+    posts_7d = 0
+    best_time_label = "—"
+    trending_label = "—"
+
+    if has_data:
+        dfm = d.copy()
+        dfm["Datum"] = _to_naive(dfm.get("Datum"))
+        dfm = dfm.dropna(subset=["Datum"])
+        if not dfm.empty:
+            today = pd.Timestamp.now(tz=TZ).tz_convert(None).normalize()
+            start7 = today - pd.Timedelta(days=6)
+            mask7 = (dfm["Datum"] >= start7) & (dfm["Datum"] < today + pd.Timedelta(days=1))
+            last7 = dfm.loc[mask7]
+
+            if not last7.empty:
+                views_7d = int(
+                    pd.to_numeric(last7.get("Views", pd.Series(dtype=float)), errors="coerce")
+                    .sum(skipna=True)
+                )
+                posts_7d = int(len(last7))
+
+            # Beste uur uit volledige dataset
+            try:
+                best_hour = _best_hours(dfm, n=1)[0]
+                best_time_label = f"{best_hour:02d}:00"
+            except Exception:
+                best_time_label = "—"
+
+            # Trending hashtag (14d)
+            try:
+                tr_df = trending_hashtags(dfm, days_window=14)
+                if tr_df is not None and not tr_df.empty:
+                    trending_label = str(tr_df.head(1).index[0])
+            except Exception:
+                trending_label = "—"
+
+    # Formatters
+    views_7d_str = f"{views_7d:,}".replace(",", ".") if views_7d else "—"
+    posts_7d_str = str(posts_7d) if posts_7d else "—"
+    if trending_label == "—":
+        trending_label = "#tiktoknl"
+
+    confidence = _confidence_from_data(d) if has_data else 0
+
+    # ====================== UI ===========================
     with st.container(border=True):
-        # kleine statusregel bovenin
+        # Statusregeltje bovenin
         st.markdown(
-            f"<p style='margin:6px 0 4px 0;color:#6b7280;'>⏱️ Laatste update: "
-            f"<b>{last_sync}</b> · 📁 Bron: <b>{bron}</b></p>",
+            f"<p style='margin:4px 0 2px;color:#6b7280;font-size:0.85rem;'>"
+            f"⏱️ Laatste update: <b>{last_sync}</b> · 📁 Bron: <b>{bron}</b>"
+            f"</p>",
             unsafe_allow_html=True,
         )
 
-        st.markdown("## 🎯 Vandaag: 1 simpele groeistap")
-        st.caption("Voor starters en creators: volg de twee stappen hieronder en je bent klaar om te posten.")
+        # Titel + subtitel
+        st.markdown(
+            """
+<div class="app-header">
+  <div class="app-title-row">
+    <h2 style="margin:0;font-size:1.9rem;">🎯 Vandaag: 1 simpele groeistap</h2>
+  </div>
+  <p class="app-subtitle">
+    Voor starters en creators: volg de twee stappen hieronder en je bent klaar om te posten.
+  </p>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
 
-        # ---------------------- MINI KPI RIJ (alleen met data) ----------------------
-        if has_data:
-            dc = d.copy()
-            dc["Datum"] = _to_naive(dc.get("Datum"))
-
-            now_local = pd.Timestamp.now(tz=TZ).tz_convert(None).normalize()
-            cutoff_7d = now_local - pd.Timedelta(days=7)
-            recent = dc[dc["Datum"] >= cutoff_7d]
-
-            views7 = int(
-                pd.to_numeric(recent.get("Views", pd.Series(dtype=float)), errors="coerce").sum(skipna=True)
-            ) if not recent.empty else 0
-            posts7 = int(recent.shape[0])
-
-            best_hour = _best_hours(dc, n=1)[0]
-            tr_df = trending_hashtags(dc, days_window=14)
-            top_tag = tr_df.head(1).index[0] if tr_df is not None and not tr_df.empty else "#tiktoknl"
-
-            st.markdown(
-                f"""
+        # ======= Mini KPI-rij (4 blokken) =======
+        st.markdown(
+            f"""
 <div class="home-mini-row">
   <div class="home-mini">
     <div class="home-mini-label">Weergaven laatste 7 dagen</div>
-    <div class="home-mini-value">👁️ {views7:,}</div>
+    <div class="home-mini-value">👁️ {views_7d_str}</div>
   </div>
   <div class="home-mini">
     <div class="home-mini-label">Aantal posts laatste 7 dagen</div>
-    <div class="home-mini-value">🎬 {posts7}</div>
+    <div class="home-mini-value">🎬 {posts_7d_str}</div>
   </div>
   <div class="home-mini">
     <div class="home-mini-label">Beste posttijd nu</div>
-    <div class="home-mini-value">⏰ {best_hour:02d}:00</div>
+    <div class="home-mini-value">⏰ {best_time_label}</div>
   </div>
   <div class="home-mini">
     <div class="home-mini-label">Trending hashtag</div>
-    <div class="home-mini-value">🏷️ {top_tag}</div>
+    <div class="home-mini-value">🏷️ {trending_label}</div>
   </div>
 </div>
-""".replace(",", "."),
-                unsafe_allow_html=True,
-            )
+""",
+            unsafe_allow_html=True,
+        )
 
-        # Onboarding progress direct onder KPI's
-        _onboarding_bar(1 if not has_data else 2)
+        # Onboarding / voortgang
+        _onboarding_bar(2 if has_data else 1)
 
-        # --------------------------- 2 kolommen: stappen ---------------------------
-        left, right = st.columns([3, 2])
+        # Twee kolommen: links stap 1, rechts stap 2
+        col_left, col_right = st.columns([3, 2])
 
-        # ------------------------- LINKERKANT: STAP 1 -----------------------------
-        with left:
+        # ---------------------- STAP 1 (LINKS) ----------------------
+        with col_left:
             st.markdown("### 1️⃣ Data & analyse klaarzetten")
-
             if not has_data:
                 st.write(
-                    "1. Upload je TikTok CSV/XLSX in de **linker sidebar** of klik op **Gebruik demo-data**.\n"
-                    "2. Klik daarna op **🚀 Start analyse** zodat PostAi je posts kan lezen."
+                    "1. Upload je TikTok CSV/XLSX in de **linker sidebar** "
+                    "of gebruik de demo-data.\n\n"
+                    "2. Klik daarna op **🚀 Start analyse** om je advies te laten berekenen."
                 )
             else:
                 st.write(
                     "✅ We hebben al data gevonden. Klik op **🚀 Start analyse** om je advies te verversen."
                 )
 
+            # Voorbeeld CSV + demo-knop
             cc1, cc2 = st.columns(2)
 
-            # Voorbeeld-CSV
             with cc1:
                 tpl = pd.DataFrame(
                     [
@@ -1516,54 +1560,22 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                     help="Gebruik dit als sjabloon voor je eigen data.",
                 )
 
-            # Demo-set
             with cc2:
                 if st.button(
                     "🎯 Gebruik demo-data",
                     use_container_width=True,
-                    key="demo_btn_hero",
+                    key="hero_demo_btn",
                     help="Geen bestand bij de hand? Start met demo-gegevens.",
                 ):
-                    try:
+                    # Gebruik je bestaande helper als die er is
+                    if "_activate_demo_data" in globals():
                         _activate_demo_data()
-                    except NameError:
-                        rng = pd.date_range(
-                            end=pd.Timestamp.today().normalize(), periods=35, freq="D"
+                    else:
+                        # Fallback: simpele melding als de helper niet bestaat
+                        st.warning(
+                            "Demo-helper `_activate_demo_data` niet gevonden. "
+                            "Gebruik de demo-knop in de sidebar."
                         )
-                        np.random.seed(42)
-                        rows = []
-                        tags_pool = [
-                            "#darkfacts #psychology #fyp",
-                            "#love #lovestory #bf #bestie",
-                            "#viral #mindblown #creepy #tiktoknl",
-                            "#redthoughts #besties #bff #lovehim",
-                            "#deepthought #foryou #real #reels",
-                        ]
-                        for d_ in rng:
-                            v = np.random.randint(20_000, 500_000)
-                            rows.append(
-                                dict(
-                                    caption=np.random.choice(tags_pool),
-                                    views=v,
-                                    likes=int(v * np.random.uniform(0.04, 0.18)),
-                                    comments=int(v * np.random.uniform(0.003, 0.02)),
-                                    shares=int(v * np.random.uniform(0.002, 0.015)),
-                                    date=d_
-                                    + pd.Timedelta(
-                                        hours=int(
-                                            np.random.choice(
-                                                [12, 14, 16, 18, 20, 0],
-                                                p=[0.25, 0.2, 0.18, 0.15, 0.12, 0.1],
-                                            )
-                                        )
-                                    ),
-                                    videolink="",
-                                )
-                            )
-                        pd.DataFrame(rows).to_csv(LATEST_FILE, index=False)
-                        st.session_state["df"] = pd.read_csv(LATEST_FILE)
-                        st.session_state["demo_active"] = True
-                    st.toast("✅ Demo-data geladen")
 
             # Start analyse-knop
             if st.button(
@@ -1571,62 +1583,51 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
                 key="hero_analyse_btn",
                 use_container_width=True,
                 type="primary",
-                help="We analyseren je recente posts en geven een simpel advies.",
+                help="We analyseren je recente posts en updaten het advies.",
             ):
                 with st.spinner("We kijken wat werkt in je laatste posts…"):
                     time.sleep(0.7)
-                    st.toast("✅ Analyse klaar — advies geüpdatet.")
+                st.toast("✅ Analyse klaar — advies geüpdatet.")
 
             st.caption(
-                "🔑 TikTok-login vind je links onder **Koppel TikTok**. Niet verplicht voor de basisanalyse."
+                "🔑 TikTok-login vind je in de sidebar onder **Koppel TikTok**. "
+                "Niet verplicht voor de basisanalyse."
             )
 
-            # trust badges
-            st.markdown(
-                f"<div class='trust-row'>"
-                f"<span class='chip badge'>🛡️ {tr('trust1')}</span>"
-                f"<span class='chip badge'>📄 {tr('trust2')}</span>"
-                f"<span class='chip badge'>🎁 {tr('trust3')}</span>"
-                f"<span class='chip badge'>🎯 {tr('trust4')}</span>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-
-        # ------------------------- RECHTERKANT: STAP 2 ----------------------------
-        with right:
+        # ---------------------- STAP 2 (RECHTS) ----------------------
+        with col_right:
             st.markdown("### 2️⃣ Vandaag posten")
 
             if not has_data:
-                st.write("Laad eerst je data of de demo-set om een concreet postadvies te krijgen.")
-                return
+                st.info("Laad eerst je data of demo-set om een concreet postadvies te krijgen.")
+            else:
+                best_hour = _best_hours(d, n=1)[0]
+                conf = confidence
 
-            best_time = _best_hours(d, n=1)[0]
-            conf = _confidence_from_data(d)
-
-            # today-card + confidence bar
-            st.markdown(
-                f"""
+                # Confidence balk
+                st.markdown(
+                    f"""
 <div class="today-card">
-  <div class="today-title">🔥 Post vandaag om <b>{best_time:02d}:00</b></div>
+  <div class="today-title">🔥 Post vandaag om {best_hour:02d}:00</div>
   <div class="today-sub">
     Repost je best scorende video en test een kleine variant (bijv. andere hook).
   </div>
-  <div class="nbabarshell" style="margin-top:10px;">
+  <div class="nbabarshell">
     <div class="nbabar" style="width:{conf}%;"></div>
     <div class="nbalabel">{conf}% dat dit uur goed is</div>
   </div>
 </div>
 """,
-                unsafe_allow_html=True,
-            )
-
-            with st.expander("Waarom dit advies?"):
-                st.write(
-                    "We kijken naar welke uren in de laatste weken het vaakst goede views gaven. "
-                    "Daaruit kiezen we het veiligste uur voor vandaag."
+                    unsafe_allow_html=True,
                 )
 
-            st.button("🔥 Voer advies uit", use_container_width=True)
+                with st.expander("Waarom dit advies?"):
+                    st.write(
+                        "We kijken naar welke uren in de laatste weken het vaakst goede views gaven. "
+                        "Daaruit kiezen we het veiligste uur voor vandaag."
+                    )
+
+                st.button("🔥 Voer advies uit", use_container_width=True)
 
             st.markdown("---")
             st.markdown("**🎬 Mini-script voor vandaag**")
