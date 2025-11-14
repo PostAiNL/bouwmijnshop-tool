@@ -3306,13 +3306,11 @@ with tab_strategy:
                     st.markdown("---")
 
     # ------------- Hook/Caption checker -------------
-    with st.container(border=True):
-        st.markdown("#### ✍️ Check mijn hook/caption")
+    with st.expander("✍️ Check mijn hook/caption", expanded=False):
         st.caption(
-            "Plak een hook of caption en krijg 3 concrete verbeterpunten. "
-            "Handig als snelle check voordat je post."
-        )
-
+                        "Plak een hook of caption en krijg 3 concrete verbeterpunten. "
+                        "Handig als snelle check voordat je post."
+                    )
         user_text_check_2 = st.text_area(
             "Je hook/caption",
             height=160,
@@ -4073,6 +4071,7 @@ _mini_footer()
 
 # ----------------------------- Chat widget (Optie A) -----------------------------
 # ----------------------------- Chat widget (robuste iframe-embed) -----------------------------
+import streamlit as st
 import streamlit.components.v1 as components
 
 CHAT_SERVER = "https://chatbot-2-0-3v8l.onrender.com"  # jouw server
@@ -4081,13 +4080,41 @@ components.html(
     f"""
   <!-- Fallback CSS (mag inline, CSP blokkeert meestal alleen inline JS) -->
   <style>
-    #bms-overlay {{ position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; }}
-    #bms-chat-launcher, #bms-chat, #bms-chat-teaser {{ position: absolute; pointer-events: auto; }}
-    #bms-chat-launcher {{
-      right:16px; bottom:16px; width:56px; height:56px; border-radius:50%;
-      background:#111827; color:#fff; border:0; cursor:pointer; box-shadow:0 10px 24px rgba(0,0,0,.2);
+    #bms-overlay {{
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      /* overlay mag klikken doorlaten naar zijn kinderen (launcher, chat, teaser) */
+      pointer-events: auto;
     }}
-    #bms-chat {{ right:16px; bottom:84px; display:none; background:#fff; }}
+    #bms-chat-launcher,
+    #bms-chat,
+    #bms-chat-teaser {{
+      position: absolute;
+      pointer-events: auto;
+    }}
+
+    #bms-chat-launcher {{
+      right:16px;
+      bottom:16px;
+      width:56px;
+      height:56px;
+      border-radius:50%;
+      background:#111827;
+      color:#fff;
+      border:0;
+      cursor:pointer;
+      box-shadow:0 10px 24px rgba(0,0,0,.2);
+      z-index: 2147483647;
+    }}
+
+    #bms-chat {{
+      right:16px;
+      bottom:84px;
+      display:none;
+      background:#fff;
+      z-index: 2147483647;
+    }}
   </style>
 
   <!-- Laad bestanden EXTERN (geen inline JS i.v.m. CSP) -->
@@ -4095,6 +4122,42 @@ components.html(
   <script src="{CHAT_SERVER}/chat-boot.js"
           data-server="{CHAT_SERVER}"
           data-css="{CHAT_SERVER}/chat-widget.css"></script>
+
+  <!-- EXTRA: eigen klik-handler als fallback -->
+  <script>
+    (function() {{
+      function setupLauncher() {{
+        var launcher = document.getElementById('bms-chat-launcher');
+        var chat = document.getElementById('bms-chat');
+        if (!launcher || !chat) {{
+          // probeer het later nog eens (widget heeft soms even nodig om alles te injecteren)
+          setTimeout(setupLauncher, 300);
+          return;
+        }}
+
+        // niet dubbel binden
+        if (launcher.getAttribute('data-bms-bound') === '1') return;
+        launcher.setAttribute('data-bms-bound', '1');
+
+        launcher.addEventListener('click', function (e) {{
+          e.preventDefault();
+          e.stopPropagation();
+          if (chat.style.display === 'none' || chat.style.display === '') {{
+            chat.style.display = 'block';
+          }} else {{
+            chat.style.display = 'none';
+          }}
+        }});
+      }}
+
+      // start na load
+      if (document.readyState === 'complete' || document.readyState === 'interactive') {{
+        setupLauncher();
+      }} else {{
+        document.addEventListener('DOMContentLoaded', setupLauncher);
+      }}
+    }})();
+  </script>
 """,
     height=720,
     scrolling=False,
@@ -4103,17 +4166,20 @@ components.html(
 st.markdown(
     """
 <style>
-/* bestond al */
 #MainMenu {visibility:hidden;}
 footer {visibility:hidden;}
 
-/* NIEUW: haal onzichtbare header/toolbar weg */
 header[data-testid="stHeader"] { height:0; visibility:hidden; }
 div[data-testid="stToolbar"] { display:none; }
 
-/* beetje top-ruimte zodat je logo niet wordt afgekapt */
 div.block-container { padding-top:14px !important; }
+
+/* als css-inspector overlay actief is, mag hij geen kliks blokkeren */
+#css-inspector-overlay {
+    pointer-events: none !important;
+}
 </style>
 """,
     unsafe_allow_html=True,
 )
+
