@@ -4,7 +4,7 @@
 
   /*** ---------- Config ---------- ***/
   var SERVER  = global.BMS_CHAT_SERVER   || "";
-  var CSS_URL = global.BMS_CHAT_CSS_URL  || "/chat-widget.css?v=2";
+  var CSS_URL = global.BMS_CHAT_CSS_URL  || "/chat-widget.css?v=3";
 
   if (!SERVER) {
     console.warn("[PostAi Chat] BMS_CHAT_SERVER ontbreekt — UI werkt, API-calls mogelijk niet.");
