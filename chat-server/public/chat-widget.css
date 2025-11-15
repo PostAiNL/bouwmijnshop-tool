@@ -1,4 +1,4 @@
-/* ========= PostAi Chat — Clean SaaS v2 ========= */
+/* ========= PostAi Chat — Clean SaaS v3 (premium) ========= */
 
 /* Basis transitions & font */
 #bms-chat-launcher,
@@ -20,8 +20,8 @@
   position: fixed;
   right: 18px;
   bottom: 18px;
-  width: 56px;
-  height: 56px;
+  width: 60px;              /* iets groter */
+  height: 60px;
   border-radius: 999px;
   background: radial-gradient(circle at 20% 0%, #16a34a 0, #16a34a 18%, #020617 70%);
   color: #f9fafb;
@@ -35,6 +35,7 @@
   justify-content: center;
   z-index: 2147483647;
   transform-origin: center;
+  font-size: 22px;
 }
 
 #bms-chat-launcher:hover {
@@ -57,14 +58,14 @@
   position: fixed;
   right: 18px;
   bottom: 86px;
-  width: 410px;
-  max-height: min(72vh, calc(100dvh - 120px));
+  width: 430px;  /* iets breder */
+  max-height: min(76vh, calc(100dvh - 120px));
   background: #ffffff;
-  border-radius: 20px;
+  border-radius: 22px;
   border: 1px solid #e2e8f0;
   box-shadow:
-    0 24px 70px rgba(15, 23, 42, .16),
-    0 0 0 1px rgba(241, 245, 249, .9);
+    0 26px 80px rgba(15, 23, 42, .18),
+    0 0 0 1px rgba(241, 245, 249, .95);
   overflow: hidden;
   display: none;
   z-index: 2147483647;
@@ -75,15 +76,15 @@
 #bms-chat .hdr {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
+  gap: 12px;
+  padding: 16px 20px;
   border-bottom: 1px solid #f1f5f9;
   background: #ffffff;
 }
 
 #bms-chat .avatar {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: #020617;
   color: #f9fafb;
@@ -98,7 +99,7 @@
 #bms-chat .titles {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 #bms-chat .ttl {
@@ -111,7 +112,7 @@
   font-size: 11px;
   font-weight: 500;
   color: #15803d;
-  padding: 2px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
   background: rgba(22, 163, 74, .06);
   display: inline-flex;
@@ -138,8 +139,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
 }
 
@@ -151,9 +152,9 @@
 /* ===== Body & berichten ===== */
 
 #bms-body {
-  padding: 16px 18px 10px;
+  padding: 18px 20px 12px;        /* meer padding */
   overflow: auto;
-  max-height: 44vh;
+  max-height: 48vh;               /* iets meer ruimte voor content */
   font-size: 14px;
   background: #f8fafc;
 }
@@ -168,7 +169,7 @@
 }
 
 .bms-msg {
-  margin: 10px 0;
+  margin: 14px 0;                 /* meer witruimte tussen berichten */
   display: flex;
   opacity: 0;
   transform: translateY(4px);
@@ -187,29 +188,30 @@
 }
 
 .bms-msg .bubble {
-  max-width: 85%;
-  padding: 12px 14px;
-  border-radius: 18px;
+  max-width: 88%;
+  padding: 14px 16px;             /* grotere bubble */
+  border-radius: 20px;
   border: 1px solid rgba(15, 23, 42, 0.04);
-  line-height: 1.5;
+  line-height: 1.6;               /* prettiger lezen, zeker met enters */
   position: relative;
   background: #ffffff;
   color: #0f172a;
-  font-size: 13px;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, .04);
+  font-size: 14px;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .06);
+  white-space: pre-wrap;          /* respecteert enters uit de AI */
 }
 
 .bms-msg.user .bubble {
   background: #020617;
   border-color: #020617;
   color: #f9fafb;
-  box-shadow: 0 5px 18px rgba(15, 23, 42, .5);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, .55);
 }
 
 .bms-msg .time {
   font-size: 11px;
   color: #94a3b8;
-  margin-top: 4px;
+  margin-top: 6px;
   margin-left: 4px;
 }
 
@@ -252,8 +254,8 @@
 .bms-suggestions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 6px 18px 6px;
+  gap: 8px;                          /* iets meer ruimte tussen chips */
+  padding: 10px 20px 12px;
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
 }
@@ -262,9 +264,9 @@
   border: 1px solid #e2e8f0;
   background: #ffffff;
   color: #0f172a;
-  font-size: 12px;
+  font-size: 12.5px;
   border-radius: 999px;
-  padding: 5px 10px;
+  padding: 7px 12px;
   cursor: pointer;
 }
 
@@ -279,7 +281,7 @@
   color: #64748b;
   display: flex;
   gap: 4px;
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   align-items: center;
 }
 
@@ -297,8 +299,8 @@
 
 .bms-restart {
   display: block;
-  margin: 10px auto 6px;
-  padding: 6px 12px;
+  margin: 12px auto 6px;
+  padding: 7px 14px;
   border-radius: 999px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
@@ -317,18 +319,18 @@
 
 .inp {
   display: flex;
-  gap: 6px;
-  padding: 8px 18px 12px;
+  gap: 8px;
+  padding: 10px 20px 14px;
   border-top: 1px solid #e5e7eb;
   background: #ffffff;
 }
 
 #bms-input {
   flex: 1;
-  padding: 8px 12px;
+  padding: 9px 14px;
   border: 1px solid #e2e8f0;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 13.5px;
   outline: none;
   background: #ffffff;
   color: #0f172a;
@@ -353,7 +355,7 @@
 #bms-upload-btn {
   padding: 0 8px;
   background: transparent;
-  font-size: 16px;
+  font-size: 18px;
 }
 
 #bms-upload-btn:hover {
@@ -361,7 +363,7 @@
 }
 
 #bms-send {
-  padding: 8px 14px;
+  padding: 9px 16px;
   background: #020617;
   color: #f9fafb;
   font-weight: 600;
@@ -369,7 +371,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 78px;
+  min-width: 84px;
 }
 
 #bms-send:hover {
@@ -381,11 +383,11 @@
 
 #bms-chat-teaser {
   position: fixed;
-  right: 86px;
-  bottom: 24px;
+  right: 90px;
+  bottom: 26px;
   background: #020617;
   color: #e2e8f0;
-  padding: 7px 12px;
+  padding: 8px 14px;
   border-radius: 999px;
   opacity: 0;
   transform: translateY(8px);
@@ -413,7 +415,7 @@
     left: 12px;
     width: auto;
     bottom: 92px;
-    max-height: min(74vh, calc(100dvh - 140px));
+    max-height: min(78vh, calc(100dvh - 140px));
   }
 
   #bms-chat-launcher {
