@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Nieuwe OpenAI SDK (>=1.0)
 try:
@@ -212,11 +213,82 @@ def license_key() -> str:
 
 # ============================== Streamlit Setup ===============================
 st.set_page_config(
-    page_title=f"{APP_NAME} — {'PRO' if is_pro() else 'DEMO'}",
-    page_icon="🧠",
+    page_title="PostAi – TikTok Growth Agent",
+    page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded",  # eerste load altijd open
 )
+
+def _force_sidebar_open():
+    """Zorgt er bij elke rerun voor dat de sidebar open staat."""
+    components.html(
+        """
+        <script>
+        (function() {
+          let attempts = 0;
+          const maxAttempts = 10;
+
+          function ensureSidebarOpen() {
+            try {
+              const doc = window.parent.document || document;
+
+              // Zoek alle knoppen met aria-expanded (typische toggle buttons)
+              const buttons = Array.from(doc.querySelectorAll("button[aria-expanded]"));
+              if (!buttons.length) return;
+
+              // Kies de knop die het meest linksboven staat → grote kans dat dit de sidebar-toggle is
+              let best = null;
+              let bestDist = Infinity;
+
+              buttons.forEach(btn => {
+                const r = btn.getBoundingClientRect();
+
+                // Negeer knoppen die duidelijk in de content zitten
+                if (r.left > 400 || r.top > 200) return;
+
+                const dx = r.left;
+                const dy = r.top;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < bestDist) {
+                  bestDist = dist;
+                  best = btn;
+                }
+              });
+
+              if (!best) return;
+
+              const expanded = best.getAttribute("aria-expanded");
+
+              // Alleen klikken als hij écht dicht is
+              if (expanded === "false") {
+                best.click();
+              }
+
+            } catch (e) {
+              // negeren
+            }
+          }
+
+          function tryOpen() {
+            attempts += 1;
+            ensureSidebarOpen();
+            if (attempts < maxAttempts) {
+              setTimeout(tryOpen, 200);
+            }
+          }
+
+          // start na een kleine delay zodat de UI geladen is
+          setTimeout(tryOpen, 200);
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+# Roep dit één keer aan, vóór je de sidebar bouwt
+_force_sidebar_open()
 
 # ============================== Simple routes (GEUPDATE) ======================
 def _render_privacy():
@@ -244,8 +316,7 @@ We **slaan geen wachtwoorden** of privédata op en **posten niets namens jou**.
   _Instellingen → Data opschonen (privacy)_.
 
 **Je rechten**
-- Je kunt op elk moment je data verwijderen via de knop “🧹 Verwijder lokale data”
-  in **Instellingen**.
+- Je kunt op elk moment je data verwijderen via de knop “🧹 Verwijder lokale data” in **Instellingen**.
 
 **Contact**
 info@bouwmijnshop.nl
@@ -349,34 +420,42 @@ def _route_simple_pages():
 # Roep de router aan vóór andere logica (zoals OAuth)
 _route_simple_pages()
 
+import streamlit as st
+
 # ============================== Cookie/Consent ===============================
+
+# Dialog definitie (popup in het midden van het scherm)
+@st.dialog("Cookies", width="small", dismissible=False)
+def _cookie_popup():
+    st.markdown(
+        "We gebruiken alleen functionele data (login/analytics). "
+        "[Privacy](?page=privacy) · [Voorwaarden](?page=terms)"
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Accepteer", use_container_width=True, type="primary"):
+            st.session_state["consent"] = "accepted"
+            st.toast("Cookies/functional tracking geaccepteerd.")
+            st.rerun()
+
+    with c2:
+        if st.button("Weiger", use_container_width=True):
+            st.session_state["consent"] = "declined"
+            st.toast("Functionele tracking geweigerd.")
+            st.rerun()
+
+
 def _cookie_banner():
-    # Toon de banner alleen als er nog geen keuze is gemaakt
+    # Toon de popup alleen als er nog geen keuze is gemaakt
     if st.session_state.get("consent") in ("accepted", "declined"):
         return
 
-    with st.container(border=True):
-        c1, c2 = st.columns([4, 2])
-        with c1:
-            st.markdown(
-                "We gebruiken alleen functionele data (login/analytics). "
-                "[Privacy](?page=privacy) · [Voorwaarden](?page=terms)"
-            )
-        with c2:
-            a, b = st.columns(2)
-            with a:
-                if st.button("Accepteer", use_container_width=True, type="primary"):
-                    st.session_state["consent"] = "accepted"
-                    st.toast("Cookies/functional tracking geaccepteerd.")
-                    st.rerun()
-            with b:
-                if st.button("Weiger", use_container_width=True):
-                    st.session_state["consent"] = "declined"
-                    st.toast("Functionele tracking geweigerd.")
-                    st.rerun()
+    # Nog geen keuze -> popup openen
+    _cookie_popup()
 
 
-# Banner direct tonen
+# Banner / popup direct tonen
 _cookie_banner()
 
 # ============================== OAuth callback ===============================
@@ -436,6 +515,7 @@ def _remove_brand_logo() -> bool:
 THEME_COLOR, LOGO_BYTES = _load_branding()
 
 # ================================== CSS ======================================
+
 def _inject_css(theme_color: str, pro: bool):
     vars_block = f"""
 :root {{
@@ -449,18 +529,35 @@ def _inject_css(theme_color: str, pro: bool):
     base_css = """
 html { color-scheme: light; -webkit-text-size-adjust: 100%; }
 body, [data-testid="stAppViewContainer"] { background: var(--bg) !important; color: var(--text) !important; }
-section[data-testid="stSidebar"] > div:first-child { background: var(--head); border-right:1px solid var(--card-border); }
-.block-container { max-width:1200px; padding-top:14px; }
-section[data-testid="stSidebar"] { width:260px !important; }
 
-/* Sidebar altijd open: knop zichtbaar maar NIET klikbaar */
-[data-testid="collapsedControl"] {
-  pointer-events: none !important;
-  opacity: 0.4;
+/* ================== SIDEBAR ALTIJD VISUEEL OPEN ================== */
+
+/* Sidebar zelf: vaste breedte en nooit weggeschoven */
+section[data-testid="stSidebar"] {
+  width:260px !important;
+  min-width:260px !important;
+  max-width:260px !important;
+  background: var(--head);
+  border-right:1px solid var(--card-border);
+  transform: translateX(0) !important;   /* voorkom wegschuiven */
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
-/* Sidebar content iets omhoog zodat het gelijk valt met het logo */
-section[data-testid="stSidebar"] .block-container { padding-top:1.5rem; }
+/* Ook als Streamlit 'denkt' dat hij collapsed is, niet inschuiven */
+section[data-testid="stSidebar"][aria-expanded="false"] {
+  transform: translateX(0) !important;
+}
+
+/* Sidebar content iets omlaag zodat het mooi uitlijnt */
+section[data-testid="stSidebar"] .block-container {
+  padding-top:1.5rem !important;
+}
+
+/* ================== OVERIGE STYLING ================== */
+
+.block-container { max-width:1200px; padding-top:14px; }
+
 .accent { color:var(--brand); }
 h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
 
@@ -705,38 +802,8 @@ label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p {
 
     st.markdown("<style>" + vars_block + base_css + "</style>", unsafe_allow_html=True)
 
-    # ❌ PRO-badge = VERWIJDERD
-    # st.markdown(f"<div class='pro-badge'>{'PRO' if pro else 'DEMO'}</div>", unsafe_allow_html=True)
-
-
+# CSS activeren (LET OP: dit moet ná de functie-definitie staan)
 _inject_css(THEME_COLOR, is_pro())
-import streamlit.components.v1 as components  # als dit al ergens staat, hoef je 'm niet nog eens te zetten
-
-# Zorgt dat de sidebar bij laden altijd open staat
-components.html(
-    """
-<script>
-(function() {
-  function ensureSidebarOpen() {
-    try {
-      const root = window.parent.document;
-      const ctrl = root.querySelector('[data-testid="collapsedControl"]');
-      if (!ctrl) return;
-      const expanded = ctrl.getAttribute("aria-expanded");
-      // Als hij dicht is, klik 'm open
-      if (expanded === "false") {
-        ctrl.click();
-      }
-    } catch (e) {}
-  }
-  // kleine delay zodat Streamlit klaar is
-  setTimeout(ensureSidebarOpen, 300);
-})();
-</script>
-""",
-    height=0,
-    width=0,
-)
 
 # ============================== Date helpers (FIX) ===========================
 def _to_naive(series_like) -> pd.Series:
@@ -1238,6 +1305,13 @@ st.markdown(
     """
     <style>
     /* =================== SIDEBAR LAYOUT =================== */
+
+    /* Verberg de knop om de sidebar in/uit te klappen */
+    button[title="Collapse sidebar"],
+    button[title="Expand sidebar"],
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
 
     /* Minder witruimte bovenin de sidebar */
     [data-testid="stSidebar"] {
