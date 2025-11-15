@@ -53,7 +53,7 @@
     '</svg>'
   );
 
-  var teaser = el("div", { id:"bms-chat-teaser", role:"status" }, "Hulp nodig? Sanne helpt je graag.");
+  var teaser = el("div", { id:"bms-chat-teaser", role:"status" }, "Hulp nodig? Sanne helpt je met TikTok.");
 
   var chat = el("div", {
     id:"bms-chat",
@@ -63,7 +63,7 @@
   }, (
     '<div class="hdr">' +
       '<div class="avatar" aria-hidden="true">S</div>' +
-      '<div><div class="ttl">Sanne van PostAi</div><div class="sub">• online</div></div>' +
+      '<div><div class="ttl">Sanne van PostAi</div><div class="sub">online</div></div>' +
       '<button class="close" aria-label="Sluit chat">✕</button>' +
     '</div>' +
     '<div id="bms-body"></div>' +
@@ -168,24 +168,35 @@
 
   /*** ---------- Welcome (éénmalig) ---------- ***/
   if (!global.localStorage.getItem("bmsChatWelcomed")) {
-    ["Hi! Ik ben Sanne. Waar kan ik je mee helpen?",
-     "Tip: wil je beste posttijd? Zeg “beste tijd”.",
-     "🔒 We bewaren niets zonder jouw actie."]
-      .forEach(function(w,i){
-        setTimeout(function(){ append("bot", w); save("bot", w); }, i*400);
-      });
+    [
+      "Hi! Ik ben Sanne, je TikTok coach in PostAi. Waar wil je aan werken?",
+      "Tip: vraag bijvoorbeeld “beste posttijd”, “hooks voor mijn product” of “maak een weekplan”.",
+      "🔒 Ik gebruik je data alleen om beter advies te geven – ik post nooit zonder jouw actie."
+    ].forEach(function(w,i){
+      setTimeout(function(){ append("bot", w); save("bot", w); }, i*400);
+    });
     global.localStorage.setItem("bmsChatWelcomed","1");
   }
 
   /*** ---------- Typing ---------- ***/
+  // Premium typing: gebruik CSS animatie .typing-dots
   function showTyping(){
-    append("bot","<span class='typing'>Sanne is aan het typen</span>");
-  }
-  function replaceTyping(text){
-    var last = body.querySelector(".typing");
-    if (last) last.parentElement.innerHTML = escapeHtml(text);
-    else append("bot", text);
+    // voorkom meerdere typing-bubbels
+    if (body.querySelector(".bms-msg.typing")) return;
+    var row = el("div", { "class":"bms-msg bot typing" },
+      "<div class='bubble'><span class='typing-dots'></span><span style='margin-left:6px;'>Sanne is aan het typen…</span></div>"
+    );
+    body.appendChild(row);
     body.scrollTop = body.scrollHeight;
+  }
+
+  function replaceTyping(text){
+    var typingRow = body.querySelector(".bms-msg.typing");
+    if (typingRow && typingRow.parentNode) {
+      typingRow.parentNode.removeChild(typingRow);
+    }
+    // daarna gewoon normaal bot-bericht toevoegen
+    append("bot", text);
   }
 
   /*** ---------- UX helpers ---------- ***/
@@ -217,7 +228,7 @@
     btn.onclick = function(){
       try { global.localStorage.removeItem(HKEY); } catch(e){}
       body.innerHTML = "";
-      append("bot","Nieuwe sessie gestart. Waar wil je mee beginnen?");
+      append("bot","Nieuwe sessie gestart. Waar wil je (op TikTok) mee beginnen?");
     };
     body.appendChild(btn);
   }
@@ -265,7 +276,7 @@
       });
       var data = {};
       try { data = await res.json(); } catch(e){}
-      var reply = (data && data.reply) || "Dankje! Ik kijk even met je mee.";
+      var reply = (data && data.reply) || "Thanks, ik denk even met je mee 👀";
       replaceTyping(reply);
       save("bot", reply);
 
