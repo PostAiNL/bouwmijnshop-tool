@@ -20,7 +20,7 @@
   position: fixed;
   right: 18px;
   bottom: 18px;
-  width: 60px;              /* iets groter */
+  width: 60px;
   height: 60px;
   border-radius: 999px;
   background: radial-gradient(circle at 20% 0%, #16a34a 0, #16a34a 18%, #020617 70%);
@@ -58,7 +58,7 @@
   position: fixed;
   right: 18px;
   bottom: 86px;
-  width: 430px;  /* iets breder */
+  width: 430px;
   max-height: min(76vh, calc(100dvh - 120px));
   background: #ffffff;
   border-radius: 22px;
@@ -69,12 +69,11 @@
   display: none;
   z-index: 2147483647;
 
-  /* NIEUW: flex-layout, zodat body scrollt en input vast blijft */
+  /* Belangrijk: flex layout zodat body scrollt en input vast blijft */
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-
 
 /* ===== Header ===== */
 
@@ -157,9 +156,10 @@
 /* ===== Body & berichten ===== */
 
 #bms-body {
-  flex: 1;                       /* neemt alle resterende hoogte */
-  padding: 18px 22px 14px;       /* iets meer horizontale ruimte */
-  overflow: auto;
+  flex: 1 1 auto;               /* neemt alle resterende hoogte */
+  min-height: 0;                 /* nodig zodat flex-child mag scrollen */
+  padding: 18px 22px 14px;
+  overflow-y: auto;              /* hier scrollen */
   font-size: 14px;
   background: #f8fafc;
 }
@@ -174,7 +174,7 @@
 }
 
 .bms-msg {
-  margin: 14px 0;                 /* meer witruimte tussen berichten */
+  margin: 14px 0;
   display: flex;
   opacity: 0;
   transform: translateY(4px);
@@ -194,7 +194,7 @@
 
 .bms-msg .bubble {
   max-width: 88%;
-  padding: 14px 18px;            /* iets breder */
+  padding: 14px 18px;
   border-radius: 20px;
   border: 1px solid rgba(15, 23, 42, 0.04);
   line-height: 1.6;
@@ -203,7 +203,7 @@
   color: #0f172a;
   font-size: 14px;
   box-shadow: 0 5px 16px rgba(15, 23, 42, .06);
-  white-space: pre-wrap;         /* behoud enters uit AI */
+  white-space: pre-wrap;
 }
 
 .bms-msg .bubble ul,
@@ -269,6 +269,7 @@
   padding: 10px 20px 10px;
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
+  flex: 0 0 auto;              /* blijft onderin, scrollt niet mee */
 }
 
 .bms-suggestions button {
@@ -334,6 +335,7 @@
   padding: 10px 20px 14px;
   border-top: 1px solid #e5e7eb;
   background: #ffffff;
+  flex: 0 0 auto;              /* vaste hoogte, blijft onderin */
 }
 
 #bms-input {
@@ -433,23 +435,6 @@
     right: 14px;
     bottom: 14px;
   }
-  /* Zorg dat header + body + input in een kolom staan */
-#bms-chat {
-  display: flex;
-  flex-direction: column;
-}
-
-/* Alleen de berichten scrollen, input blijft vast onderin */
-#bms-body {
-  flex: 1 1 auto;   /* neem alle overgebleven ruimte */
-  max-height: none; /* oude max-height uitschakelen */
-  overflow-y: auto; /* hier scrollen */
-}
-
-/* Input-balk heeft vaste hoogte en scrollt niet mee */
-.inp {
-  flex: 0 0 auto;
-}
 
   #bms-chat-teaser {
     right: 78px;
