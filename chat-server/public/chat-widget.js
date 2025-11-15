@@ -1,300 +1,497 @@
-/* ===== PostAi Chat 2.0 — JS (werkt met absolute overlay CSS) ===== */
+/* ===== PostAi Chat 2.0 — JS (absolute overlay) ===== */
 (function (global) {
   "use strict";
 
-  /*** ---------- Config ---------- ***/
-  var SERVER  = global.BMS_CHAT_SERVER   || "";
-  var CSS_URL = global.BMS_CHAT_CSS_URL  || "/chat-widget.css?v=3";
+  /*** ------------ Config ------------ ***/
+  var SERVER = global.BMS_CHAT_SERVER || "";
+  var CSS_URL = global.BMS_CHAT_CSS_URL || "/chat-widget.css?v=3";
 
   if (!SERVER) {
-    console.warn("[PostAi Chat] BMS_CHAT_SERVER ontbreekt — UI werkt, API-calls mogelijk niet.");
+    console.warn(
+      "[PostAi Chat] BMS_CHAT_SERVER ontbreekt – UI werkt, API-calls zijn nu een demo."
+    );
   }
 
-  /*** ---------- Safe document (escape uit iframes) ---------- ***/
+  /*** ------------ Safe document (escape uit iframes) ------------ ***/
   var DOC = (function () {
-    try { return global.top.document; }
-    catch (e) { return global.document; }
+    try {
+      return global.top.document;
+    } catch (e) {
+      return global.document;
+    }
   })();
 
-  /*** ---------- Idempotent mount ---------- ***/
-  if (DOC.getElementById("bms-chat-launcher") || DOC.getElementById("bms-overlay")) return;
+  /*** ------------ Idempotent mount ------------ ***/
+  if (
+    DOC.getElementById("bms-chat-launcher") ||
+    DOC.getElementById("bms-chat")
+  ) {
+    return;
+  }
 
-  /*** ---------- Utils ---------- ***/
-  var qs = function(sel, root){ return (root || DOC).querySelector(sel); };
-  var el = function(tag, attrs, html){
-    var n = DOC.createElement(tag);
-    attrs = attrs || {};
-    Object.keys(attrs).forEach(function(k){ n.setAttribute(k, attrs[k]); });
-    if (html != null) n.innerHTML = html;
-    return n;
-  };
-  var escapeHtml = function(s){
-    return String(s).replace(/[&<>"]/g, function(c){
-      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];
-    });
-  };
+  /*** ------------ CSS injecteren ------------ ***/
+  (function ensureCss() {
+    var head = DOC.head || DOC.getElementsByTagName("head")[0];
+    if (!head) return;
+    var existing = DOC.querySelector('link[data-bms-chat-css="1"]');
+    if (existing) return;
 
-  /*** ---------- CSS laden (1x) ---------- ***/
-  (function ensureCss(){
-    if (DOC.querySelector('link[href="'+CSS_URL+'"]') || DOC.getElementById("bms-chat-css")) return;
     var link = DOC.createElement("link");
-    link.id  = "bms-chat-css";
     link.rel = "stylesheet";
     link.href = CSS_URL;
-    DOC.head.appendChild(link);
+    link.setAttribute("data-bms-chat-css", "1");
+    head.appendChild(link);
   })();
 
-  /*** ---------- DOM structuur ---------- ***/
-  var overlay = el("div", { id:"bms-overlay", "aria-hidden":"false" });
+  /*** ------------ DOM opbouwen ------------ ***/
 
-  var launcher = el("button", { id:"bms-chat-launcher", "aria-label":"Open chat" },
-    '<svg viewBox="0 0 24 24" fill="none" width="24" height="24" aria-hidden="true">' +
-      '<path d="M12 3c5.5 0 10 3.8 10 8.5S17.5 20 12 20a13 13 0 0 1-3.7-.5L3 21l1.7-4.3A8.6 8.6 0 0 1 2 11.5C2 6.8 6.5 3 12 3Z" stroke="currentColor" stroke-width="1.6"/>' +
-    '</svg>'
-  );
+  var launcher = DOC.createElement("div");
+  launcher.id = "bms-chat-launcher";
+  launcher.setAttribute("aria-label", "Open chat met Sanne");
+  launcher.textContent = "💬";
 
-  var teaser = el("div", { id:"bms-chat-teaser", role:"status" }, "Hulp nodig? Sanne helpt je met TikTok.");
+  var chat = DOC.createElement("div");
+  chat.id = "bms-chat";
+  chat.setAttribute("aria-live", "polite");
+  chat.setAttribute("role", "dialog");
+  chat.setAttribute("aria-label", "PostAi TikTok coach");
 
-  var chat = el("div", {
-    id:"bms-chat",
-    role:"dialog",
-    "aria-modal":"true",
-    "aria-label":"Chat met Sanne"
-  }, (
+  chat.innerHTML =
     '<div class="hdr">' +
-      '<div class="avatar" aria-hidden="true">S</div>' +
-      '<div><div class="ttl">Sanne van PostAi</div><div class="sub">online</div></div>' +
-      '<button class="close" aria-label="Sluit chat">✕</button>' +
-    '</div>' +
+    '  <div class="avatar">S</div>' +
+    '  <div class="titles">' +
+    '    <div class="ttl">Sanne van PostAi</div>' +
+    '    <div class="sub">online • TikTok coach</div>' +
+    "  </div>" +
+    '  <button class="close" id="bms-close" aria-label="Sluit chat">&times;</button>' +
+    "</div>" +
     '<div id="bms-body"></div>' +
+    '<div class="bms-suggestions" id="bms-suggestions"></div>' +
     '<div class="inp">' +
-      '<input id="bms-input" placeholder="Typ je bericht…" autocomplete="off" aria-label="Bericht"/>' +
-      '<button id="bms-send" aria-label="Verstuur">Verstuur</button>' +
-    '</div>'
-  ));
+    '  <input id="bms-input" type="text" placeholder="Typ je bericht..." autocomplete="off" />' +
+    '  <input type="file" id="bms-upload" accept="image/*" style="display:none" />' +
+    '  <button id="bms-upload-btn" title="Upload productfoto">📷</button>' +
+    '  <button id="bms-send">Verstuur</button>' +
+    "</div>";
 
-  overlay.appendChild(launcher);
-  overlay.appendChild(teaser);
-  overlay.appendChild(chat);
-  DOC.body.appendChild(overlay);
+  var teaser = DOC.createElement("div");
+  teaser.id = "bms-chat-teaser";
+  teaser.textContent = "Vraag Sanne om TikTok-advies 👋";
 
-  /*** ---------- Elements & basic events ---------- ***/
-  var body    = qs("#bms-body");
-  var input   = qs("#bms-input");
-  var sendBtn = qs("#bms-send");
-  var closeBtn= chat.querySelector(".close");
+  DOC.body.appendChild(launcher);
+  DOC.body.appendChild(chat);
+  DOC.body.appendChild(teaser);
 
-  function openChat(){
-    chat.style.display = "block";
-    if (input) input.focus();
+  /*** ------------ JS logica (onboarding, profiel, AI, etc.) ------------ ***/
+
+  var STORAGE_KEY = "postai_profile_v1";
+  var STATE_KEY = "postai_returning_v1";
+
+  var closeBtn = DOC.getElementById("bms-close");
+  var bodyEl = DOC.getElementById("bms-body");
+  var inputEl = DOC.getElementById("bms-input");
+  var sendBtn = DOC.getElementById("bms-send");
+  var suggestionsEl = DOC.getElementById("bms-suggestions");
+  var uploadInput = DOC.getElementById("bms-upload");
+  var uploadBtn = DOC.getElementById("bms-upload-btn");
+
+  var profile = loadProfile();
+  var onboardingStep = profile ? 0 : 1; // 0 = klaar
+  var messageIdCounter = 1;
+  var lastBotType = null;
+
+  function loadProfile() {
+    try {
+      var raw = global.localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
   }
-  function closeChat(){
+
+  function saveProfile(newProfile) {
+    profile = newProfile;
+    try {
+      global.localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    } catch (e) {}
+  }
+
+  /*** ----- UI helpers ----- ***/
+
+  function openChat() {
+    chat.style.display = "block";
+    teaser.classList.remove("show");
+    try {
+      if (!global.localStorage.getItem(STATE_KEY)) {
+        global.localStorage.setItem(STATE_KEY, "1");
+      }
+    } catch (e) {}
+
+    if (!bodyEl.childElementCount) {
+      startConversation();
+    }
+    setTimeout(scrollToBottom, 50);
+  }
+
+  function closeChat() {
     chat.style.display = "none";
   }
 
-  launcher.addEventListener("click", function(e){
-    e.stopPropagation();
-    e.preventDefault();
-    openChat();
-  });
+  function scrollToBottom() {
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+  }
 
-  closeBtn.addEventListener("click", function(e){
-    e.stopPropagation();
-    e.preventDefault();
-    closeChat();
-  });
+  function addMessage(text, sender, opts) {
+    if (sender === void 0) sender = "bot";
+    opts = opts || {};
 
-  // >>> GLOBAL CLICK-CAPTURE: forceer klik op bubbel, ook als er iets overheen ligt
-  DOC.addEventListener("click", function(e){
+    var msgId = messageIdCounter++;
+
+    var wrapper = DOC.createElement("div");
+    wrapper.className = "bms-msg " + (sender === "user" ? "user" : "bot");
+
+    var bubble = DOC.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = text;
+
+    wrapper.appendChild(bubble);
+
+    var time = DOC.createElement("div");
+    time.className = "time";
     try {
-      if (!launcher) return;
-      var r = launcher.getBoundingClientRect();
-      var x = e.clientX;
-      var y = e.clientY;
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        openChat();
-      }
-    } catch(err){}
-  }, true); // capture = true
-
-  // Teaser show (eenmalig)
-  if (!global.localStorage.getItem("bmsChatTeaseShown")) {
-    setTimeout(function(){ teaser.classList.add("show"); }, 600);
-    setTimeout(function(){
-      teaser.classList.remove("show");
-      global.localStorage.setItem("bmsChatTeaseShown","1");
-    }, 5200);
-  }
-
-  /*** ---------- History ---------- ***/
-  var HKEY = "bmsChatHistory";
-
-  function append(role, text){
-    var now = new Date().toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
-    var row = el("div", { "class":"bms-msg "+role }, (
-      '<div class="bubble">' + escapeHtml(text) + ' <button class="copy-btn" title="Kopieer" aria-label="Kopieer">📋</button></div>' +
-      '<div class="time">' + now + '</div>'
-    ));
-    body.appendChild(row);
-    body.scrollTop = body.scrollHeight;
-    var copyBtn = row.querySelector(".copy-btn");
-    if (copyBtn) {
-      copyBtn.onclick = function(){
-        try {
-          navigator.clipboard.writeText(text);
-          copyBtn.textContent="✅";
-          setTimeout(function(){ copyBtn.textContent="📋"; }, 1500);
-        } catch(e){}
-      };
-    }
-  }
-
-  function save(role, text){
-    try {
-      var h = JSON.parse(global.localStorage.getItem(HKEY) || "[]");
-      h.push({ role:role, text:text });
-      global.localStorage.setItem(HKEY, JSON.stringify(h.slice(-60)));
-    } catch(e){}
-  }
-
-  // Restore vorige sessie
-  try {
-    JSON.parse(global.localStorage.getItem(HKEY) || "[]")
-      .forEach(function(m){ append(m.role, m.text); });
-  } catch(e){}
-
-  /*** ---------- Welcome (éénmalig) ---------- ***/
-  if (!global.localStorage.getItem("bmsChatWelcomed")) {
-    [
-      "Hi! Ik ben Sanne, je TikTok coach in PostAi. Waar wil je aan werken?",
-      "Tip: vraag bijvoorbeeld “beste posttijd”, “hooks voor mijn product” of “maak een weekplan”.",
-      "🔒 Ik gebruik je data alleen om beter advies te geven – ik post nooit zonder jouw actie."
-    ].forEach(function(w,i){
-      setTimeout(function(){ append("bot", w); save("bot", w); }, i*400);
-    });
-    global.localStorage.setItem("bmsChatWelcomed","1");
-  }
-
-  /*** ---------- Typing ---------- ***/
-  // Premium typing: gebruik CSS animatie .typing-dots
-  function showTyping(){
-    // voorkom meerdere typing-bubbels
-    if (body.querySelector(".bms-msg.typing")) return;
-    var row = el("div", { "class":"bms-msg bot typing" },
-      "<div class='bubble'><span class='typing-dots'></span><span style='margin-left:6px;'>Sanne is aan het typen…</span></div>"
-    );
-    body.appendChild(row);
-    body.scrollTop = body.scrollHeight;
-  }
-
-  function replaceTyping(text){
-    var typingRow = body.querySelector(".bms-msg.typing");
-    if (typingRow && typingRow.parentNode) {
-      typingRow.parentNode.removeChild(typingRow);
-    }
-    // daarna gewoon normaal bot-bericht toevoegen
-    append("bot", text);
-  }
-
-  /*** ---------- UX helpers ---------- ***/
-  function addSuggestions(list){
-    var wrap = el("div", { "class":"bms-suggestions" });
-    list.forEach(function(label){
-      var btn = el("button", {}, escapeHtml(label));
-      btn.onclick = function(){
-        append("user", label); save("user", label);
-        wrap.remove();
-        sendToAI(label);
-      };
-      wrap.appendChild(btn);
-    });
-    body.appendChild(wrap);
-    body.scrollTop = body.scrollHeight;
-  }
-  function addFeedback(){
-    var fb = el("div", { "class":"bms-feedback" },
-      "<span>Was dit nuttig?</span><button aria-label='Ja'>👍</button><button aria-label='Nee'>👎</button>"
-    );
-    Array.prototype.forEach.call(fb.querySelectorAll("button"), function(b){
-      b.onclick = function(){ fb.innerHTML = "Bedankt voor je feedback 💜"; };
-    });
-    body.appendChild(fb);
-  }
-  function addRestart(){
-    var btn = el("button", { "class":"bms-restart" }, "🔄 Nieuw gesprek");
-    btn.onclick = function(){
-      try { global.localStorage.removeItem(HKEY); } catch(e){}
-      body.innerHTML = "";
-      append("bot","Nieuwe sessie gestart. Waar wil je (op TikTok) mee beginnen?");
-    };
-    body.appendChild(btn);
-  }
-
-  /*** ---------- Verzenden ---------- ***/
-  sendBtn.addEventListener("click", function(){ sendToAI(input.value); });
-  input.addEventListener("keydown", function(e){
-    if (e.key === "Enter") { e.preventDefault(); sendToAI(input.value); }
-  });
-
-  async function sendToAI(txt){
-    txt = (txt || "").trim();
-    if (!txt) return;
-
-    append("user", txt); save("user", txt);
-    input.value = ""; input.focus();
-    showTyping();
-
-    // Meta
-    var mode = global.localStorage.getItem("postai_mode") || "DEMO";
-    var bestHours = []; var topHashtags = [];
-    try { bestHours   = JSON.parse(global.localStorage.getItem("postai_best_hours") || "[]"); } catch(e){}
-    var lastUpload = global.localStorage.getItem("postai_last_upload") || "";
-    try { topHashtags = JSON.parse(global.localStorage.getItem("postai_top_hashtags") || "[]"); } catch(e){}
-
-    // History → laatste 6
-    var history = [];
-    try {
-      history = JSON.parse(global.localStorage.getItem(HKEY) || "[]")
-        .slice(-6)
-        .map(function(m){
-          return { role: (m.role==="bot" ? "assistant" : "user"), text: m.text };
-        });
-    } catch(e){}
-
-    try {
-      var res = await fetch(SERVER + "/api/chat", {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify({
-          message: txt,
-          history: history,
-          meta: { mode: mode, best_hours: bestHours, last_upload: lastUpload, top_hashtags: topHashtags }
-        })
+      time.textContent = new Date().toLocaleTimeString("nl-NL", {
+        hour: "2-digit",
+        minute: "2-digit",
       });
-      var data = {};
-      try { data = await res.json(); } catch(e){}
-      var reply = (data && data.reply) || "Thanks, ik denk even met je mee 👀";
-      replaceTyping(reply);
-      save("bot", reply);
-
-      addSuggestions(["Beste posttijd","Analyseer mijn upload","Geef hooks","Toon weekplan"]);
-      addFeedback();
-      addRestart();
     } catch (e) {
-      console.error("[PostAi Chat] API-fout:", e);
-      replaceTyping("⚠️ Netwerkfout. Probeer het zo nog eens.");
+      time.textContent = "";
+    }
+    wrapper.appendChild(time);
+
+    if (sender === "bot" && opts.feedback !== false) {
+      var fb = DOC.createElement("div");
+      fb.className = "bms-feedback";
+      var label = DOC.createElement("span");
+      label.textContent = "Was dit nuttig?";
+      fb.appendChild(label);
+
+      var btnUp = DOC.createElement("button");
+      btnUp.type = "button";
+      btnUp.textContent = "👍";
+      btnUp.addEventListener("click", function () {
+        handleFeedback(msgId, "up");
+      });
+      fb.appendChild(btnUp);
+
+      var btnDown = DOC.createElement("button");
+      btnDown.type = "button";
+      btnDown.textContent = "👎";
+      btnDown.addEventListener("click", function () {
+        handleFeedback(msgId, "down");
+      });
+      fb.appendChild(btnDown);
+
+      bubble.appendChild(fb);
+    }
+
+    bodyEl.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  function setSuggestions(list) {
+    suggestionsEl.innerHTML = "";
+    if (!list || !list.length) return;
+    list.forEach(function (label) {
+      var btn = DOC.createElement("button");
+      btn.type = "button";
+      btn.textContent = label;
+      btn.addEventListener("click", function () {
+        handleSuggestion(label);
+      });
+      suggestionsEl.appendChild(btn);
+    });
+  }
+
+  function handleFeedback(msgId, type) {
+    // hier kun je later feedback naar je backend sturen
+    // console.log("Feedback:", msgId, type);
+  }
+
+  /*** ----- Onboarding ----- ***/
+
+  function startConversation() {
+    if (!profile) {
+      addMessage(
+        "Hi! Ik ben Sanne, je TikTok coach in PostAi. Ik stel je 3 snelle vragen zodat ik je beter kan helpen. 👇",
+        "bot"
+      );
+      setTimeout(function () {
+        askOnboardingQuestion(1);
+      }, 600);
+    } else {
+      addMessage(
+        'Hi! Goed je weer te zien 👋 Ik help je met TikTok voor je product "' +
+          profile.product +
+          '". Waar wil je vandaag aan werken?',
+        "bot"
+      );
+      setSuggestions(getDefaultSuggestions(profile));
     }
   }
 
-  /*** ---------- Optionele embed-API ---------- **/
-  global.initBMS = function(root){
-    if (!root) return;
-    if (!overlay.parentNode || overlay.parentNode !== root) {
-      try { root.appendChild(overlay); } catch(e){}
+  function askOnboardingQuestion(step) {
+    onboardingStep = step;
+    if (step === 1) {
+      addMessage(
+        "1/3 • Wat verkoop je? Beschrijf je product in één zin.",
+        "bot",
+        { feedback: false }
+      );
+    } else if (step === 2) {
+      addMessage(
+        "2/3 • Voor wie is je product bedoeld? (bijv. moeders, studenten, sporters)",
+        "bot",
+        { feedback: false }
+      );
+    } else if (step === 3) {
+      addMessage(
+        "3/3 • Wat is je grootste TikTok-doel nu? (meer bereik, meer sales, meer volgers)",
+        "bot",
+        { feedback: false }
+      );
     }
-  };
+  }
 
+  function processOnboardingAnswer(text) {
+    if (onboardingStep === 1) {
+      profile = {
+        product: text,
+        audience: "",
+        goal: "",
+        level: "starter",
+      };
+      saveProfile(profile);
+      askOnboardingQuestion(2);
+    } else if (onboardingStep === 2) {
+      profile.audience = text;
+      saveProfile(profile);
+      askOnboardingQuestion(3);
+    } else if (onboardingStep === 3) {
+      profile.goal = text;
+      saveProfile(profile);
+      onboardingStep = 0;
+      addMessage(
+        "Top, dankjewel! 🎉 Ik gebruik deze info om betere TikTok-ideeën te geven. Waar wil je mee beginnen?",
+        "bot"
+      );
+      setSuggestions(getDefaultSuggestions(profile));
+    }
+  }
+
+  function getDefaultSuggestions(profileObj) {
+    var prod = (profileObj && profileObj.product) || "mijn product";
+    return [
+      "Maak een TikTok-weekplan voor " + prod,
+      "Maak 3 hooks voor " + prod,
+      "Wat is de beste posttijd voor mijn doelgroep?",
+      "Check mijn TikTok-account",
+    ];
+  }
+
+  /*** ----- Typing indicator ----- ***/
+
+  function showTyping() {
+    var id = "typing-" + Date.now();
+    var wrapper = DOC.createElement("div");
+    wrapper.className = "bms-msg bot";
+    wrapper.id = id;
+
+    var bubble = DOC.createElement("div");
+    bubble.className = "bubble typing-dots";
+    bubble.textContent = "Sanne typt";
+    wrapper.appendChild(bubble);
+
+    bodyEl.appendChild(wrapper);
+    scrollToBottom();
+    return id;
+  }
+
+  function hideTyping(id) {
+    var el = DOC.getElementById(id);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  /*** ----- AI-koppeling ----- ***/
+
+  function guessTypeFromMessage(text) {
+    var t = text.toLowerCase();
+    if (t.indexOf("hook") !== -1) return "hooks";
+    if (t.indexOf("weekplan") !== -1 || t.indexOf("week planning") !== -1)
+      return "weekplan";
+    return null;
+  }
+
+  function getFollowUpSuggestions(type, profileObj) {
+    var base = [
+      "Maak het korter",
+      "Maak het concreter voor mijn doelgroep",
+      "Maak 3 variaties",
+    ];
+    if (!type) return base;
+
+    if (type === "hooks") {
+      return [
+        "Maak 5 extra hooks",
+        "Schrijf een script voor 1 van deze hooks",
+        base[0],
+        base[2],
+      ];
+    }
+
+    if (type === "weekplan") {
+      var prod = (profileObj && profileObj.product) || "mijn product";
+      return [
+        "Maak nu 3 hooks per dag voor " + prod,
+        "Schrijf caption-ideeën bij dit weekplan",
+        base[0],
+        base[2],
+      ];
+    }
+    return base;
+  }
+
+  function sendToPostAi(userMessage) {
+    // ❗ HIER kun je koppelen met je echte chat-server.
+    // Voor nu een demo-response zodat de widget altijd werkt.
+    //
+    // Voorbeeld (pas endpoint aan):
+    // return fetch(SERVER + "/chat", {
+    //   method: "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body: JSON.stringify({ message: userMessage, profile: profile }),
+    // }).then(function (res) { return res.json(); });
+
+    var context = profile
+      ? "Product: " +
+        profile.product +
+        "\nDoelgroep: " +
+        profile.audience +
+        "\nDoel: " +
+        profile.goal +
+        "\n"
+      : "";
+
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        resolve({
+          text:
+            "Demo-antwoord van Sanne (koppel hier je echte AI-backend):\n\n" +
+            "• Ik heb je profiel en doel gebruikt om dit advies te geven.\n" +
+            "• Context:\n" +
+            context +
+            "\nVervang deze tekst door de response van je server.",
+          type: guessTypeFromMessage(userMessage),
+        });
+      }, 900);
+    });
+  }
+
+  /*** ----- Input & send ----- ***/
+
+  function handleSuggestion(label) {
+    inputEl.value = label;
+    handleSend();
+  }
+
+  function handleSend() {
+    var text = inputEl.value.trim();
+    if (!text) return;
+
+    addMessage(text, "user");
+    inputEl.value = "";
+    setSuggestions([]);
+
+    if (onboardingStep > 0) {
+      processOnboardingAnswer(text);
+      return;
+    }
+
+    var typingId = showTyping();
+
+    sendToPostAi(text)
+      .then(function (reply) {
+        hideTyping(typingId);
+        addMessage(reply.text, "bot");
+        lastBotType = reply.type || null;
+        setSuggestions(getFollowUpSuggestions(lastBotType, profile));
+      })
+      .catch(function () {
+        hideTyping(typingId);
+        addMessage(
+          "Hmm, er gaat iets mis met de verbinding. Probeer het zo nog een keer. 🙈",
+          "bot",
+          { feedback: false }
+        );
+      });
+  }
+
+  /*** ----- File upload (productfoto) ----- ***/
+
+  uploadBtn.addEventListener("click", function () {
+    uploadInput && uploadInput.click();
+  });
+
+  uploadInput.addEventListener("change", function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    addMessage(
+      "📷 Productfoto toegevoegd. Ik gebruik deze om betere ideeën te geven.",
+      "bot",
+      { feedback: false }
+    );
+
+    // Koppelen met backend? Bijvoorbeeld:
+    // var formData = new FormData();
+    // formData.append("image", file);
+    // formData.append("profile", JSON.stringify(profile || {}));
+    // fetch(SERVER + "/image", { method: "POST", body: formData });
+  });
+
+  /*** ----- Teaser ----- ***/
+
+  function showTeaserOnce() {
+    try {
+      if (global.localStorage.getItem(STATE_KEY)) return;
+    } catch (e) {
+      // als localStorage niet mag, gewoon tonen
+    }
+    setTimeout(function () {
+      teaser.classList.add("show");
+    }, 2500);
+  }
+
+  /*** ----- Event listeners ----- ***/
+
+  launcher.addEventListener("click", openChat);
+  closeBtn.addEventListener("click", closeChat);
+
+  sendBtn.addEventListener("click", handleSend);
+
+  inputEl.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  });
+
+  uploadBtn.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      uploadInput && uploadInput.click();
+    }
+  });
+
+  /*** ----- Init ----- ***/
+  showTeaserOnce();
 })(window);
