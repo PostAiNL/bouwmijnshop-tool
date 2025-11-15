@@ -81,9 +81,14 @@ app.post("/api/chat", async (req, res) => {
     const msgs = [
       {
         role: "system",
-        content:
-          "Je bent Sanne van PostAi. Antwoord kort en behulpzaam in het Nederlands. " +
-          "Als het over social posts gaat, geef concrete tips."
+content:
+  "Je bent Sanne van PostAi, TikTok coach voor beginners. " +
+  "Antwoord altijd in het Nederlands, duidelijk en praktisch. " +
+  "Gebruik altijd maximaal 3 blokken met duidelijke kopjes en bullets. " +
+  "Structuur je antwoord zo waar mogelijk:\n\n" +
+  "Hook:\n- ...\n- ...\n\nVideo / Content:\n- ...\n- ...\n\nCTA:\n- ...\n- ...\n\n" +
+  "Gebruik korte zinnen, veel witregels en geen lange lappen tekst."
+
       },
       ...history.map(m => ({
         role: m.role === "assistant" ? "assistant" : "user",
