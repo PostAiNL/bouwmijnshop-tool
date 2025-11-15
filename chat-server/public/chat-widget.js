@@ -4,7 +4,7 @@
 
   // ---------- Config ----------
   var SERVER = global.BMS_CHAT_SERVER || "";
-  var CSS_URL = global.BMS_CHAT_CSS_URL || "/chat-widget.css?v=6";
+  var CSS_URL = global.BMS_CHAT_CSS_URL || "/chat-widget.css?v=7";
 
   if (!SERVER) {
     console.warn(
@@ -140,23 +140,55 @@
     bodyEl.scrollTop = bodyEl.scrollHeight;
   }
 
-  // ---------- Markdown helper voor bot-antwoorden ----------
-  function renderMarkdownToHtml(text) {
+  // ---------- Rich text formatter voor bot-antwoorden ----------
+
+  function formatBotText(text) {
     if (!text) return "";
 
-    // basis-escaping
+    // 1) Escape HTML (veilig)
     var safe = String(text)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    // **vet**
+    // 2) Bold: **tekst**
     safe = safe.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 
-    // nieuwe regels → <br>
-    safe = safe.replace(/\n/g, "<br>");
+    // 3) Headings zoals "Hook:" / "Body:" / "CTA:"
+    safe = safe.replace(
+      /^(Hook|Body|CTA|Advies\s*\d?|Tip\s*\d?)\s*:/gim,
+      '<span class="bms-heading">$1:</span>'
+    );
 
-    return safe;
+    // 4) Bullet lists: lijnen die beginnen met "- " of "• "
+    var lines = safe.split(/\r?\n/);
+    var out = [];
+    var inList = false;
+
+    lines.forEach(function (line) {
+      if (/^\s*[-•]\s+/.test(line)) {
+        if (!inList) {
+          out.push("<ul class=\"bms-list\">");
+          inList = true;
+        }
+        out.push(
+          "<li>" + line.replace(/^\s*[-•]\s+/, "") + "</li>"
+        );
+      } else {
+        if (inList) {
+          out.push("</ul>");
+          inList = false;
+        }
+        if (line.trim() === "") {
+          out.push("<br>");
+        } else {
+          out.push("<p>" + line + "</p>");
+        }
+      }
+    });
+    if (inList) out.push("</ul>");
+
+    return out.join("");
   }
 
   function addMessage(text, sender, opts) {
@@ -172,8 +204,10 @@
     bubble.className = "bubble";
 
     if (sender === "bot") {
-      bubble.innerHTML = renderMarkdownToHtml(text);
+      // Premium: nette opmaak voor AI-antwoord
+      bubble.innerHTML = formatBotText(text);
     } else {
+      // User altijd plain text (veilig)
       bubble.textContent = text;
     }
 
@@ -360,14 +394,6 @@
     if (t.indexOf("hook") !== -1) return "hooks";
     if (t.indexOf("weekplan") !== -1 || t.indexOf("week planning") !== -1)
       return "weekplan";
-    if (
-      t.indexOf("analyseer") !== -1 ||
-      t.indexOf("analyseren") !== -1 ||
-      t.indexOf("review") !== -1 ||
-      t.indexOf("feedback") !== -1
-    )
-      return "analysis";
-    if (t.indexOf("challenge") !== -1) return "challenge";
     return null;
   }
 
@@ -397,38 +423,17 @@
         base[2],
       ];
     }
-
-    if (type === "analysis") {
-      return [
-        "Maak verbeterde hooks op basis van deze analyse",
-        "Schrijf een nieuw script dat dit verbetert",
-        base[0],
-        base[2],
-      ];
-    }
-
-    if (type === "challenge") {
-      return [
-        "Maak een 7-dagen TikTok-challenge van dit idee",
-        "Geef 5 video-ideeën voor deze challenge",
-        base[0],
-        base[2],
-      ];
-    }
-
     return base;
   }
 
   function sendToPostAi(userMessage) {
-    // bouw payload voor je backend
     var payload = {
       message: userMessage,
       profile: profile || null,
-      history: [], // later kun je hier echte history in stoppen
+      history: [],
       meta: { mode: "default" },
     };
 
-    // als er geen SERVER is ingesteld → val terug op demo
     if (!SERVER) {
       return new Promise(function (resolve) {
         setTimeout(function () {
@@ -441,7 +446,6 @@
       });
     }
 
-    // echte call naar jouw Node-server
     return fetch(SERVER + "/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -525,12 +529,6 @@
       "bot",
       { feedback: false }
     );
-
-    // Koppelen met backend:
-    // var formData = new FormData();
-    // formData.append("image", file);
-    // formData.append("profile", JSON.stringify(profile || {}));
-    // fetch(SERVER + "/image", { method: "POST", body: formData });
   });
 
   // ---------- Teaser ----------
