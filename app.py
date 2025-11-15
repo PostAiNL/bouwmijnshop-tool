@@ -152,11 +152,13 @@ def build_tiktok_auth_url() -> str:
 
 # --------------------------- Licentie / PRO status ----------------------------
 def _read_license() -> Tuple[str, bool]:
+    """Lees licentie uit bestand. Geeft (key, is_pro). 'DEMO' is expliciet geen PRO."""
     try:
         if LICENSE_FILE.exists():
             key = LICENSE_FILE.read_text(encoding="utf-8").strip()
-            if key and key.upper() != "DEMO":
-                return key, True
+            if key:
+                # 'DEMO' telt expliciet als géén PRO
+                return key, key.upper() != "DEMO"
     except Exception:
         pass
     return "", False
@@ -165,6 +167,8 @@ def _read_license() -> Tuple[str, bool]:
 def _write_license(key: str) -> bool:
     try:
         LICENSE_FILE.write_text(key.strip(), encoding="utf-8")
+        st.session_state["LICENSE_KEY"] = key.strip()
+        st.session_state["IS_PRO"] = (key.strip().upper() != "DEMO")
         return True
     except Exception:
         return False
@@ -174,21 +178,41 @@ def _remove_license() -> bool:
     try:
         if LICENSE_FILE.exists():
             LICENSE_FILE.unlink()
-            return True
+        st.session_state["LICENSE_KEY"] = ""
+        st.session_state["IS_PRO"] = False
+        return True
     except Exception:
         return False
 
 
-ENV_LICENSE = getconf("LICENSE_KEY", "").strip()
-if ENV_LICENSE:
-    LICENSE_KEY = ENV_LICENSE
-    IS_PRO = True
-else:
-    LICENSE_KEY, IS_PRO = _read_license()
+def _init_license_state() -> None:
+    """Init PRO/DEMO status één keer per sessie."""
+    if "IS_PRO" in st.session_state and "LICENSE_KEY" in st.session_state:
+        return  # al gedaan
+
+    env_key = getconf("LICENSE_KEY", "").strip()
+    if env_key:
+        # Licentie via secrets/env → altijd PRO
+        st.session_state["LICENSE_KEY"] = env_key
+        st.session_state["IS_PRO"] = True
+    else:
+        file_key, is_pro_flag = _read_license()
+        st.session_state["LICENSE_KEY"] = file_key
+        st.session_state["IS_PRO"] = is_pro_flag
+
+
+# ---- aanroepen bij start van de app + helpers ----
+_init_license_state()
+
+def is_pro() -> bool:
+    return bool(st.session_state.get("IS_PRO", False))
+
+def license_key() -> str:
+    return st.session_state.get("LICENSE_KEY", "")
 
 # ============================== Streamlit Setup ===============================
 st.set_page_config(
-    page_title=f"{APP_NAME} — {'PRO' if IS_PRO else 'DEMO'}",
+    page_title=f"{APP_NAME} — {'PRO' if is_pro() else 'DEMO'}",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -685,7 +709,7 @@ label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p {
     # st.markdown(f"<div class='pro-badge'>{'PRO' if pro else 'DEMO'}</div>", unsafe_allow_html=True)
 
 
-_inject_css(THEME_COLOR, IS_PRO)
+_inject_css(THEME_COLOR, is_pro())
 import streamlit.components.v1 as components  # als dit al ergens staat, hoef je 'm niet nog eens te zetten
 
 # Zorgt dat de sidebar bij laden altijd open staat
@@ -1124,7 +1148,7 @@ with c2:
 <div class="app-header">
   <div class="app-title-row">
     <h1><span class="accent">PostAi</span> — TikTok Growth Agent</h1>
-    <span class="app-pill">{'PRO' if IS_PRO else 'DEMO'}</span>
+        <span class="app-pill">{'PRO' if is_pro() else 'DEMO'}</span>
   </div>
   <p class="app-subtitle">Slimmer groeien met TikTok-data. Dare to know.</p>
 </div>
@@ -1198,7 +1222,7 @@ st.markdown(
         padding-top: 0 !important;
     }
 
-    /* --- PRO pill --- */
+    /* --- PRO / DEMO pill --- */
     .sidebar-pro-pill {
         display: inline-flex;
         align-items: center;
@@ -1302,15 +1326,25 @@ st.markdown(
 )
 
 with st.sidebar:
-    # PRO-status
-    st.markdown(
-        "<div class='sidebar-pro-pill'>✅ PRO geactiveerd</div>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "<div class='sidebar-pro-sub'>Alle functies beschikbaar.</div>",
-        unsafe_allow_html=True,
-    )
+    # PRO / DEMO-status
+    if is_pro():
+        st.markdown(
+            "<div class='sidebar-pro-pill'>✅ PRO geactiveerd</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<div class='sidebar-pro-sub'>Alle functies beschikbaar.</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            "<div class='sidebar-pro-pill'>🧪 DEMO-modus</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<div class='sidebar-pro-sub'>Je draait nu in demo. Upgrade voor alle PRO-functies.</div>",
+            unsafe_allow_html=True,
+        )
 
     # Koppel TikTok
     st.markdown("<div class='sidebar-section'>", unsafe_allow_html=True)
@@ -1368,6 +1402,7 @@ with st.sidebar:
     up = st.file_uploader("Drag and drop hier", type=["csv", "xlsx"])
     # (je upload-logica hier…)
     st.markdown("</div>", unsafe_allow_html=True)
+
 # ============================= Onboarding bar ================================
 def _onboarding_bar(step: int):
     """Eenvoudige, rustige voortgangsbalk voor starters (stap 0–5)."""
@@ -2400,11 +2435,11 @@ with tab_assist:
                 "Voeg een `OPENAI_API_KEY` toe in `st.secrets` of als environment variable om de Coach te activeren."
             )
         else:
-            if not IS_PRO:
+            if not is_pro():
                 st.markdown(
                     """
                     <div style="font-size:0.85rem;color:#6b7280;margin-bottom:0.35rem;">
-                      De volledige 🤖 Coach staat klaar in de tab <strong>‘🤖 Coach’</strong>, 
+                      De volledige 🧠 Coach staat klaar in de tab <strong>‘🤖 Coach’</strong>,
                       maar is onderdeel van PRO. In deze DEMO kun je al zien wat de app met je data doet.
                     </div>
                     """,
@@ -2430,7 +2465,7 @@ with tab_assist:
     with st.container(border=True):
         st.markdown("#### ⏳ Wachtrij (PRO)")
 
-        if not IS_PRO:
+        if not is_pro():
             locked_section("Wachtrij", pattern="queue")
         else:
             q = _read_queue()
@@ -2531,7 +2566,7 @@ with tab_coach:
         )
     else:
         # PRO-gate: volledige coach alleen voor PRO
-        if not IS_PRO:
+        if not is_pro():
             st.markdown("---")
             locked_section("Volledige coach", pattern="coach")
         else:
@@ -2839,7 +2874,7 @@ with tab_analyse:
 
     # ================== Blok 3: Wat werkt nu? (trends) =================
     with st.expander("📈 Wat werkt nu? (trends, PRO)", expanded=False):
-        if not IS_PRO:
+        if not is_pro():
             locked_section("Trends", pattern="trends")
         else:
             st.caption(
@@ -2861,7 +2896,7 @@ with tab_analyse:
 
     # ================== Blok 4: Vergelijk perioden (PRO) ==============
     with st.expander("🔁 Vergelijk perioden (A vs. B, PRO)", expanded=False):
-        if not IS_PRO:
+        if not is_pro():
             locked_section("Vergelijk perioden", pattern="compare")
         else:
             st.caption(
@@ -2997,7 +3032,7 @@ with tab_strategy:
 
     # ===================== Blok 2: A/B-test planner (PRO) =====================
     with st.expander("🔁 A/B-test planner (PRO)", expanded=False):
-        if not IS_PRO:
+        if not is_pro():
             locked_section("A/B-test planner", pattern="generator")
         else:
             if d.empty:
@@ -3107,7 +3142,7 @@ with tab_strategy:
         if not _has_openai():
             st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om de AI Coach te gebruiken.")
         else:
-            if not IS_PRO:
+            if not is_pro():
                 locked_section("AI Coach — persoonlijk advies", pattern="coach")
             else:
                 has_data = not d.empty
@@ -3391,7 +3426,7 @@ with tab_strategy:
         if not _has_openai():
             st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om de generator te gebruiken.")
         else:
-            if not IS_PRO:
+            if not is_pro():
                 locked_section("Caption & Hook generator", pattern="generator")
             else:
                 if d.empty:
@@ -3432,7 +3467,7 @@ with tab_strategy:
         if not _has_openai():
             st.info("Voeg je **OPENAI_API_KEY** toe in `st.secrets` om te chatten.")
         else:
-            if not IS_PRO:
+            if not is_pro():
                 locked_section("Chat", pattern="chat")
             else:
                 if d.empty:
@@ -3460,148 +3495,11 @@ with tab_strategy:
 
     st.markdown("---")
 
-# -------------------------------- STRATEGIE -----------------------------------
-with tab_strategy:
-    st.subheader("🎯 Strategie — makkelijk testen")
-
-    base = normalize_per_post(df_raw)
-    d = add_kpis(base) if not base.empty else pd.DataFrame()
-
-    # ===================== Blok 1: Ideeën & testen ============================
-    st.markdown("### 🧪 Ideeën & testen")
-
-    # Ideeëngenerator (gratis)
-    with st.expander("💡 Ideeëngenerator (gratis)", expanded=False):
-        topic = st.text_input(
-            "Onderwerp of thema",
-            placeholder="Bijv. manipulatie, angst, liefde…",
-            help="Waar gaat je video over?",
-            key="topic_idas",
-        )
-        if topic:
-            st.caption(
-                "We geven 3 simpele video-ideeën die je direct kunt opnemen. "
-                "Pas ze aan naar jouw niche."
-            )
-            for i in range(1, 4):
-                st.markdown(f"**Idee {i}** — #{topic}")
-                cap = f"{topic}. Volg @Darkestpsycho voor meer dark psych facts."
-                tags = "#darkfacts #psychology #creepy #mindblown #tiktoknl"
-                prompt = (
-                    f"Korte 9:16 video over **{topic}**; donkere stijl; 5–8s; "
-                    "1) hook shockfact 2) 2–3 beats 3) CTA 'Volg @Darkestpsycho'."
-                )
-                st.code(cap, language="text")
-                st.code(tags, language="text")
-                st.code(prompt, language="text")
-                st.divider()
-
-    # ===================== Blok 2: A/B-test planner ===========================
-    with st.expander("🔁 A/B-test planner (PRO)", expanded=False):
-        if not IS_PRO:
-            locked_section("A/B-test planner", pattern="generator")
-        else:
-            if d.empty:
-                st.info("Upload een CSV/XLSX of gebruik de demo-data om te plannen.")
-            else:
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    hook_a = st.text_input(
-                        "Hook A (eerste zin)",
-                        value="Wat bijna niemand weet…",
-                        help="De allereerste zin. Kort en prikkelend (8–12 woorden).",
-                    )
-                    tags_a = st.text_input(
-                        "Hashtags A",
-                        value="#darkfacts #psychology #tiktoknl",
-                        help="Gebruik max. 3 hashtags. Houd ze relevant.",
-                    )
-                    hour_a = st.number_input(
-                        "Uur A",
-                        min_value=0,
-                        max_value=23,
-                        value=19,
-                        key="hourA",
-                        help="Het uur waarop je wilt posten (0–23).",
-                    )
-
-                with col2:
-                    hook_b = st.text_input(
-                        "Hook B",
-                        value="Dit klinkt raar, maar…",
-                        help="Alternatieve eerste zin.",
-                    )
-                    tags_b = st.text_input(
-                        "Hashtags B",
-                        value="#viral #mindblown #fyp",
-                        help="Alternatieve hashtagset.",
-                    )
-                    hour_b = st.number_input(
-                        "Uur B",
-                        min_value=0,
-                        max_value=23,
-                        value=21,
-                        key="hourB",
-                        help="Alternatief uur.",
-                    )
-
-                def pvs(hook, tags, hr):
-                    base_vir = float(
-                        d["Virality"].tail(50).mean(skipna=True)
-                    ) if "Virality" in d and not d["Virality"].empty else 50
-                    hook_len = len(hook.split())
-                    n_tags = len([t for t in tags.split() if t.startswith("#")])
-                    hook_bonus = np.clip(hook_len * 2.2, 0, 22)
-                    tags_bonus = np.clip(n_tags * 3.0, 0, 18)
-                    hr_bonus = 22 if hr in _best_hours(d, n=3) else 8
-                    return int(
-                        np.clip(
-                            base_vir * 0.3 + hook_bonus + tags_bonus + hr_bonus,
-                            0,
-                            100,
-                        )
-                    )
-
-                rows = []
-                for label, hook, tags, hr in [
-                    ("A", hook_a, tags_a, int(hour_a)),
-                    ("B", hook_b, tags_b, int(hour_b)),
-                ]:
-                    rows.append([label, hook, tags, hr, pvs(hook, tags, hr)])
-
-                combo = pd.DataFrame(
-                    rows,
-                    columns=[
-                        "Variant",
-                        "Hook (tekst)",
-                        "Hashtag-mix",
-                        "Uur",
-                        "PVS",
-                    ],
-                )
-
-                st.dataframe(combo, use_container_width=True, hide_index=True)
-
-                st.markdown("### In wachtrij zetten")
-                pick = st.selectbox(
-                    "Welke variant toevoegen?",
-                    ["A", "B"],
-                    help="Kies de versie die je wilt inplannen.",
-                )
-
-                if st.button(tr("add_queue")):
-                    row = combo.loc[0 if pick == "A" else 1]
-                    queue_post(row["Hook (tekst)"], row["Hashtag-mix"], int(row["Uur"]))
-                    st.success("Toegevoegd aan wachtrij.")
-
-    st.markdown("---")
-
     # ===================== Blok 3: Playbook & Plan (PRO) ======================
     st.markdown("### 📅 Playbook & 7-dagen plan (PRO)")
 
     with st.expander("📅 Playbook & exports openen", expanded=False):
-        if not IS_PRO:
+        if not is_pro():
             locked_section("Playbook & Exports", pattern="exports")
         else:
             if d.empty:
@@ -3841,7 +3739,7 @@ with tab_settings:
             "Maak PostAi herkenbaar voor jouw merk. We gebruiken deze stijl in exports en de interface."
         )
 
-        if not IS_PRO:
+        if not is_pro():
             locked_section("Branding", pattern="branding")
         else:
             b1, b2 = st.columns(2)
@@ -3888,58 +3786,64 @@ with tab_settings:
     st.markdown("---")
 
     # =========================== Card: Licentie ==============================
-    with st.container(border=True):
-        st.markdown("#### 🔑 Licentie & PRO")
-        st.caption("Bekijk of je PRO draait en beheer hier je licentiesleutel.")
+with st.container(border=True):
+    st.markdown("#### 🔑 Licentie & PRO")
+    st.caption("Bekijk of je PRO draait en beheer hier je licentiesleutel.")
 
-        if IS_PRO:
-            st.success("Je draait momenteel **PRO**. Bedankt voor je vertrouwen! 🎉")
+    if is_pro():
+        st.success("Je draait momenteel **PRO**. Bedankt voor je vertrouwen! 🎉")
 
-            col_l, col_r = st.columns([2, 1])
-            with col_l:
-                st.caption("Je hebt toegang tot alle PRO-functies (coach, playbook, exports, branding).")
-            with col_r:
-                if st.button(
-                    "Deactiveer PRO",
-                    key="deactivate_license",
-                    use_container_width=True,
-                    help="Verwijdert de huidige licentie van dit apparaat.",
-                ):
-                    if _remove_license():
-                        st.success("Licentie verwijderd. Herlaad de pagina.")
+        col_l, col_r = st.columns([2, 1])
+        with col_l:
+            st.caption("Je hebt toegang tot alle PRO-functies (coach, playbook, exports, branding).")
+        with col_r:
+            if st.button(
+                "Deactiveer PRO",
+                key="deactivate_license",
+                use_container_width=True,
+                help="Verwijdert de huidige licentie van dit apparaat.",
+            ):
+                ok = _remove_license()
+                if ok:
+                    st.toast("Licentie verwijderd. PRO is gedeactiveerd.")
+                else:
+                    st.toast("Kon licentie niet verwijderen, maar instellingen worden opnieuw geladen…")
+                st.experimental_rerun()
+    else:
+        key = st.text_input(
+            "Licentiesleutel",
+            value=license_key(),
+            placeholder="Voer hier je PRO-sleutel in",
+            help="Je ontvangt deze sleutel na aankoop van PRO.",
+        )
+
+        col_l, col_r = st.columns([2, 1])
+        with col_l:
+            if st.button(
+                "🔓 Activeer PRO",
+                use_container_width=True,
+                key="activate_license",
+            ):
+                k = key.strip()
+                if not k:
+                    st.warning("Vul eerst een geldige sleutel in.")
+                else:
+                    ok = _write_license(k)
+                    if ok:
+                        st.toast("Licentie opgeslagen. PRO wordt nu geactiveerd…")
+                        st.experimental_rerun()
                     else:
-                        st.error("Kon licentie niet verwijderen.")
-        else:
-            key = st.text_input(
-                "Licentiesleutel",
-                placeholder="Voer hier je PRO-sleutel in",
-                help="Je ontvangt deze sleutel na aankoop van PRO.",
+                        st.error("Kon licentie niet opslaan. Controleer je sleutel.")
+        with col_r:
+            st.link_button(
+                "✨ Koop PRO",
+                LEMON_CHECKOUT_URL,
+                use_container_width=True,
             )
 
-            col_l, col_r = st.columns([2, 1])
-            with col_l:
-                if st.button(
-                    "🔓 Activeer PRO",
-                    use_container_width=True,
-                    key="activate_license",
-                ):
-                    if not key.strip():
-                        st.warning("Vul eerst een geldige sleutel in.")
-                    else:
-                        if _write_license(key.strip()):
-                            st.success("Licentie opgeslagen. Herlaad de pagina.")
-                        else:
-                            st.error("Kon licentie niet opslaan. Controleer je sleutel.")
-            with col_r:
-                st.link_button(
-                    "✨ Koop PRO",
-                    LEMON_CHECKOUT_URL,
-                    use_container_width=True,
-                )
-
-            st.caption(
-                "Nog geen licentie? Met PRO krijg je o.a. toegang tot de volledige coach, playbook en branding."
-            )
+        st.caption(
+            "Nog geen licentie? Met PRO krijg je o.a. toegang tot de volledige coach, playbook en branding."
+        )
 
     st.markdown("---")
 
