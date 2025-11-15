@@ -3786,64 +3786,69 @@ with tab_settings:
     st.markdown("---")
 
     # =========================== Card: Licentie ==============================
-with st.container(border=True):
-    st.markdown("#### 🔑 Licentie & PRO")
-    st.caption("Bekijk of je PRO draait en beheer hier je licentiesleutel.")
+    with st.container(border=True):
+        st.markdown("#### 🔑 Licentie & PRO")
+        st.caption("Bekijk of je PRO draait en beheer hier je licentiesleutel.")
 
-    if is_pro():
-        st.success("Je draait momenteel **PRO**. Bedankt voor je vertrouwen! 🎉")
+        if is_pro():
+            st.success("Je draait momenteel **PRO**. Bedankt voor je vertrouwen! 🎉")
 
-        col_l, col_r = st.columns([2, 1])
-        with col_l:
-            st.caption("Je hebt toegang tot alle PRO-functies (coach, playbook, exports, branding).")
-        with col_r:
-            if st.button(
-                "Deactiveer PRO",
-                key="deactivate_license",
-                use_container_width=True,
-                help="Verwijdert de huidige licentie van dit apparaat.",
-            ):
-                ok = _remove_license()
-                if ok:
-                    st.toast("Licentie verwijderd. PRO is gedeactiveerd.")
-                else:
-                    st.toast("Kon licentie niet verwijderen, maar instellingen worden opnieuw geladen…")
-                st.experimental_rerun()
-    else:
-        key = st.text_input(
-            "Licentiesleutel",
-            value=license_key(),
-            placeholder="Voer hier je PRO-sleutel in",
-            help="Je ontvangt deze sleutel na aankoop van PRO.",
-        )
-
-        col_l, col_r = st.columns([2, 1])
-        with col_l:
-            if st.button(
-                "🔓 Activeer PRO",
-                use_container_width=True,
-                key="activate_license",
-            ):
-                k = key.strip()
-                if not k:
-                    st.warning("Vul eerst een geldige sleutel in.")
-                else:
-                    ok = _write_license(k)
+            col_l, col_r = st.columns([2, 1])
+            with col_l:
+                st.caption(
+                    "Je hebt toegang tot alle PRO-functies (coach, playbook, exports, branding)."
+                )
+            with col_r:
+                if st.button(
+                    "Deactiveer PRO",
+                    key="deactivate_license",
+                    use_container_width=True,
+                    help="Verwijdert de huidige licentie van dit apparaat.",
+                ):
+                    ok = _remove_license()
                     if ok:
-                        st.toast("Licentie opgeslagen. PRO wordt nu geactiveerd…")
-                        st.experimental_rerun()
+                        st.toast("Licentie verwijderd. PRO is gedeactiveerd.")
                     else:
-                        st.error("Kon licentie niet opslaan. Controleer je sleutel.")
-        with col_r:
-            st.link_button(
-                "✨ Koop PRO",
-                LEMON_CHECKOUT_URL,
-                use_container_width=True,
+                        st.toast(
+                            "Kon licentie niet verwijderen, maar instellingen worden opnieuw geladen…"
+                        )
+                    st.rerun()
+
+        else:
+            key = st.text_input(
+                "Licentiesleutel",
+                value=license_key(),
+                placeholder="Voer hier je PRO-sleutel in",
+                help="Je ontvangt deze sleutel na aankoop van PRO.",
             )
 
-        st.caption(
-            "Nog geen licentie? Met PRO krijg je o.a. toegang tot de volledige coach, playbook en branding."
-        )
+            col_l, col_r = st.columns([2, 1])
+            with col_l:
+                if st.button(
+                    "🔓 Activeer PRO",
+                    use_container_width=True,
+                    key="activate_license",
+                ):
+                    k = key.strip()
+                    if not k:
+                        st.warning("Vul eerst een geldige sleutel in.")
+                    else:
+                        ok = _write_license(k)
+                        if ok:
+                            st.toast("Licentie opgeslagen. PRO wordt nu geactiveerd…")
+                            st.rerun()
+                        else:
+                            st.error("Kon licentie niet opslaan. Controleer je sleutel.")
+            with col_r:
+                st.link_button(
+                    "✨ Koop PRO",
+                    LEMON_CHECKOUT_URL,
+                    use_container_width=True,
+                )
+
+            st.caption(
+                "Nog geen licentie? Met PRO krijg je o.a. toegang tot de volledige coach, playbook en branding."
+            )
 
     st.markdown("---")
 
