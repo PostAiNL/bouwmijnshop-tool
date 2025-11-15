@@ -2,9 +2,9 @@
 (function (global) {
   "use strict";
 
-  /*** ------------ Config ------------ ***/
+  // ---------- Config ----------
   var SERVER = global.BMS_CHAT_SERVER || "";
-  var CSS_URL = global.BMS_CHAT_CSS_URL || "/chat-widget.css?v=3";
+  var CSS_URL = global.BMS_CHAT_CSS_URL || "/chat-widget.css?v=4";
 
   if (!SERVER) {
     console.warn(
@@ -12,7 +12,7 @@
     );
   }
 
-  /*** ------------ Safe document (escape uit iframes) ------------ ***/
+  // ---------- Safe document ----------
   var DOC = (function () {
     try {
       return global.top.document;
@@ -21,7 +21,7 @@
     }
   })();
 
-  /*** ------------ Idempotent mount ------------ ***/
+  // ---------- Idempotent ----------
   if (
     DOC.getElementById("bms-chat-launcher") ||
     DOC.getElementById("bms-chat")
@@ -29,7 +29,7 @@
     return;
   }
 
-  /*** ------------ CSS injecteren ------------ ***/
+  // ---------- CSS injecteren ----------
   (function ensureCss() {
     var head = DOC.head || DOC.getElementsByTagName("head")[0];
     if (!head) return;
@@ -43,7 +43,7 @@
     head.appendChild(link);
   })();
 
-  /*** ------------ DOM opbouwen ------------ ***/
+  // ---------- DOM opbouwen ----------
 
   var launcher = DOC.createElement("div");
   launcher.id = "bms-chat-launcher";
@@ -82,8 +82,7 @@
   DOC.body.appendChild(chat);
   DOC.body.appendChild(teaser);
 
-  /*** ------------ JS logica (onboarding, profiel, AI, etc.) ------------ ***/
-
+  // ---------- State ----------
   var STORAGE_KEY = "postai_profile_v1";
   var STATE_KEY = "postai_returning_v1";
 
@@ -116,7 +115,7 @@
     } catch (e) {}
   }
 
-  /*** ----- UI helpers ----- ***/
+  // ---------- UI helpers ----------
 
   function openChat() {
     chat.style.display = "block";
@@ -168,7 +167,15 @@
     }
     wrapper.appendChild(time);
 
-    if (sender === "bot" && opts.feedback !== false) {
+    // Feedback alleen bij echte AI-answers (geen onboarding, geen korte regels)
+    var shouldFeedback =
+      sender === "bot" &&
+      opts.feedback !== false &&
+      onboardingStep === 0 &&
+      typeof text === "string" &&
+      text.length > 80;
+
+    if (shouldFeedback) {
       var fb = DOC.createElement("div");
       fb.className = "bms-feedback";
       var label = DOC.createElement("span");
@@ -213,17 +220,18 @@
   }
 
   function handleFeedback(msgId, type) {
-    // hier kun je later feedback naar je backend sturen
+    // later naar backend sturen indien gewenst
     // console.log("Feedback:", msgId, type);
   }
 
-  /*** ----- Onboarding ----- ***/
+  // ---------- Onboarding ----------
 
   function startConversation() {
     if (!profile) {
       addMessage(
         "Hi! Ik ben Sanne, je TikTok coach in PostAi. Ik stel je 3 snelle vragen zodat ik je beter kan helpen. 👇",
-        "bot"
+        "bot",
+        { feedback: false }
       );
       setTimeout(function () {
         askOnboardingQuestion(1);
@@ -298,7 +306,7 @@
     ];
   }
 
-  /*** ----- Typing indicator ----- ***/
+  // ---------- Typing indicator ----------
 
   function showTyping() {
     var id = "typing-" + Date.now();
@@ -308,7 +316,7 @@
 
     var bubble = DOC.createElement("div");
     bubble.className = "bubble typing-dots";
-    bubble.textContent = "Sanne typt";
+    bubble.textContent = " ";
     wrapper.appendChild(bubble);
 
     bodyEl.appendChild(wrapper);
@@ -321,7 +329,7 @@
     if (el && el.parentNode) el.parentNode.removeChild(el);
   }
 
-  /*** ----- AI-koppeling ----- ***/
+  // ---------- AI-koppeling ----------
 
   function guessTypeFromMessage(text) {
     var t = text.toLowerCase();
@@ -361,15 +369,8 @@
   }
 
   function sendToPostAi(userMessage) {
-    // ❗ HIER kun je koppelen met je echte chat-server.
-    // Voor nu een demo-response zodat de widget altijd werkt.
-    //
-    // Voorbeeld (pas endpoint aan):
-    // return fetch(SERVER + "/chat", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ message: userMessage, profile: profile }),
-    // }).then(function (res) { return res.json(); });
+    // ❗ Hier koppel je je echte chat-server.
+    // Voor nu demo-response zodat front-end altijd werkt.
 
     var context = profile
       ? "Product: " +
@@ -380,6 +381,13 @@
         profile.goal +
         "\n"
       : "";
+
+    // Voorbeeld hoe je echte call kunt doen:
+    // return fetch(SERVER + "/chat", {
+    //   method: "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body: JSON.stringify({ message: userMessage, profile: profile }),
+    // }).then(function (res) { return res.json(); });
 
     return new Promise(function (resolve) {
       setTimeout(function () {
@@ -396,7 +404,7 @@
     });
   }
 
-  /*** ----- Input & send ----- ***/
+  // ---------- Input & send ----------
 
   function handleSuggestion(label) {
     inputEl.value = label;
@@ -435,7 +443,7 @@
       });
   }
 
-  /*** ----- File upload (productfoto) ----- ***/
+  // ---------- File upload (productfoto) ----------
 
   uploadBtn.addEventListener("click", function () {
     uploadInput && uploadInput.click();
@@ -451,31 +459,28 @@
       { feedback: false }
     );
 
-    // Koppelen met backend? Bijvoorbeeld:
+    // Koppelen met backend:
     // var formData = new FormData();
     // formData.append("image", file);
     // formData.append("profile", JSON.stringify(profile || {}));
     // fetch(SERVER + "/image", { method: "POST", body: formData });
   });
 
-  /*** ----- Teaser ----- ***/
+  // ---------- Teaser ----------
 
   function showTeaserOnce() {
     try {
       if (global.localStorage.getItem(STATE_KEY)) return;
-    } catch (e) {
-      // als localStorage niet mag, gewoon tonen
-    }
+    } catch (e) {}
     setTimeout(function () {
       teaser.classList.add("show");
     }, 2500);
   }
 
-  /*** ----- Event listeners ----- ***/
+  // ---------- Event listeners ----------
 
   launcher.addEventListener("click", openChat);
   closeBtn.addEventListener("click", closeChat);
-
   sendBtn.addEventListener("click", handleSend);
 
   inputEl.addEventListener("keydown", function (e) {
@@ -492,6 +497,6 @@
     }
   });
 
-  /*** ----- Init ----- ***/
+  // ---------- Init ----------
   showTeaserOnce();
 })(window);
