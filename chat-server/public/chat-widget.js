@@ -4,7 +4,7 @@
 
   // ---------- Config ----------
   var SERVER = global.BMS_CHAT_SERVER || "";
-  var CSS_URL = global.BMS_CHAT_CSS_URL || "/chat-widget.css?v=8";
+  var CSS_URL = global.BMS_CHAT_CSS_URL || "/chat-widget.css?v=10";
 
   if (!SERVER) {
     console.warn(
