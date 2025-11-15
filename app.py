@@ -2219,7 +2219,7 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
               Volg eerst deze stap. Daarna kun je in <strong>Analyse</strong> en 
               <strong>Strategie</strong> verder testen en tweaken.
             </div>
-            <br><br>
+            <br>
             """,
             unsafe_allow_html=True,
         )
@@ -2257,7 +2257,7 @@ else:
 
 _hero_and_nba(d_for_hero, last_sync, bron)
 _kpi_row(d_for_hero, key_ns="top")
-st.divider()
+st.write("")
 
 # ===== Mini-script voor vandaag ===========================================
 # Bepaal beste uur voor mini-script (gebruik dezelfde data als hero)
@@ -2281,6 +2281,7 @@ with st.container(border=True):
         "CTA: Volg voor meer dagelijkse TikTok-inspiratie.",
         language="markdown",
     )
+st.write("")
 
 # ================================ LLM / AI Core ==============================
 def _has_openai() -> bool:
