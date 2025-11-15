@@ -72,6 +72,21 @@
     '  <input type="file" id="bms-upload" accept="image/*" style="display:none" />' +
     '  <button id="bms-upload-btn" title="Upload productfoto">📷</button>' +
     '  <button id="bms-send">Verstuur</button>' +
+    "</div>" +
+    // NIEUW: USP-blok onder het typeveld
+    '<div class="bms-usps">' +
+    '  <div class="bms-usps-item">' +
+    '    <span class="bms-usps-icon">✓</span>' +
+    '    <span>Je data blijft privé</span>' +
+    "  </div>" +
+    '  <div class="bms-usps-item">' +
+    '    <span class="bms-usps-icon">✓</span>' +
+    '    <span>100% AVG-proof</span>' +
+    "  </div>" +
+    '  <div class="bms-usps-item">' +
+    '    <span class="bms-usps-icon">✓</span>' +
+    '    <span>Geen toegang tot je TikTok zonder toestemming</span>' +
+    "  </div>" +
     "</div>";
 
   var teaser = DOC.createElement("div");
@@ -168,12 +183,10 @@
     lines.forEach(function (line) {
       if (/^\s*[-•]\s+/.test(line)) {
         if (!inList) {
-          out.push("<ul class=\"bms-list\">");
+          out.push('<ul class="bms-list">');
           inList = true;
         }
-        out.push(
-          "<li>" + line.replace(/^\s*[-•]\s+/, "") + "</li>"
-        );
+        out.push("<li>" + line.replace(/^\s*[-•]\s+/, "") + "</li>");
       } else {
         if (inList) {
           out.push("</ul>");
@@ -204,10 +217,8 @@
     bubble.className = "bubble";
 
     if (sender === "bot") {
-      // Premium: nette opmaak voor AI-antwoord
       bubble.innerHTML = formatBotText(text);
     } else {
-      // User altijd plain text (veilig)
       bubble.textContent = text;
     }
 
@@ -225,7 +236,6 @@
     }
     wrapper.appendChild(time);
 
-    // Feedback alleen bij echte AI-answers (geen onboarding, geen korte regels)
     var shouldFeedback =
       sender === "bot" &&
       opts.feedback !== false &&
@@ -278,8 +288,7 @@
   }
 
   function handleFeedback(msgId, type) {
-    // later naar backend sturen indien gewenst
-    // console.log("Feedback:", msgId, type);
+    // plaats voor backend logging
   }
 
   // ---------- Onboarding ----------
