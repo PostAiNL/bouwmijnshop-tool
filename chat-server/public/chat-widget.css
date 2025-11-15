@@ -66,10 +66,15 @@
   box-shadow:
     0 26px 80px rgba(15, 23, 42, .18),
     0 0 0 1px rgba(241, 245, 249, .95);
-  overflow: hidden;
   display: none;
   z-index: 2147483647;
+
+  /* NIEUW: flex-layout, zodat body scrollt en input vast blijft */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
+
 
 /* ===== Header ===== */
 
@@ -152,9 +157,9 @@
 /* ===== Body & berichten ===== */
 
 #bms-body {
-  padding: 18px 20px 12px;        /* meer padding */
+  flex: 1;                       /* neemt alle resterende hoogte */
+  padding: 18px 22px 14px;       /* iets meer horizontale ruimte */
   overflow: auto;
-  max-height: 48vh;               /* iets meer ruimte voor content */
   font-size: 14px;
   background: #f8fafc;
 }
@@ -189,16 +194,22 @@
 
 .bms-msg .bubble {
   max-width: 88%;
-  padding: 14px 16px;             /* grotere bubble */
+  padding: 14px 18px;            /* iets breder */
   border-radius: 20px;
   border: 1px solid rgba(15, 23, 42, 0.04);
-  line-height: 1.6;               /* prettiger lezen, zeker met enters */
+  line-height: 1.6;
   position: relative;
   background: #ffffff;
   color: #0f172a;
   font-size: 14px;
   box-shadow: 0 5px 16px rgba(15, 23, 42, .06);
-  white-space: pre-wrap;          /* respecteert enters uit de AI */
+  white-space: pre-wrap;         /* behoud enters uit AI */
+}
+
+.bms-msg .bubble ul,
+.bms-msg .bubble ol {
+  padding-left: 1.4rem;
+  margin: 0.2rem 0 0.4rem;
 }
 
 .bms-msg.user .bubble {
@@ -254,8 +265,8 @@
 .bms-suggestions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;                          /* iets meer ruimte tussen chips */
-  padding: 10px 20px 12px;
+  gap: 8px;
+  padding: 10px 20px 10px;
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
 }
