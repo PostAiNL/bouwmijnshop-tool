@@ -1,4 +1,4 @@
-/* ========= PostAi Chat — Clean SaaS Style ========= */
+/* ========= PostAi Chat — Clean SaaS v2 ========= */
 
 /* Basis transitions & font */
 #bms-chat-launcher,
@@ -57,10 +57,10 @@
   position: fixed;
   right: 18px;
   bottom: 86px;
-  width: 360px;
+  width: 410px;
   max-height: min(72vh, calc(100dvh - 120px));
   background: #ffffff;
-  border-radius: 18px;
+  border-radius: 20px;
   border: 1px solid #e2e8f0;
   box-shadow:
     0 24px 70px rgba(15, 23, 42, .16),
@@ -76,15 +76,15 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
-  background: linear-gradient(135deg, #f9fafb 0%, #f1f5f9 60%, #e5e7eb 100%);
+  padding: 14px 18px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #ffffff;
 }
 
 #bms-chat .avatar {
   width: 32px;
   height: 32px;
-  border-radius: 12px;
+  border-radius: 50%;
   background: #020617;
   color: #f9fafb;
   display: flex;
@@ -92,7 +92,7 @@
   justify-content: center;
   font-weight: 800;
   font-size: 14px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, .35);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, .3);
 }
 
 #bms-chat .titles {
@@ -151,7 +151,7 @@
 /* ===== Body & berichten ===== */
 
 #bms-body {
-  padding: 10px 14px 6px;
+  padding: 16px 18px 10px;
   overflow: auto;
   max-height: 44vh;
   font-size: 14px;
@@ -168,8 +168,18 @@
 }
 
 .bms-msg {
-  margin: 6px 0;
+  margin: 10px 0;
   display: flex;
+  opacity: 0;
+  transform: translateY(4px);
+  animation: bms-fade-in .18s ease-out forwards;
+}
+
+@keyframes bms-fade-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .bms-msg.user {
@@ -178,28 +188,28 @@
 
 .bms-msg .bubble {
   max-width: 85%;
-  padding: 8px 11px;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  line-height: 1.4;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.04);
+  line-height: 1.5;
   position: relative;
   background: #ffffff;
   color: #0f172a;
   font-size: 13px;
-  box-shadow: 0 3px 8px rgba(15, 23, 42, .03);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, .04);
 }
 
 .bms-msg.user .bubble {
   background: #020617;
   border-color: #020617;
   color: #f9fafb;
-  box-shadow: 0 5px 16px rgba(15, 23, 42, .45);
+  box-shadow: 0 5px 18px rgba(15, 23, 42, .5);
 }
 
 .bms-msg .time {
   font-size: 11px;
   color: #94a3b8;
-  margin-top: 2px;
+  margin-top: 4px;
   margin-left: 4px;
 }
 
@@ -225,13 +235,16 @@
 
 /* Typing indicator */
 .typing-dots::after {
-  content: "…";
-  animation: bms-blink 1s infinite;
+  content: "●●●";
+  letter-spacing: 2px;
+  animation: bms-typing 1s infinite;
 }
 
-@keyframes bms-blink {
-  0%, 80%, 100% { opacity: 0; }
-  40% { opacity: 1; }
+@keyframes bms-typing {
+  0% { opacity: .2; }
+  30% { opacity: 1; }
+  60% { opacity: .4; }
+  100% { opacity: .2; }
 }
 
 /* ===== Suggesties / feedback / restart ===== */
@@ -240,7 +253,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 8px 0 4px;
+  padding: 6px 18px 6px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
 }
 
 .bms-suggestions button {
@@ -264,7 +279,7 @@
   color: #64748b;
   display: flex;
   gap: 4px;
-  margin: 4px 0 10px;
+  margin: 6px 0 0;
   align-items: center;
 }
 
@@ -302,15 +317,15 @@
 
 .inp {
   display: flex;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 8px 18px 12px;
   border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
+  background: #ffffff;
 }
 
 #bms-input {
   flex: 1;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: 1px solid #e2e8f0;
   border-radius: 999px;
   font-size: 13px;
@@ -346,7 +361,7 @@
 }
 
 #bms-send {
-  padding: 9px 14px;
+  padding: 8px 14px;
   background: #020617;
   color: #f9fafb;
   font-weight: 600;
@@ -354,12 +369,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 80px;
+  min-width: 78px;
 }
 
 #bms-send:hover {
   background: #020617;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, .35);
+  box-shadow: 0 7px 20px rgba(15, 23, 42, .35);
 }
 
 /* ===== Teaser ===== */
@@ -429,7 +444,7 @@
   }
 }
 
-/* ===== Dark mode (optioneel, via :root.dark) ===== */
+/* ===== Dark mode (via :root.dark) ===== */
 
 :root.dark #bms-chat {
   background: #020617;
@@ -441,7 +456,7 @@
 }
 
 :root.dark #bms-chat .hdr {
-  background: linear-gradient(135deg, #020617 0%, #020617 100%);
+  background: #020617;
   border-bottom-color: rgba(30, 64, 175, .5);
 }
 
@@ -463,6 +478,11 @@
 
 :root.dark #bms-body {
   background: #020617;
+}
+
+:root.dark .bms-suggestions {
+  background: #020617;
+  border-top-color: rgba(30, 64, 175, .6);
 }
 
 :root.dark .bms-suggestions button {
