@@ -3,3 +3,4 @@ __pycache__/
 .streamlit/secrets.toml
 *.key
 auto/*.csv  # laat weg als je CSV’s wél publiek wilt
+.env
