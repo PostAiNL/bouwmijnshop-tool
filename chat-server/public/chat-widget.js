@@ -83,10 +83,6 @@
     '    <span class="bms-usps-icon">✓</span>' +
     '    <span>100% AVG-proof</span>' +
     "  </div>" +
-    '  <div class="bms-usps-item">' +
-    '    <span class="bms-usps-icon">✓</span>' +
-    '    <span>Geen toegang tot je TikTok zonder toestemming</span>' +
-    "  </div>" +
     "</div>";
 
   var teaser = DOC.createElement("div");
