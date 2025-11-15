@@ -140,6 +140,25 @@
     bodyEl.scrollTop = bodyEl.scrollHeight;
   }
 
+  // ---------- Markdown helper voor bot-antwoorden ----------
+  function renderMarkdownToHtml(text) {
+    if (!text) return "";
+
+    // basis-escaping
+    var safe = String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    // **vet**
+    safe = safe.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+    // nieuwe regels → <br>
+    safe = safe.replace(/\n/g, "<br>");
+
+    return safe;
+  }
+
   function addMessage(text, sender, opts) {
     if (sender === void 0) sender = "bot";
     opts = opts || {};
@@ -151,7 +170,12 @@
 
     var bubble = DOC.createElement("div");
     bubble.className = "bubble";
-    bubble.textContent = text;
+
+    if (sender === "bot") {
+      bubble.innerHTML = renderMarkdownToHtml(text);
+    } else {
+      bubble.textContent = text;
+    }
 
     wrapper.appendChild(bubble);
 
@@ -336,6 +360,14 @@
     if (t.indexOf("hook") !== -1) return "hooks";
     if (t.indexOf("weekplan") !== -1 || t.indexOf("week planning") !== -1)
       return "weekplan";
+    if (
+      t.indexOf("analyseer") !== -1 ||
+      t.indexOf("analyseren") !== -1 ||
+      t.indexOf("review") !== -1 ||
+      t.indexOf("feedback") !== -1
+    )
+      return "analysis";
+    if (t.indexOf("challenge") !== -1) return "challenge";
     return null;
   }
 
@@ -365,60 +397,79 @@
         base[2],
       ];
     }
+
+    if (type === "analysis") {
+      return [
+        "Maak verbeterde hooks op basis van deze analyse",
+        "Schrijf een nieuw script dat dit verbetert",
+        base[0],
+        base[2],
+      ];
+    }
+
+    if (type === "challenge") {
+      return [
+        "Maak een 7-dagen TikTok-challenge van dit idee",
+        "Geef 5 video-ideeën voor deze challenge",
+        base[0],
+        base[2],
+      ];
+    }
+
     return base;
   }
 
-function sendToPostAi(userMessage) {
-  // bouw payload voor je backend
-  var payload = {
-    message: userMessage,
-    profile: profile || null,
-    history: [],              // later kun je hier echte history in stoppen
-    meta: { mode: "default" }
-  };
+  function sendToPostAi(userMessage) {
+    // bouw payload voor je backend
+    var payload = {
+      message: userMessage,
+      profile: profile || null,
+      history: [], // later kun je hier echte history in stoppen
+      meta: { mode: "default" },
+    };
 
-  // als er geen SERVER is ingesteld → val terug op demo
-  if (!SERVER) {
-    return new Promise(function (resolve) {
-      setTimeout(function () {
-        resolve({
+    // als er geen SERVER is ingesteld → val terug op demo
+    if (!SERVER) {
+      return new Promise(function (resolve) {
+        setTimeout(function () {
+          resolve({
+            text:
+              "DEMO: ik ben nog niet gekoppeld aan een server. Vraag je developer om BMS_CHAT_SERVER in te stellen.",
+            type: guessTypeFromMessage(userMessage),
+          });
+        }, 600);
+      });
+    }
+
+    // echte call naar jouw Node-server
+    return fetch(SERVER + "/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          throw new Error("Server error " + res.status);
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        return {
           text:
-            "DEMO: ik ben nog niet gekoppeld aan een server. Vraag je developer om BMS_CHAT_SERVER in te stellen.",
+            data.reply ||
+            "Ik kan even geen antwoord geven. Probeer het zo nog een keer.",
+          type: data.type || guessTypeFromMessage(userMessage),
+        };
+      })
+      .catch(function (err) {
+        console.error("[PostAi Chat] Fout bij /api/chat:", err);
+        return {
+          text:
+            "Er gaat iets mis met de verbinding. Probeer het zo nog een keer.",
           type: guessTypeFromMessage(userMessage),
-        });
-      }, 600);
-    });
+        };
+      });
   }
-
-  // echte call naar jouw Node-server
-  return fetch(SERVER + "/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  })
-    .then(function (res) {
-      if (!res.ok) {
-        throw new Error("Server error " + res.status);
-      }
-      return res.json();
-    })
-    .then(function (data) {
-      return {
-        text:
-          data.reply ||
-          "Ik kan even geen antwoord geven. Probeer het zo nog een keer.",
-        type: data.type || guessTypeFromMessage(userMessage),
-      };
-    })
-    .catch(function (err) {
-      console.error("[PostAi Chat] Fout bij /api/chat:", err);
-      return {
-        text:
-          "Er gaat iets mis met de verbinding. Probeer het zo nog een keer.",
-        type: guessTypeFromMessage(userMessage),
-      };
-    });
-}
 
   // ---------- Input & send ----------
 
