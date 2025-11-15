@@ -368,41 +368,57 @@
     return base;
   }
 
-  function sendToPostAi(userMessage) {
-    // ❗ Hier koppel je je echte chat-server.
-    // Voor nu demo-response zodat front-end altijd werkt.
+function sendToPostAi(userMessage) {
+  // bouw payload voor je backend
+  var payload = {
+    message: userMessage,
+    profile: profile || null,
+    history: [],              // later kun je hier echte history in stoppen
+    meta: { mode: "default" }
+  };
 
-    var context = profile
-      ? "Product: " +
-        profile.product +
-        "\nDoelgroep: " +
-        profile.audience +
-        "\nDoel: " +
-        profile.goal +
-        "\n"
-      : "";
-
-    // Voorbeeld hoe je echte call kunt doen:
-    // return fetch(SERVER + "/chat", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ message: userMessage, profile: profile }),
-    // }).then(function (res) { return res.json(); });
-
+  // als er geen SERVER is ingesteld → val terug op demo
+  if (!SERVER) {
     return new Promise(function (resolve) {
       setTimeout(function () {
         resolve({
           text:
-            "Demo-antwoord van Sanne (koppel hier je echte AI-backend):\n\n" +
-            "• Ik heb je profiel en doel gebruikt om dit advies te geven.\n" +
-            "• Context:\n" +
-            context +
-            "\nVervang deze tekst door de response van je server.",
+            "DEMO: ik ben nog niet gekoppeld aan een server. Vraag je developer om BMS_CHAT_SERVER in te stellen.",
           type: guessTypeFromMessage(userMessage),
         });
-      }, 900);
+      }, 600);
     });
   }
+
+  // echte call naar jouw Node-server
+  return fetch(SERVER + "/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+    .then(function (res) {
+      if (!res.ok) {
+        throw new Error("Server error " + res.status);
+      }
+      return res.json();
+    })
+    .then(function (data) {
+      return {
+        text:
+          data.reply ||
+          "Ik kan even geen antwoord geven. Probeer het zo nog een keer.",
+        type: data.type || guessTypeFromMessage(userMessage),
+      };
+    })
+    .catch(function (err) {
+      console.error("[PostAi Chat] Fout bij /api/chat:", err);
+      return {
+        text:
+          "Er gaat iets mis met de verbinding. Probeer het zo nog een keer.",
+        type: guessTypeFromMessage(userMessage),
+      };
+    });
+}
 
   // ---------- Input & send ----------
 
