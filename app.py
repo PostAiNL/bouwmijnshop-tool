@@ -1157,47 +1157,78 @@ with c2:
     )
 
 # ============================ Demo-data helper ================================
-def _activate_demo_data() -> None:
-    """Genereer voorbeelddata en zet deze actief in de sessie."""
-    rng = pd.date_range(end=pd.Timestamp.today().normalize(), periods=35, freq="D")
-    np.random.seed(42)
-    rows = []
-    tags_pool = [
-        "#darkfacts #psychology #fyp",
-        "#love #lovestory #bf #bestie",
-        "#viral #mindblown #creepy #tiktoknl",
-        "#redthoughts #besties #bff #lovehim",
-        "#deepthought #foryou #real #reels",
+def _activate_demo_data():
+    """Maak een nieuwe, random DEMO-set en laad 'm in."""
+    rng = np.random.default_rng(42)  # vaste seed → reproduceerbaar, mag je weghalen
+
+    n = 80  # aantal demo-posts
+    today = pd.Timestamp.today().normalize()
+
+    # Willekeurige datums in laatste 30 dagen
+    days_back = rng.integers(0, 30, size=n)
+    dates = today - pd.to_timedelta(days_back, unit="D")
+
+    # Views grofweg tussen 1k en 200k, scheef verdeeld
+    base_views = rng.lognormal(mean=9.5, sigma=0.6, size=n)
+    views = np.clip(base_views, 1_000, 200_000).astype(int)
+
+    # Likes / comments / shares als simpele ratio’s van views + ruis
+    like_rate   = rng.uniform(0.03, 0.18, size=n)   # 3–18%
+    comm_rate   = rng.uniform(0.002, 0.02, size=n)  # 0.2–2%
+    share_rate  = rng.uniform(0.001, 0.01, size=n)  # 0.1–1%
+
+    likes    = (views * like_rate).astype(int)
+    comments = (views * comm_rate).astype(int)
+    shares   = (views * share_rate).astype(int)
+
+    # Een paar vaste hashtag-setjes
+    hashtag_sets = [
+        "#tiktoknl #fyp #viral",
+        "#darkfacts #psychology #tiktoknl",
+        "#liefde #relatie #tiktoknederland",
+        "#mindset #money #business",
+        "#storytime #nl #voorjou",
     ]
-    for d_ in rng:
-        views = np.random.randint(20_000, 500_000)
-        likes = int(views * np.random.uniform(0.04, 0.18))
-        comments = int(views * np.random.uniform(0.003, 0.02))
-        shares = int(views * np.random.uniform(0.002, 0.015))
-        d_ = d_ + pd.Timedelta(
-            hours=int(
-                np.random.choice(
-                    [12, 14, 16, 18, 20, 0],
-                    p=[0.25, 0.2, 0.18, 0.15, 0.12, 0.1],
-                )
-            )
+    hashtags = [rng.choice(hashtag_sets) for _ in range(n)]
+
+    # Simpele captions
+    raw_hooks = [
+        "Niemand vertelt je dit",
+        "Dit klinkt raar, maar",
+        "De meeste mensen weten niet",
+        "3 dingen die je moet weten",
+        "Als je dit doet, stop dan nu",
+    ]
+    captions = [
+        f"{rng.choice(raw_hooks)}... {rng.integers(10,99)}% doet dit nog steeds."
+        for _ in range(n)
+    ]
+
+    df_demo = pd.DataFrame(
+        dict(
+            caption=captions,
+            views=views,
+            likes=likes,
+            comments=comments,
+            shares=shares,
+            date=dates,
+            videolink="",
+            author="@demo_account",
+            videoid=[str(x) for x in rng.integers(1_000_000_000, 9_999_999_999, size=n)],
+            hashtags=hashtags,
         )
-        rows.append(
-            dict(
-                caption=np.random.choice(tags_pool),
-                views=views,
-                likes=likes,
-                comments=comments,
-                shares=shares,
-                date=d_,
-                videolink="",
-            )
-        )
-    df_demo = pd.DataFrame(rows)
-    df_demo.to_csv(LATEST_FILE, index=False)
+    )
+
+    # Opslaan als 'laatste bestand' + in session_state zetten
+    try:
+        df_demo.to_csv(LATEST_FILE, index=False)
+    except Exception:
+        pass  # als schrijven niet lukt, draait hij in-memory demo
+
     st.session_state["df"] = df_demo
     st.session_state["demo_active"] = True
-    st.toast("✅ Demo-data geactiveerd")
+
+    st.toast("✅ Random demo-data geactiveerd")
 
 # ------------------------------ Sidebar -------------------------------
 SHOW_SETUP_WARNINGS = st.session_state.get("show_setup_warnings", False)
@@ -1382,7 +1413,8 @@ with st.sidebar:
         st.toast(res["msg"] if res["ok"] else f"❌ {res['msg']}")
 
     if st.button("⚡ Demo-data gebruiken"):
-        _activate_demo_data()
+        _activate_demo_data()        # zet df + demo_active in session_state
+        # géén st.rerun() nodig, button triggert al één rerun
 
     if st.session_state.get("df") is not None:
         st.markdown(
@@ -1400,7 +1432,26 @@ with st.sidebar:
     )
 
     up = st.file_uploader("Drag and drop hier", type=["csv", "xlsx"])
-    # (je upload-logica hier…)
+
+    if up is not None:
+        df_up = _smart_read_any(up)
+
+        if df_up is None or df_up.empty:
+            st.warning("Kon geen geldige data vinden in dit bestand.")
+        else:
+            # in memory zetten
+            st.session_state["df"] = df_up
+            st.session_state["demo_active"] = False
+
+            # optioneel: laatste bestand opslaan
+            try:
+                df_up.to_csv(LATEST_FILE, index=False)
+            except Exception:
+                pass
+
+            st.success("Bestand geladen. Dashboard gebruikt nu je eigen data. ✅")
+            # géén st.rerun() hier!
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================= Onboarding bar ================================
@@ -1418,14 +1469,25 @@ def _onboarding_bar(step: int):
     st.progress(frac, text=" ➜ ".join(step_labels))
 
 # =============================== Data load ===================================
+# 1) Eerste keer: laad uit laatste CSV (of lege df)
 if "df" not in st.session_state:
     st.session_state["df"] = _smart_read_any(LATEST_FILE)
+
 df_raw = st.session_state.get("df", pd.DataFrame())
 
+# 2) Eventueel elk uur syncen en daarna altijd df opnieuw ophalen
 if _should_sync_hourly():
     _ = run_manual_fetch()
-    if "df" not in st.session_state or st.session_state["df"].empty:
-        st.session_state["df"] = _smart_read_any(LATEST_FILE); df_raw = st.session_state["df"]
+
+    # Probeer na de sync opnieuw de laatste data te laden
+    new_df = _smart_read_any(LATEST_FILE)
+
+    if new_df is not None and not new_df.empty:
+        st.session_state["df"] = new_df
+        df_raw = new_df
+    else:
+        # fallback: gebruik wat er al in session_state zat
+        df_raw = st.session_state.get("df", pd.DataFrame())
 
 # ================================ KPI helpers ================================
 def _fmt_delta(curr, prev):
@@ -1451,7 +1513,26 @@ def _kpi_row(d: pd.DataFrame, key_ns: str = "top"):
         return
 
     # -------- Periode-selector (compact aan rechterkant) --------
-    period_options = [7, 14, 28]
+    # -------- Periode-selector (compact aan rechterkant) --------
+    base_period_options = [7, 14, 28]
+
+    # Bepaal hoeveel dagen je dataset ongeveer dekt
+    try:
+        dt_all = _to_naive(d["Datum"]).astype("datetime64[ns]")
+        if len(dt_all) >= 2:
+            span_days = int((dt_all.max() - dt_all.min()) / np.timedelta64(1, "D")) + 1
+        else:
+            span_days = len(dt_all)
+    except Exception:
+        span_days = 0
+
+    # Bouw de lijst met opties op basis van de beschikbare dagen
+    period_options = [7]  # 7d altijd toestaan
+    if span_days >= 14:
+        period_options.append(14)
+    if span_days >= 28:
+        period_options.append(28)
+
     kpi_left, kpi_right = st.columns([4, 1])
 
     with kpi_right:
