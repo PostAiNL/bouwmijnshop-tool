@@ -31,19 +31,133 @@ else:
     client = OpenAI(api_key=OPENAI_KEY)
 
 
+# ======================= Premium TikTok coach: Sanne =========================
+
+# Globale prompt voor Sanne
+SYSTEM_PROMPT = """
+Je heet **Sanne** en je bent een premium TikTok growth coach voor Nederlandse ondernemers en starters.
+
+Stijl:
+- Schrijf in het Nederlands, in spreektaal, met je/jij.
+- Kort, concreet en vriendelijk.
+- Geen onnodige tekst; elke zin moet praktisch zijn.
+
+Doelgroep:
+- Starters op TikTok en kleine ondernemers (webshops, coaches, creators).
+- Mensen die vaak weinig vertrouwen/ervaring hebben met video.
+
+Werkwijze:
+1. Als je te weinig info hebt (niche, doel, type content), stel maximaal 3 korte vragen.
+2. Antwoorden hebben deze structuur:
+   - 1–2 zinnen met de kern van je advies.
+   - Daarna maximaal 5 bullets met:
+     - concrete hooks, scripts of postideeën, of
+     - een simpel stappenplan (bijv. 7 dagen).
+   - Eindig vaak met een volgende stap vraag, zoals:
+     - "Wil je dat ik 5 hooks voor jouw niche uitwerk?"
+     - "Wil je een simpel 7-daags contentplan?"
+
+Specifiek voor TikTok:
+- Geef waar mogelijk:
+  - sterke hooks (max. 8–12 woorden),
+  - ideeën voor beeld/B-roll,
+  - voorbeeld caption + CTA.
+- Voor kleine accounts (< 1.000 volgers): focus op basics, consistentie en experimenteren.
+- Voor grotere accounts: focus op optimaliseren (retentie, eerste 3 seconden, A/B hooks).
+
+Formatting:
+- Gebruik vetgedrukte mini-kopjes zoals **Hooks:**, **Contentplan:**, **Volgende stap:**.
+- Geen lange tekstblokken; houd het overzichtelijk.
+
+Geheugen:
+- Als de gebruiker zijn niche of product vertelt, onthoud dit en gebruik het in volgende antwoorden.
+- Als je de niche weet, verwijs er dan expliciet naar ("voor jouw niche [X]...").
+"""
+
+def _update_niche_memory(message: str) -> None:
+    """
+    Heel simpele niche-detectie:
+    - pakt tekst na 'mijn niche is', 'mijn niche:' etc.
+    - slaat dit op in st.session_state['user_niche']
+    """
+    msg = message.lower()
+
+    triggers = [
+        "mijn niche is",
+        "mijn niche:",
+        "ik zit in de niche",
+        "ik verkoop",
+        "ik help",
+    ]
+    for t in triggers:
+        if t in msg:
+            try:
+                after = message[msg.index(t) + len(t):].strip(" .,:;-")
+                # alleen de eerste zin pakken
+                niche = after.split(".")[0].strip()
+                if niche:
+                    st.session_state["user_niche"] = niche
+            except Exception:
+                pass
+            break
+
+
+def _build_user_context() -> str:
+    """Maak een korte context-string over de gebruiker (niche etc.)."""
+    parts = []
+    niche = st.session_state.get("user_niche")
+    if niche:
+        parts.append(f"Niche/product van de gebruiker: {niche}")
+    # hier kun je later nog dingen aan toevoegen (followers, doelen, etc.)
+    return "\n".join(parts)
+
+
 def ai_coach_reply(prompt: str) -> str:
     """Eenvoudige helper: stuur prompt naar OpenAI en krijg coach-antwoord terug."""
     if client is None:
         return "⚠️ Geen OPENAI_API_KEY gevonden."
+
+    # Eventuele nieuwe niche uit dit bericht halen
+    _update_niche_memory(prompt)
+
+    # Gesprekshistorie initialiseren
+    if "coach_chat" not in st.session_state:
+        st.session_state["coach_chat"] = [
+            {"role": "system", "content": SYSTEM_PROMPT}
+        ]
+
+    messages = list(st.session_state["coach_chat"])
+
+    # Context-message toevoegen als we info over de gebruiker hebben
+    user_ctx = _build_user_context()
+    if user_ctx:
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "Bekende informatie over de gebruiker:\n"
+                    f"{user_ctx}\n\n"
+                    "Gebruik dit om je advies beter te laten aansluiten."
+                ),
+            }
+        )
+
+    # Nieuwe user-boodschap
+    messages.append({"role": "user", "content": prompt})
+
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "Je bent een nuchtere TikTok growth coach."},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.3,
+        messages=messages,
+        temperature=0.45,
     )
-    return resp.choices[0].message.content.strip()
+
+    answer = resp.choices[0].message.content.strip()
+
+    # Historie updaten voor volgende vragen
+    st.session_state["coach_chat"].append({"role": "user", "content": prompt})
+    st.session_state["coach_chat"].append({"role": "assistant", "content": answer})
+
+    return answer
 
 
 # --------------------------------- Optioneel ---------------------------------
@@ -52,7 +166,6 @@ try:
     HAS_ALTAIR = True
 except Exception:
     HAS_ALTAIR = False
-
 
 # =============================== Basis / Config ===============================
 APP_NAME = "PostAi — TikTok Growth Agent"
@@ -520,7 +633,7 @@ def _inject_css(theme_color: str, pro: bool):
     vars_block = f"""
 :root {{
   --brand:{theme_color};
-  --ring:#e8edf3; --muted:#4b5563; --head:#f8fafc;
+  --ring:#e8edf3; --muted:#4b5563; --head:#f8fafb;
   --card:#ffffff; --card-border:#eef2f7; --text:#111827; --bg:#ffffff;
   --hover:#f4f8ff; --track:#e5e7eb; --skeleton:#f1f5f9;
 }}
@@ -676,7 +789,7 @@ h1,h2,h3 { letter-spacing:-.01em; color: var(--text); }
   border:1px solid var(--brand) !important;
 }
 
-/* Optionele varianten (als je ze gebruikt) */
+/* Optionele varianten (als je gebruikt) */
 .primary-btn>button {
   background:var(--brand) !important;
   color:#fff !important;
@@ -797,6 +910,167 @@ label, .stCheckbox, .stRadio, .stMetric, .stMarkdown p {
   .kpi-value{ font-size:1.05rem; }
   .stTabs [data-baseweb="tab-list"]{ padding-top:4px; }
   .stTabs [data-baseweb="tab"]{ padding:8px 10px; font-size:13px; }
+}
+
+/* =================== SANNE CHAT PREMIUM =================== */
+
+/* Container voor je chat-widget (gebruik deze class op je outer container) */
+.sanne-chat-wrapper {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 360px;
+  max-height: 70vh;
+  z-index: 999;
+  border-radius: 18px;
+  box-shadow: 0 18px 45px rgba(15,23,42,0.35);
+  background: #ffffff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+/* Header */
+.sanne-chat-header {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #111827, #1f2937);
+  color: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sanne-chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sanne-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, #4ade80, #22c55e, #16a34a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  color: #ecfdf5;
+}
+
+.sanne-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.sanne-status {
+  font-size: 0.78rem;
+  color: #bbf7d0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sanne-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34,197,94,0.25);
+}
+
+/* Body */
+.sanne-chat-body {
+  padding: 12px 14px;
+  background: #f9fafb;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Bubbels */
+.sanne-bubble-user,
+.sanne-bubble-ai {
+  max-width: 90%;
+  padding: 8px 11px;
+  border-radius: 14px;
+  margin-bottom: 8px;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.sanne-bubble-user {
+  margin-left: auto;
+  background: #111827;
+  color: #f9fafb;
+  border-bottom-right-radius: 4px;
+}
+
+.sanne-bubble-ai {
+  margin-right: auto;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-bottom-left-radius: 4px;
+}
+
+/* Footer */
+.sanne-chat-footer {
+  border-top: 1px solid #e5e7eb;
+  padding: 8px 10px;
+  background: #ffffff;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sanne-chat-footer input[type="text"] {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  padding: 8px 12px;
+  font-size: 0.86rem;
+}
+
+.sanne-chat-footer button {
+  border-radius: 999px;
+  padding: 8px 14px;
+  border: none;
+  font-size: 0.86rem;
+  font-weight: 600;
+  background: #22c55e;
+  color: #ecfdf5;
+  cursor: pointer;
+}
+
+/* Typ-indicator */
+.sanne-typing {
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sanne-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #9ca3af;
+  animation: sanne-bounce 1s infinite ease-in-out;
+}
+
+.sanne-typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.sanne-typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes sanne-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: .6; }
+  40% { transform: translateY(-3px); opacity: 1; }
 }
 """
 
@@ -1945,6 +2219,7 @@ def _hero_and_nba(d: pd.DataFrame, last_sync: str, bron: str):
               Volg eerst deze stap. Daarna kun je in <strong>Analyse</strong> en 
               <strong>Strategie</strong> verder testen en tweaken.
             </div>
+            <br><br>
             """,
             unsafe_allow_html=True,
         )
