@@ -433,6 +433,23 @@
     right: 14px;
     bottom: 14px;
   }
+  /* Zorg dat header + body + input in een kolom staan */
+#bms-chat {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Alleen de berichten scrollen, input blijft vast onderin */
+#bms-body {
+  flex: 1 1 auto;   /* neem alle overgebleven ruimte */
+  max-height: none; /* oude max-height uitschakelen */
+  overflow-y: auto; /* hier scrollen */
+}
+
+/* Input-balk heeft vaste hoogte en scrollt niet mee */
+.inp {
+  flex: 0 0 auto;
+}
 
   #bms-chat-teaser {
     right: 78px;
