@@ -7,6 +7,11 @@ from modules import analytics, ui, auth, ai_coach, data_loader
 
 # --- CONFIG ---
 st.set_page_config(page_title="PostAi – TikTok Growth", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
+
+# 1. FORCE SIDEBAR OPEN (Nieuwe fix)
+ui.force_sidebar_open()
+
+# 2. Styling en hacks
 ui.inject_style_and_hacks()
 
 # --- ROUTER (Privacy & Terms) ---
