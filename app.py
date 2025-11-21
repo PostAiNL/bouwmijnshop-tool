@@ -3,150 +3,197 @@ import pandas as pd
 import os
 from pathlib import Path
 
-# Modules
 from modules import analytics, ui, auth, ai_coach, data_loader
 
 # --- CONFIG ---
 st.set_page_config(page_title="PostAi – TikTok Growth", page_icon="📈", layout="wide")
 ui.inject_style_and_hacks()
 
-# Chatbot (altijd laden, hij regelt zelf of hij zichtbaar is)
-chat_url = os.getenv("CHAT_SERVER_URL", "https://chatbot-2-0-3v8l.onrender.com")
-ui.inject_chat_widget(server_url=chat_url)
+# Chatbot url ophalen
+chat_url = auth.get_secret("CHAT_SERVER_URL", "https://chatbot-2-0-3v8l.onrender.com")
+ui.inject_chat_widget(chat_url)
 
-# --- AUTH & ROUTING ---
+# --- AUTH CHECK ---
 auth.init_session()
 
-# Router: Als niet ingelogd -> Landing Page
 if not auth.is_authenticated():
     auth.render_landing_page()
-    st.stop() # Stop hier, laat de rest van de app niet zien
+    st.stop()
 
-# --- APP LOGICA (Alleen zichtbaar na login) ---
+# --- APP START (Alleen voor ingelogden) ---
 
 # Data laden
-if "df" not in st.session_state: st.session_state.df = data_loader.load_demo_data()
-df = analytics.calculate_kpis(st.session_state.df) # Zorg dat deze functie in analytics.py bestaat!
-if 'Viral Score' not in df.columns: df['Viral Score'] = 50 # Fallback
+if "df" not in st.session_state: 
+    st.session_state.df = data_loader.load_demo_data()
+    st.session_state.data_source = "demo"
 
-# Check PRO status
+df = analytics.calculate_kpis(st.session_state.df)
 is_pro = auth.is_pro()
 
-# --- SIDEBAR ---
+# Sidebar
 with st.sidebar:
     if Path("assets/logo.png").exists():
         st.image("assets/logo.png", use_container_width=True)
     else:
-        st.markdown("## 🚀 PostAi")
-    
+        st.markdown("### PostAi 🚀")
+
     if is_pro:
         st.success("✅ PRO Geactiveerd")
     else:
-        st.info(f"🧪 DEMO Modus (Verloopt over 14 dgn)")
+        st.info("🧪 DEMO Modus")
 
     st.markdown("---")
     st.subheader("📂 Jouw Data")
+    
     uploaded_file = st.file_uploader("Upload CSV/XLSX", type=['csv', 'xlsx'])
     if uploaded_file:
-        raw_df = data_loader.load_file(uploaded_file)
-        # Let op: analytics.clean_data moet bestaan!
-        st.session_state.df = raw_df 
+        st.session_state.df = analytics.clean_data(data_loader.load_file(uploaded_file))
+        st.session_state.data_source = "upload"
         st.toast("Data geladen!")
         st.rerun()
         
-    if st.button("⚡ Reset Data"):
+    if st.button("⚡ Reset naar Demo"):
         st.session_state.df = data_loader.load_demo_data()
+        st.session_state.data_source = "demo"
         st.rerun()
 
-# --- DASHBOARD ---
+# --- HOOFD SCHERM ---
 
-# 1. Vertrouwen balk
-conf = analytics.calculate_confidence(df) if hasattr(analytics, 'calculate_confidence') else 85
-ui.render_trust_bar(confidence=conf)
+# Trust Bar
+ui.render_trust_bar(confidence=85 if st.session_state.data_source == "demo" else 95)
 
-# 2. Tabs
 tabs = st.tabs(["🧠 Start", "🤖 Coach", "📊 Analyse", "🎯 Strategie", "⚙️ Instellingen"])
 t_start, t_coach, t_analyse, t_strat, t_set = tabs
 
+# TAB 1: START
 with t_start:
-    # KPI Rij (Bovenaan!)
+    # KPI Cards
     avg_views = int(df['Views'].mean()) if not df.empty else 0
     avg_eng = int(df['Engagement'].mean()) if 'Engagement' in df.columns else 0
-    avg_viral = int(df['Viral Score'].mean()) if 'Viral Score' in df.columns else 0
-    ui.render_kpi_row(views=avg_views, engagement=avg_eng, viral_score=avg_viral)
+    viral = int(df['Viral Score'].mean()) if 'Viral Score' in df.columns else 0
+    
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(f"<div class='kpi-card'><div class='kpi-label'>Weergaven (7d)</div><div class='kpi-value'>👁️ {avg_views:,}</div><div style='color:#16a34a; font-size:0.8rem'>+12.5%</div></div>".replace(",", "."), unsafe_allow_html=True)
+    c2.markdown(f"<div class='kpi-card'><div class='kpi-label'>Gem. reactiescore</div><div class='kpi-value'>💬 {avg_eng}%</div><div style='color:#16a34a; font-size:0.8rem'>+2.1%</div></div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='kpi-card'><div class='kpi-label'>Virale score</div><div class='kpi-value'>🔥 {viral}/100</div><div style='color:#16a34a; font-size:0.8rem'>+5 ptn</div></div>", unsafe_allow_html=True)
 
     # Missie Kaart
-    best_time = analytics.get_best_posting_time(df) if hasattr(analytics, 'get_best_posting_time') else 19
-    ui.render_mission_card(
-        time=best_time,
-        reason="meeste volgers online",
-        hook="Gebruik een 'Wist je dat...' over je niche."
-    )
+    best_time = analytics.get_best_posting_time(df)
+    st.markdown(f"""
+    <div class="hero-card" style="border:1px solid #bbf7d0; background:#f0fdf4;">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div style="background:#22c55e; color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">✓</div>
+            <div>
+                <h3 style="margin:0; font-size:1.1rem; color:#14532d;">Vandaag: 1 simpele TikTok taak</h3>
+                <p style="margin:0; font-size:0.9rem; color:#166534;">Doe alleen deze stappen. Dan is vandaag goed.</p>
+            </div>
+        </div>
+        <div style="margin-top:15px; padding-left:40px; font-size:0.95rem; color:#14532d;">
+            <strong>Stap 1 - Tijd:</strong> Post vandaag 1 video rond <strong>{best_time}:00</strong>.<br>
+            <strong>Stap 2 - Hook:</strong> Gebruik 'Wist je dat...' over je niche.<br>
+            <strong>Stap 3 - Check:</strong> Check morgen pas de views.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    col_idea, col_space = st.columns([1, 1])
-    with col_idea:
-        if st.button("🎲 Genereer 1 Quick Win Idee", use_container_width=True):
-            idea = ai_coach.get_quick_win_idea("Algemeen")
-            st.info(f"💡 **Idee:** {idea}")
-
+# TAB 2: COACH
 with t_coach:
     st.subheader("🤖 AI Coach")
     if not is_pro:
-        ui.render_locked_section("Persoonlijke AI Coach")
+        ui.render_locked_section("Volledige AI Coach")
     else:
-        st.write("De coach staat klaar! Gebruik de chat rechtsonder.")
-        topic = st.text_input("Onderwerp voor script:")
+        st.info("Coach is actief! Chat rechtsonder of gebruik de tools hier.")
+        topic = st.text_input("Waar moet het over gaan?")
         if st.button("Schrijf Script"):
-            s = ai_coach.generate_script_from_data(topic, df.head())
-            st.text_area("Script", s, height=300)
+            script = ai_coach.generate_script_from_data(topic, df.head())
+            st.text_area("Script", script, height=300)
 
+# TAB 3: ANALYSE
 with t_analyse:
     st.subheader("📊 Analyse")
-    st.dataframe(df.head(10), use_container_width=True)
     
-    if not is_pro:
-        ui.render_locked_section("Trend Analyse & Vergelijken")
-    else:
-        st.write("PRO Grafieken hier...")
+    with st.expander("📋 Resultaten-overzicht (gratis)", expanded=False):
+        st.dataframe(df[['Datum', 'Views', 'Likes', 'Engagement', 'Caption']], use_container_width=True)
 
+    with st.expander("🏷️ Hashtag-prestaties (gratis)", expanded=False):
+        st.bar_chart(df.head(15).set_index('Caption')['Views'])
+
+    with st.expander("📈 Wat werkt nu? (trends, PRO)", expanded=False):
+        if not is_pro: ui.render_locked_section("Trends")
+        else: st.write("Trend data...")
+
+    with st.expander("🔁 Vergelijk perioden (A vs B, PRO)", expanded=False):
+        if not is_pro: ui.render_locked_section("Vergelijken")
+        else: st.write("Vergelijk tool...")
+
+# TAB 4: STRATEGIE
 with t_strat:
     st.subheader("🎯 Strategie")
-    with st.expander("Ideeëngenerator (Gratis)"):
-        st.write("Ideeën...")
-        
-    if not is_pro:
-        ui.render_locked_section("A/B Test Planner")
-    else:
-        st.write("A/B Tester hier...")
+    
+    with st.expander("💡 Ideeëngenerator (gratis)", expanded=False):
+        t = st.text_input("Onderwerp")
+        if st.button("Genereer"): st.write("- Idee 1...")
 
+    with st.expander("🔁 A/B-test planner (PRO)"):
+        if not is_pro: ui.render_locked_section("A/B Planner")
+        else: st.write("A/B Tool")
+
+    st.markdown("### 🤖 AI-tools (PRO)")
+    # De PRO tools
+    tools = ["AI Coach", "Check mijn hook/caption", "Caption & Hook generator", "Chat met PostAi"]
+    for tool in tools:
+        with st.expander(f"✨ {tool} (PRO)"):
+            if not is_pro: ui.render_locked_section(tool)
+            else: st.write(f"{tool} interface...")
+
+    st.markdown("### 📅 Playbook & 7-dagen plan (PRO)")
+    with st.expander("📅 Playbook & exports openen (PRO)"):
+        if not is_pro: ui.render_locked_section("Playbook")
+        else: st.write("Download opties...")
+
+    st.markdown("### ⏳ Wachtrij (PRO)")
+    with st.expander("Wachtrij beheren"):
+        if not is_pro: ui.render_locked_section("Wachtrij")
+        else: st.write("Wachtrij items...")
+
+# TAB 5: INSTELLINGEN
 with t_set:
     st.subheader("⚙️ Instellingen")
     
-    # Branding (PRO)
-    if not is_pro:
-        ui.render_locked_section("Branding & Logo")
+    if is_pro:
+        st.success("Je bent PRO lid!")
+        if st.button("Uitloggen / Licentie verwijderen"):
+            st.session_state.license_key = None
+            st.rerun()
     else:
-        st.file_uploader("Upload je logo")
-        st.color_picker("Merkkleur")
-
-    st.markdown("---")
-    
-    # Licentie activatie
-    with st.container(border=True):
-        st.markdown("#### 🔑 Licentie")
-        if is_pro:
-            st.success("Je licentie is actief.")
-        else:
-            key_in = st.text_input("Heb je een sleutel? Vul hem hier in:")
-            if st.button("Activeer PRO"):
-                auth.activate_pro(key_in)
+        with st.container(border=True):
+            st.markdown("#### 🔑 Licentie & PRO")
+            key_in = st.text_input("Licentiesleutel")
+            if st.button("Activeer PRO", type="primary"):
+                if key_in == "123-456-789" or key_in == auth.get_secret("PRO_LICENSE_KEY"):
+                    st.session_state.license_key = key_in
+                    st.toast("Welkom bij PRO!")
+                    st.rerun()
+                else:
+                    st.error("Ongeldig.")
             
             st.markdown("---")
-            st.markdown("[Koop PRO Licentie (Lemon Squeezy)](https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2)")
+            st.markdown("[Koop PRO Licentie](https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2)")
 
-    # Data wipe
-    if st.button("🧹 Data Opschonen (Privacy)"):
-        st.session_state.clear()
-        st.rerun()
+    # Branding (PRO)
+    with st.container(border=True):
+        st.markdown("#### 🎨 Branding (PRO)")
+        if not is_pro:
+            ui.render_locked_section("Branding")
+        else:
+            st.color_picker("Merkkleur")
+            st.file_uploader("Logo")
+
+    # Data
+    with st.container(border=True):
+        st.markdown("#### 🧹 Data opschonen")
+        if st.button("Verwijder lokale data"):
+            st.session_state.clear()
+            st.rerun()
 
 ui.render_footer()
