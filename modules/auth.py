@@ -97,102 +97,104 @@ def render_landing_page():
     # CSS: Minder witruimte, strakker op elkaar
     st.markdown("""
     <style>
-        /* 1. Haal de standaard Streamlit witruimte weg bovenaan */
+        /* Witruimte bovenin weghalen */
         .block-container {
-            padding-top: 1.5rem !important;
+            padding-top: 2rem !important;
             padding-bottom: 1rem !important;
-            max-width: 700px !important; /* Iets smaller leest fijner */
+            max-width: 680px !important;
         }
         
-        /* 2. Header en Tekst compacter */
+        /* Header Styling */
         .lp-header { 
-            font-size: 1.8rem; /* Iets kleiner dan 2.4rem */
+            font-size: 1.7rem; 
             font-weight: 800; 
             color: #111827; 
-            line-height: 1.1; 
-            margin-bottom: 10px; 
+            line-height: 1.2; 
+            margin-bottom: 12px; 
             text-align: center;
         }
         
+        /* Badges container */
         .lp-badges { 
-            display: flex; gap: 8px; margin-bottom: 15px; 
-            justify-content: center; flex-wrap: wrap; 
+            display: flex; 
+            gap: 8px; 
+            margin-bottom: 15px; 
+            justify-content: center; 
+            flex-wrap: wrap; 
         }
+        
         .lp-badge { 
-            background: #ecfdf5; color: #065f46; padding: 2px 10px; 
+            background: #ecfdf5; color: #065f46; padding: 3px 10px; 
             border-radius: 99px; font-size: 0.75rem; font-weight: 600; 
         }
         .lp-badge.blue { background: #eff6ff; color: #1e40af; }
         .lp-badge.gray { background: #f3f4f6; color: #374151; }
 
         .lp-subhead {
-            font-size: 0.95rem; margin-bottom: 8px; text-align: center;
+            font-size: 0.9rem; margin-bottom: 10px; text-align: center; color: #111827;
         }
         
         .lp-list { 
-            color: #374151; font-size: 0.9rem; line-height: 1.4; 
-            margin-bottom: 15px; padding-left: 20px;
-            max-width: 90%; margin-left: auto; margin-right: auto;
+            color: #374151; font-size: 0.9rem; line-height: 1.5; 
+            margin-bottom: 20px; padding-left: 25px;
+            max-width: 95%; margin-left: auto; margin-right: auto;
         }
         .lp-list li { margin-bottom: 4px; }
         
         .lp-small { font-size: 0.8rem; color:#6b7280; text-align:center; margin-bottom: 15px; }
 
-        /* 3. Formulier container strakker */
+        /* Formulier container strakker */
         div[data-testid="stForm"] {
-            padding: 20px !important;
+            padding: 25px !important;
             border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            background: white;
         }
         
-        /* Input velden minder witruimte */
-        .stTextInput { margin-bottom: -15px !important; }
+        /* Input velden compacter */
+        .stTextInput { margin-bottom: -10px !important; }
+        .stTextInput > label { font-size: 0.85rem !important; }
         p { margin-bottom: 0.2rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
-    # Header Sectie
+    # HTML Content - LET OP: Alles strak links uitgelijnd om code-blocks te voorkomen!
     st.markdown("""
-    <div>
-        <div class="lp-header">Dagelijkse TikTok ideeën voor jouw niche.</div>
-        
-        <div class="lp-badges">
-            <span class="lp-badge">✔ Voor creators & shops</span>
-            <span class="lp-badge blue">✔ Geen betaalgegevens</span>
-            <span class="lp-badge gray">✔ Privacy-proof</span>
-        </div>
+<div>
+<div class="lp-header">Dagelijkse TikTok ideeën voor jouw niche.</div>
+<div class="lp-badges">
+<span class="lp-badge">✔ Voor creators & shops</span>
+<span class="lp-badge blue">✔ Geen betaalgegevens</span>
+<span class="lp-badge gray">✔ Privacy-proof</span>
+</div>
+<div class="lp-subhead">
+<b>14 dagen gratis toegang.</b> Geen kosten. Je kunt meteen starten.
+</div>
+<ul class="lp-list">
+<li><b>Zien wat werkt</b> voor jouw niche.</li>
+<li><b>Kant-en-klare video-ideeën</b> om direct op te nemen.</li>
+<li><b>Slimme posttijden</b> op basis van jouw account.</li>
+</ul>
+<div class="lp-small">
+Vul je gegevens in. Je krijgt direct je demo-code per mail en start meteen.
+</div>
+</div>
+""", unsafe_allow_html=True)
 
-        <div class="lp-subhead">
-            <b>14 dagen gratis toegang.</b> Geen kosten. Je kunt meteen starten.
-        </div>
-
-        <ul class="lp-list">
-            <li><b>Zien wat werkt</b> voor jouw niche.</li>
-            <li><b>Kant-en-klare video-ideeën</b> om direct op te nemen.</li>
-            <li><b>Slimme posttijden</b> op basis van jouw account.</li>
-        </ul>
-        
-        <div class="lp-small">
-            Vul je gegevens in. Je krijgt direct je demo-code per mail en start meteen.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Formulier (Geen kolommen meer nodig, gewoon strak onder elkaar)
+    # Formulier
     with st.form("landing_form"):
         name = st.text_input("Naam")
         email = st.text_input("E-mailadres")
         
-        # Iets ruimte voor de checkbox, maar minder dan eerst
-        st.markdown("<div style='height:5px'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
         
-        # Checkbox en tekst naast elkaar
+        # Checkbox en tekst
         c_check, c_txt = st.columns([0.06, 0.94])
         with c_check:
             agree = st.checkbox(" ", label_visibility="collapsed")
         with c_txt:
-            st.markdown("<div style='font-size:0.8rem; color:#4b5563; padding-top:2px;'>Ik ga akkoord met de <a href='?page=privacy' target='_self'>privacy</a> en <a href='?page=terms' target='_self'>voorwaarden</a>.</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-size:0.8rem; color:#4b5563; padding-top:4px;'>Ik ga akkoord met de <a href='?page=privacy' target='_self'>privacy</a> en <a href='?page=terms' target='_self'>voorwaarden</a>.</div>", unsafe_allow_html=True)
 
         submitted = st.form_submit_button("🚀 Start mijn gratis demo", use_container_width=True)
 
@@ -210,7 +212,7 @@ def render_landing_page():
                 if success:
                     st.toast("Licentie gemaild! Je bent ingelogd.", icon="📧")
                 else:
-                    st.toast("Ingelogd! (Mail mislukt)", icon="🚀")
+                    st.toast("Ingelogd! (Mail mislukt, check spam/settings)", icon="🚀")
                 
                 time.sleep(1)
                 st.rerun()
