@@ -6,98 +6,47 @@ from pathlib import Path
 from modules import analytics, ui, auth, ai_coach, data_loader
 
 # --- CONFIG ---
-st.set_page_config(page_title="PostAi – TikTok Growth", page_icon="📈", layout="wide")
+st.set_page_config(page_title="PostAi – TikTok Growth", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 ui.inject_style_and_hacks()
 
-# --- ROUTER VOOR SIMPELE PAGINA'S (Privacy & Voorwaarden) ---
-def route_simple_pages():
-    """Checkt of we een tekstpagina moeten laten zien."""
-    try:
-        # Haal query param op (werkt voor nieuwe en oude streamlit versies)
-        qp = st.query_params
-        page = qp.get("page")
-    except:
-        page = None
+# --- ROUTER (Privacy & Terms) ---
+# We gebruiken query params. Als page=privacy, toon ALLEEN dat en stop.
+qp = st.query_params
+page = qp.get("page")
 
-    if page == "privacy":
-        st.markdown("""
-        <div style="max-width:800px; margin:0 auto; padding:40px 20px; background:#fff; border-radius:16px; border:1px solid #e5e7eb; margin-top:40px;">
-            <a href="/" style="text-decoration:none; color:#2563eb; font-weight:bold;">← Terug naar Home</a>
-            <h1 style="margin-top:20px;">Privacyverklaring</h1>
-            <p style="color:#666; font-size:0.9rem;">Laatst bijgewerkt: 21 november 2025</p>
-            <hr style="margin:20px 0; border:0; border-top:1px solid #eee;">
-            
-            <h3>1. Inleiding</h3>
-            <p>PostAi respecteert de privacy van alle gebruikers en draagt er zorg voor dat de persoonlijke informatie die u ons verschaft vertrouwelijk wordt behandeld.</p>
-            
-            <h3>2. Welke gegevens verzamelen we?</h3>
-            <ul>
-                <li>Naam en e-mailadres (voor accounttoegang).</li>
-                <li>TikTok statistieken (geüpload via CSV of gekoppeld) om de dashboards te tonen.</li>
-                <li>Licentiesleutel gegevens.</li>
-            </ul>
+if page == "privacy":
+    st.markdown("<a href='/' target='_self' style='text-decoration:none;'>← Terug</a>", unsafe_allow_html=True)
+    st.markdown("# Privacyverklaring")
+    st.markdown("Wij geven om je data. Geen verkoop aan derden. Geen opslag van wachtwoorden.")
+    st.stop()
 
-            <h3>3. Hoe gebruiken we deze gegevens?</h3>
-            <p>De gegevens worden uitsluitend gebruikt om de functionaliteit van de app te bieden (analyses, advies). We verkopen uw gegevens <strong>nooit</strong> aan derden.</p>
+if page == "terms":
+    st.markdown("<a href='/' target='_self' style='text-decoration:none;'>← Terug</a>", unsafe_allow_html=True)
+    st.markdown("# Algemene Voorwaarden")
+    st.markdown("Gebruik op eigen risico. Wij garanderen geen specifieke resultaten.")
+    st.stop()
 
-            <h3>4. Bewaartermijn</h3>
-            <p>U kunt te allen tijde uw lokale data wissen via de instellingen in de app ("Data Opschonen").</p>
-            
-            <br>
-            <p>Vragen? Mail naar <a href="mailto:info@bouwmijnshop.nl">info@bouwmijnshop.nl</a></p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.stop() # Stop de rest van de app
-
-    elif page == "terms":
-        st.markdown("""
-        <div style="max-width:800px; margin:0 auto; padding:40px 20px; background:#fff; border-radius:16px; border:1px solid #e5e7eb; margin-top:40px;">
-            <a href="/" style="text-decoration:none; color:#2563eb; font-weight:bold;">← Terug naar Home</a>
-            <h1 style="margin-top:20px;">Algemene Voorwaarden</h1>
-            <p style="color:#666; font-size:0.9rem;">Laatst bijgewerkt: 21 november 2025</p>
-            <hr style="margin:20px 0; border:0; border-top:1px solid #eee;">
-            
-            <h3>1. Algemeen</h3>
-            <p>Deze voorwaarden zijn van toepassing op elk gebruik van de webapplicatie PostAi.</p>
-            
-            <h3>2. Gebruik van de dienst</h3>
-            <p>PostAi is een hulpmiddel voor TikTok groei. Wij garanderen geen specifieke resultaten (zoals aantallen views of volgers), aangezien dit afhankelijk is van het algoritme van TikTok en uw eigen content.</p>
-
-            <h3>3. Abonnementen</h3>
-            <p>De PRO-versie wordt gefactureerd via Lemon Squeezy. Restitutie is mogelijk binnen 7 dagen na aankoop indien de dienst niet bevalt.</p>
-
-            <h3>4. Aansprakelijkheid</h3>
-            <p>PostAi is niet aansprakelijk voor directe of indirecte schade als gevolg van het gebruik van de applicatie.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.stop()
-
-# Voer router uit
-route_simple_pages()
-
-# Chatbot url ophalen
-chat_url = auth.get_secret("CHAT_SERVER_URL", "https://chatbot-2-0-3v8l.onrender.com")
-ui.inject_chat_widget(chat_url)
+# --- MOBIELE ACTIE CHECK ---
+# Als iemand op de mobiele knop 'Demo' klikt
+if qp.get("mobile_action") == "demo":
+    st.session_state.data_source = "demo"
+    st.session_state.df = data_loader.load_demo_data()
+    # Reset de URL (zodat je niet in een loop komt)
+    st.query_params.clear()
+    st.rerun()
 
 # --- AUTH CHECK ---
 auth.init_session()
 
-# Als de gebruiker nog NIET is ingelogd (geen licentie in sessie)
 if not auth.is_authenticated():
-    # Toon formulier
     auth.render_landing_page()
-    # STOP hier. Laad de rest van de app (en de chatbot) niet.
     st.stop()
 
-# =========================================================
-# HIERONDER KOMEN WE PAS ALS IEMAND INGELOGD IS (DEMO/PRO)
-# =========================================================
+# --- APP START ---
 
-# 2. NU pas de Chatbot laden (zodat hij niet op de landingspagina staat)
+# Chatbot laden (alleen als ingelogd)
 chat_url = auth.get_secret("CHAT_SERVER_URL", "https://chatbot-2-0-3v8l.onrender.com")
 ui.inject_chat_widget(chat_url)
-
-# --- APP LOGICA ---
 
 # Data laden
 if "df" not in st.session_state: 
@@ -106,6 +55,10 @@ if "df" not in st.session_state:
 
 df = analytics.calculate_kpis(st.session_state.df)
 is_pro = auth.is_pro()
+
+# --- MOBIELE ONBOARDING (Boven alles) ---
+# Dit wordt getoond, maar door CSS in ui.py is het onzichtbaar op desktop!
+ui.render_mobile_onboarding()
 
 # Sidebar
 with st.sidebar:
