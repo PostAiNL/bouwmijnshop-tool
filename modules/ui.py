@@ -2,18 +2,21 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 def inject_style_and_hacks():
-    """Injecteert CSS voor de PRO-overlay, mobiele weergave en algemene styling."""
+    """Injecteert CSS en styling."""
     st.markdown("""
     <style>
         /* 1. BASIC CLEANUP */
         header[data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
         .block-container { padding-top: 1rem; max-width: 1100px; }
 
-        /* 2. DESKTOP SIDEBAR */
-        [data-testid="stSidebarCollapsedControl"] { visibility: hidden !important; width: 0 !important; margin: 0 !important; }
-        section[data-testid="stSidebar"] { min-width: 280px !important; }
+        /* 2. DESKTOP SIDEBAR: Verberg de 'X' knop zodat je hem niet dicht kan doen */
+        @media (min-width: 769px) {
+            [data-testid="stSidebarCollapsedControl"] {
+                display: none !important;
+            }
+        }
 
-        /* 3. MOBIEL */
+        /* 3. MOBIEL: Sidebar VERBERGEN */
         @media (max-width: 768px) {
             section[data-testid="stSidebar"] { display: none !important; }
             .block-container { padding-left: 1rem; padding-right: 1rem; }
@@ -44,74 +47,24 @@ def inject_style_and_hacks():
         .kpi-label { color: #6b7280; font-size: 0.85rem; margin-bottom: 4px; }
         .kpi-value { font-size: 1.5rem; font-weight: 700; color: #111827; }
         
-        /* 6. PRO GATING (COMPACT & PREMIUM) */
-        .ghost-wrapper { 
-            position: relative; 
-            margin-bottom: 15px; 
-            overflow: hidden; 
-            border-radius: 14px; 
-            border: 1px solid #f1f5f9; 
-        }
-        .ghost-content { 
-            filter: blur(5px); 
-            opacity: 0.5; 
-            pointer-events: none; 
-            user-select: none; 
-            padding: 15px; 
-            background: #fff;
-        }
-        
+        /* 6. PRO GATING */
+        .ghost-wrapper { position: relative; margin-bottom: 15px; overflow: hidden; border-radius: 14px; border: 1px solid #f1f5f9; }
+        .ghost-content { filter: blur(5px); opacity: 0.5; pointer-events: none; user-select: none; padding: 15px; background: #fff;}
         .pro-lock-overlay {
-            position: absolute; 
-            top: 50%; left: 50%; 
-            transform: translate(-50%, -50%);
-            background: #ffffff; 
-            padding: 16px 20px; /* Compacter */
-            border-radius: 14px;
-            box-shadow: 0 15px 35px -5px rgba(0,0,0,0.12); 
-            text-align: center; 
-            width: 85%; 
-            max-width: 360px; /* Smalle kaart */
-            border: 1px solid #e5e7eb; 
-            z-index: 10;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #ffffff; padding: 16px 20px; border-radius: 14px;
+            box-shadow: 0 15px 35px -5px rgba(0,0,0,0.12); text-align: center; width: 85%; max-width: 360px; border: 1px solid #e5e7eb; z-index: 10;
         }
         
-        /* De Knop - Geen streep, wel pop */
         a.pro-btn {
-            display: block;
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); 
-            color: white !important; 
-            font-weight: 700; 
-            font-size: 0.9rem;
-            padding: 10px 0;
-            border-radius: 10px; 
-            text-decoration: none !important; /* GEEN STREEP */
-            margin-top: 10px;
-            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
-            border: none;
+            display: block; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); 
+            color: white !important; font-weight: 700; font-size: 0.9rem; padding: 10px 0;
+            border-radius: 10px; text-decoration: none !important; margin-top: 10px;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25); border: none;
             transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
-        a.pro-btn:hover { 
-            transform: translateY(-2px); 
-            box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35);
-            text-decoration: none !important;
-            color: white !important;
-        }
-        /* Extra force tegen Streamlit link styling */
-        .pro-lock-overlay a { text-decoration: none !important; border: none !important; }
-
-        /* Badges */
-        .pro-badges {
-            background: #f8fafc;
-            border: 1px solid #f1f5f9;
-            border-radius: 6px;
-            padding: 6px;
-            font-size: 0.75rem;
-            color: #4b5563;
-            margin-bottom: 12px;
-            display: inline-block;
-            width: 100%;
-        }
+        a.pro-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35); color: white !important; }
+        .pro-badges { background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 6px; padding: 6px; font-size: 0.75rem; color: #4b5563; margin-bottom: 12px; display: inline-block; width: 100%; }
 
         /* Trust Bar */
         .trust-row { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; font-size: 0.8rem; color: #6b7280; }
@@ -122,19 +75,29 @@ def inject_style_and_hacks():
     """, unsafe_allow_html=True)
 
 def force_sidebar_open():
+    """
+    Slimme JS die de sidebar open klikt als hij dicht is.
+    We doen dit met een interval om zeker te weten dat hij het pakt.
+    """
     components.html("""
     <script>
     (function() {
-        const forceOpen = () => {
-            if (window.parent.innerWidth <= 768) return; 
-            const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-            const btn = window.parent.document.querySelector('[data-testid="stSidebarCollapsedControl"] button');
-            if (sidebar && sidebar.getAttribute('aria-expanded') === 'false' && btn) {
-                btn.click();
-            }
-        };
-        forceOpen();
-        setInterval(forceOpen, 500);
+        function ensureSidebarOpen() {
+            // Alleen op desktop
+            if (window.parent.innerWidth < 768) return;
+
+            try {
+                const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+                const trigger = window.parent.document.querySelector('[data-testid="stSidebarCollapsedControl"] button');
+                
+                // Als de sidebar 'collapsed' is (width < 100px) en de knop bestaat -> KLIK
+                if (sidebar && sidebar.offsetWidth < 100 && trigger) {
+                    trigger.click();
+                }
+            } catch (e) {}
+        }
+        // Probeer elke 300ms te checken of hij open moet
+        setInterval(ensureSidebarOpen, 300);
     })();
     </script>
     """, height=0, width=0)
@@ -197,7 +160,6 @@ def render_kpi_row(views, engagement, viral_score):
     """.replace(",", "."), unsafe_allow_html=True)
 
 def render_locked_section(title="Deze functie"):
-    """Compacter en strakker design."""
     st.markdown(f"""
     <div class="ghost-wrapper">
         <div class="pro-lock-overlay">
