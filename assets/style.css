@@ -1,60 +1,79 @@
-/* assets/style.css */
+/* assets/styles.css */
 :root {
   --brand: #2563eb;
-  --ring: #e8edf3; 
-  --muted: #4b5563; 
-  --head: #f8fafb;
-  --card: #ffffff; 
-  --card-border: #eef2f7; 
-  --text: #111827; 
-  --bg: #ffffff;
-  --hover: #f4f8ff; 
-  --track: #e5e7eb; 
-  --skeleton: #f1f5f9;
+  --bg-gray: #f8fafc;
+  --text-dark: #0f172a;
+  --text-light: #64748b;
+  --card-border: #e2e8f0;
+  --success-bg: #dcfce7;
+  --success-text: #166534;
 }
 
-/* Streamlit cleanups */
-header[data-testid="stHeader"], [data-testid="stToolbar"] { display: none !important; }
-div[data-testid="stAppViewContainer"] > .main { padding-top: 0 !important; }
-.block-container { max-width: 1200px; padding-top: 1rem; }
+/* Algemene cleanup */
+header[data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
+.block-container { padding-top: 1.5rem; max-width: 1100px; }
+div[data-testid="stAppViewContainer"] { background-color: #ffffff; }
 
-/* Sidebar Fixes */
-section[data-testid="stSidebar"] {
-  width: 260px !important;
-  background: var(--head);
-  border-right: 1px solid var(--card-border);
-  padding-top: 0 !important;
+/* 1. Vertrouwen Balk */
+.trust-bar {
+    display: flex; gap: 15px; font-size: 0.8rem; color: var(--text-light);
+    margin-bottom: 15px; align-items: center; flex-wrap: wrap;
+}
+.trust-badge {
+    background: var(--bg-gray); padding: 4px 10px; border-radius: 20px;
+    border: 1px solid var(--card-border); display: flex; align-items: center; gap: 6px;
+}
+.trust-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; }
+
+/* 2. KPI Cards (Bovenaan) */
+.kpi-container {
+    display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;
+}
+.kpi-card {
+    flex: 1; min-width: 200px; background: #fff; border: 1px solid var(--card-border);
+    border-radius: 16px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+.kpi-label { font-size: 0.8rem; color: var(--text-light); margin-bottom: 4px; }
+.kpi-value { font-size: 1.5rem; font-weight: 700; color: var(--text-dark); }
+.kpi-delta { font-size: 0.85rem; font-weight: 500; }
+.delta-pos { color: #16a34a; } .delta-neg { color: #dc2626; }
+
+/* 3. Missie Kaart (Vandaag) */
+.mission-card {
+    background: #fff; border: 1px solid #dbeafe; border-radius: 16px; padding: 20px;
+    margin-bottom: 25px; position: relative; overflow: hidden;
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.05);
+}
+.mission-header { display: flex; gap: 12px; align-items: flex-start; }
+.mission-icon { 
+    background: #dbeafe; color: #2563eb; width: 40px; height: 40px; 
+    border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+}
+.mission-time-badge {
+    background: #eff6ff; color: #1d4ed8; font-size: 0.75rem; font-weight: 700;
+    padding: 4px 12px; border-radius: 99px; border: 1px solid #bfdbfe;
+    position: absolute; top: 20px; right: 20px;
 }
 
-/* Cards & UI Elements */
-.hero-card, .kpi-card {
-  border: 1px solid var(--card-border);
-  border-radius: 16px;
-  padding: 14px 16px;
-  background: var(--card);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.03);
-  color: var(--text);
-  margin-bottom: 10px;
+/* 4. PRO Gating (Blur & Overlay) */
+.ghost-wrapper { position: relative; margin-bottom: 20px; }
+.ghost-content { filter: blur(5px); opacity: 0.5; pointer-events: none; user-select: none; }
+.pro-lock-overlay {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: #fff; padding: 20px 30px; border-radius: 16px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    text-align: center; width: 85%; max-width: 400px; border: 1px solid var(--card-border); z-index: 10;
 }
-
-.kpi-label { font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
-.kpi-value { font-size: 1.4rem; font-weight: 700; color: var(--text); }
-
-/* PRO Gating Overlay */
-.pro-overlay {
-    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-    z-index: 30; background: #fff; border: 1px solid var(--card-border);
-    border-radius: 18px; box-shadow: 0 18px 40px rgba(15,23,42,0.18);
-    padding: 16px 20px; width: 90%; max-width: 400px; text-align: center;
+.pro-btn {
+    background: #16a34a; color: #fff !important; font-weight: 600; padding: 10px 20px;
+    border-radius: 8px; text-decoration: none; display: inline-block; margin-top: 10px;
+    transition: transform 0.1s;
 }
-.pro-cta-btn {
-    background: #22c55e; color: #fff !important; padding: 10px 20px;
-    border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;
-}
+.pro-btn:hover { transform: scale(1.02); }
 
-/* Mobile responsiveness */
+/* Mobiel */
 @media (max-width: 768px) {
     section[data-testid="stSidebar"] { display: none !important; }
-    .app-header-main { flex-direction: row; }
-    .kpi-value { font-size: 1.1rem; }
+    .kpi-container { flex-direction: column; }
+    .trust-bar { display: none; } /* Ruimte besparen op mobiel */
 }
