@@ -1,0 +1,68 @@
+<!-- public/widget.html -->
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat Widget</title>
+  <link rel="stylesheet" href="/chat-widget.css" />
+  <style>
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    .wrap { height:100dvh; display:flex; flex-direction:column; }
+    header { padding:10px 14px; background:#111827; color:#fff; }
+    main { flex:1; padding:12px; background:#f8fafc; overflow:auto; }
+    form { display:flex; gap:8px; padding:10px; border-top:1px solid #e5e7eb; background:#fff; }
+    input, textarea { flex:1; padding:10px; border:1px solid #e5e7eb; border-radius:10px; }
+    button { padding:10px 14px; border-radius:10px; border:1px solid #111827; background:#111827; color:#fff; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>💬 Chat met ons</header>
+    <main id="log">
+      <p>Welkom! Stel je vraag hieronder, we reageren zo snel mogelijk.</p>
+    </main>
+    <form id="chatForm">
+      <input id="name" placeholder="Je naam (optioneel)" />
+      <textarea id="msg" placeholder="Typ je bericht..." rows="2"></textarea>
+      <button type="submit">Verstuur</button>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('chatForm');
+    const log  = document.getElementById('log');
+
+    function addLine(txt) {
+      const p = document.createElement('p');
+      p.textContent = txt;
+      log.appendChild(p);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim();
+      const msg  = document.getElementById('msg').value.trim();
+      if (!msg) return;
+
+      addLine((name ? name + ': ' : '') + msg);
+      document.getElementById('msg').value = '';
+
+      try {
+        const res = await fetch('/api/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name, message: msg, page: document.referrer || 'direct', ts: Date.now()
+          })
+        });
+        const data = await res.json();
+        // Je zou hier een automatische reply kunnen tonen
+      } catch (err) {
+        addLine('⚠️ Kon niet versturen. Probeer later opnieuw.');
+      }
+    });
+  </script>
+</body>
+</html>

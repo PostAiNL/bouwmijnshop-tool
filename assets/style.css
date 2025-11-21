@@ -1,0 +1,60 @@
+/* assets/style.css */
+:root {
+  --brand: #2563eb;
+  --ring: #e8edf3; 
+  --muted: #4b5563; 
+  --head: #f8fafb;
+  --card: #ffffff; 
+  --card-border: #eef2f7; 
+  --text: #111827; 
+  --bg: #ffffff;
+  --hover: #f4f8ff; 
+  --track: #e5e7eb; 
+  --skeleton: #f1f5f9;
+}
+
+/* Streamlit cleanups */
+header[data-testid="stHeader"], [data-testid="stToolbar"] { display: none !important; }
+div[data-testid="stAppViewContainer"] > .main { padding-top: 0 !important; }
+.block-container { max-width: 1200px; padding-top: 1rem; }
+
+/* Sidebar Fixes */
+section[data-testid="stSidebar"] {
+  width: 260px !important;
+  background: var(--head);
+  border-right: 1px solid var(--card-border);
+  padding-top: 0 !important;
+}
+
+/* Cards & UI Elements */
+.hero-card, .kpi-card {
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: var(--card);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.03);
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.kpi-label { font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
+.kpi-value { font-size: 1.4rem; font-weight: 700; color: var(--text); }
+
+/* PRO Gating Overlay */
+.pro-overlay {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    z-index: 30; background: #fff; border: 1px solid var(--card-border);
+    border-radius: 18px; box-shadow: 0 18px 40px rgba(15,23,42,0.18);
+    padding: 16px 20px; width: 90%; max-width: 400px; text-align: center;
+}
+.pro-cta-btn {
+    background: #22c55e; color: #fff !important; padding: 10px 20px;
+    border-radius: 12px; text-decoration: none; font-weight: 700; display: inline-block;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    section[data-testid="stSidebar"] { display: none !important; }
+    .app-header-main { flex-direction: row; }
+    .kpi-value { font-size: 1.1rem; }
+}
