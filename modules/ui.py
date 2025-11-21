@@ -1,24 +1,19 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-# --- STYLING & CSS ---
 def inject_style_and_hacks():
     """Injecteert CSS voor de PRO-overlay, mobiele weergave en algemene styling."""
     st.markdown("""
     <style>
-        /* 1. VERBERG STANDAARD ELEMENTEN */
+        /* 1. BASIC CLEANUP */
         header[data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
         .block-container { padding-top: 1rem; max-width: 1100px; }
 
-        /* 2. DESKTOP SIDEBAR: Vastzetten (Pijltje onzichtbaar maken maar wel aanwezig laten voor script) */
-        [data-testid="stSidebarCollapsedControl"] { 
-            visibility: hidden !important; 
-            width: 0 !important;
-            margin: 0 !important;
-        }
+        /* 2. DESKTOP SIDEBAR */
+        [data-testid="stSidebarCollapsedControl"] { visibility: hidden !important; width: 0 !important; margin: 0 !important; }
         section[data-testid="stSidebar"] { min-width: 280px !important; }
 
-        /* 3. MOBIEL: Sidebar weg & Padding fix */
+        /* 3. MOBIEL */
         @media (max-width: 768px) {
             section[data-testid="stSidebar"] { display: none !important; }
             .block-container { padding-left: 1rem; padding-right: 1rem; }
@@ -31,9 +26,7 @@ def inject_style_and_hacks():
             padding: 20px; margin-bottom: 20px; text-align: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         }
-        @media (max-width: 768px) {
-            .mobile-onboarding-card { display: block !important; }
-        }
+        @media (max-width: 768px) { .mobile-onboarding-card { display: block !important; } }
 
         .mob-btn {
             display: block; width: 100%; padding: 12px; margin-bottom: 10px;
@@ -43,7 +36,7 @@ def inject_style_and_hacks():
         .mob-btn-primary { background: #2563eb; color: white !important; }
         .mob-btn-secondary { background: #f1f5f9; color: #111827 !important; border: 1px solid #e5e7eb; }
 
-        /* 5. PRO & UI Styling */
+        /* 5. UI ELEMENTS */
         .hero-card, .kpi-card {
             border: 1px solid #e5e7eb; border-radius: 16px; padding: 16px;
             background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 15px;
@@ -51,16 +44,73 @@ def inject_style_and_hacks():
         .kpi-label { color: #6b7280; font-size: 0.85rem; margin-bottom: 4px; }
         .kpi-value { font-size: 1.5rem; font-weight: 700; color: #111827; }
         
-        .ghost-wrapper { position: relative; margin-bottom: 20px; overflow: hidden; border-radius: 16px; border:1px solid #f3f4f6; }
-        .ghost-content { filter: blur(6px); opacity: 0.6; pointer-events: none; user-select: none; padding: 20px; background: #fff;}
-        .pro-lock-overlay {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #ffffff; padding: 20px 25px; border-radius: 16px;
-            box-shadow: 0 20px 40px -5px rgba(0,0,0,0.15); text-align: center; width: 90%; max-width: 450px; border: 1px solid #e5e7eb; z-index: 10;
+        /* 6. PRO GATING (COMPACT & PREMIUM) */
+        .ghost-wrapper { 
+            position: relative; 
+            margin-bottom: 15px; 
+            overflow: hidden; 
+            border-radius: 14px; 
+            border: 1px solid #f1f5f9; 
         }
-        .pro-btn {
-            background: linear-gradient(135deg, #22c55e, #16a34a); color: white !important; font-weight: 700; padding: 10px 24px;
-            border-radius: 10px; text-decoration: none; display: inline-block; margin-top: 12px;
+        .ghost-content { 
+            filter: blur(5px); 
+            opacity: 0.5; 
+            pointer-events: none; 
+            user-select: none; 
+            padding: 15px; 
+            background: #fff;
+        }
+        
+        .pro-lock-overlay {
+            position: absolute; 
+            top: 50%; left: 50%; 
+            transform: translate(-50%, -50%);
+            background: #ffffff; 
+            padding: 16px 20px; /* Compacter */
+            border-radius: 14px;
+            box-shadow: 0 15px 35px -5px rgba(0,0,0,0.12); 
+            text-align: center; 
+            width: 85%; 
+            max-width: 360px; /* Smalle kaart */
+            border: 1px solid #e5e7eb; 
+            z-index: 10;
+        }
+        
+        /* De Knop - Geen streep, wel pop */
+        a.pro-btn {
+            display: block;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); 
+            color: white !important; 
+            font-weight: 700; 
+            font-size: 0.9rem;
+            padding: 10px 0;
+            border-radius: 10px; 
+            text-decoration: none !important; /* GEEN STREEP */
+            margin-top: 10px;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
+            border: none;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        a.pro-btn:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35);
+            text-decoration: none !important;
+            color: white !important;
+        }
+        /* Extra force tegen Streamlit link styling */
+        .pro-lock-overlay a { text-decoration: none !important; border: none !important; }
+
+        /* Badges */
+        .pro-badges {
+            background: #f8fafc;
+            border: 1px solid #f1f5f9;
+            border-radius: 6px;
+            padding: 6px;
+            font-size: 0.75rem;
+            color: #4b5563;
+            margin-bottom: 12px;
+            display: inline-block;
+            width: 100%;
         }
 
         /* Trust Bar */
@@ -72,23 +122,17 @@ def inject_style_and_hacks():
     """, unsafe_allow_html=True)
 
 def force_sidebar_open():
-    """Dwingt de sidebar open op Desktop via JavaScript."""
     components.html("""
     <script>
     (function() {
         const forceOpen = () => {
-            // Alleen op desktop (breder dan 768px)
             if (window.parent.innerWidth <= 768) return; 
-            
             const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
             const btn = window.parent.document.querySelector('[data-testid="stSidebarCollapsedControl"] button');
-            
-            // Als sidebar dicht is (aria-expanded=false), klik op de knop
             if (sidebar && sidebar.getAttribute('aria-expanded') === 'false' && btn) {
                 btn.click();
             }
         };
-        // Check direct en daarna elke 500ms
         forceOpen();
         setInterval(forceOpen, 500);
     })();
@@ -153,16 +197,29 @@ def render_kpi_row(views, engagement, viral_score):
     """.replace(",", "."), unsafe_allow_html=True)
 
 def render_locked_section(title="Deze functie"):
+    """Compacter en strakker design."""
     st.markdown(f"""
     <div class="ghost-wrapper">
         <div class="pro-lock-overlay">
-            <div style="font-size:1.4rem; margin-bottom:5px;">🔒 <strong>{title}</strong> is een PRO-functie</div>
-            <p style="color:#4b5563; font-size:0.95rem; margin-bottom:10px;">Ontgrendel alle AI-tools, playbooks en exports.</p>
-            <div style="font-size:0.85rem; color:#6b7280; margin-bottom:10px;">🎁 14 dagen gratis · 💎 20% korting bij jaar</div>
-            <a href="https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2" target="_blank" class="pro-btn">🔓 Ontgrendel PRO</a>
+            <div style="font-size:1.1rem; margin-bottom:4px; font-weight:700; color:#111827;">
+                🔒 {title}
+            </div>
+            <p style="color:#6b7280; font-size:0.85rem; margin-bottom:10px; line-height:1.3;">
+                Ontgrendel alle AI-tools, playbooks en exports.
+            </p>
+            
+            <div class="pro-badges">
+                🎁 14 dagen gratis &nbsp;·&nbsp; 💎 20% korting bij jaar
+            </div>
+            
+            <a href="https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2" target="_blank" class="pro-btn">
+                🔓 &nbsp; Ontgrendel PRO
+            </a>
         </div>
         <div class="ghost-content">
-            <h3>Voorbeeld</h3><div style="height:100px; background:#f3f4f6; width:100%; border-radius:12px;"></div>
+            <div style="height:12px; background:#f3f4f6; width:40%; margin-bottom:8px; border-radius:4px;"></div>
+            <div style="height:12px; background:#f3f4f6; width:70%; margin-bottom:12px; border-radius:4px;"></div>
+            <div style="height:80px; background:#f3f4f6; width:100%; border-radius:10px;"></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
