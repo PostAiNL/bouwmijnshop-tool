@@ -11,9 +11,18 @@ LEADS_FILE = "leads.json"
 PRO_KEY_FIXED = "123-456-789"
 
 def get_secret(key, default=None):
-    """Haalt secret op uit OS (Render) of st.secrets (Lokaal)."""
-    return os.getenv(key) or st.secrets.get(key, default)
+    """Haalt secret op uit OS (Render) of st.secrets (Lokaal), zonder te crashen."""
+    # 1. Probeer eerst Environment Variable (Render)
+    value = os.getenv(key)
+    if value is not None:
+        return value
 
+    # 2. Probeer lokaal secrets bestand, maar vang fouten op
+    try:
+        return st.secrets.get(key, default)
+    except Exception:
+        # Als er geen secrets bestand is, geef gewoon de default terug
+        return default
 def init_session():
     if "license_key" not in st.session_state:
         # Check URL param
@@ -137,7 +146,7 @@ def render_landing_page():
         with c1:
             agree = st.checkbox(" ", label_visibility="collapsed")
         with c2:
-            st.markdown("Ik ga akkoord met de <a href='#'>privacyverklaring</a> en <a href='#'>voorwaarden</a>.", unsafe_allow_html=True)
+            st.markdown("Ik ga akkoord met de <a href='?page=privacy' target='_self'>privacyverklaring</a> en <a href='?page=terms' target='_self'>voorwaarden</a>.", unsafe_allow_html=True)
 
         submitted = st.form_submit_button("Start mijn gratis demo", use_container_width=True)
 

@@ -97,4 +97,13 @@ def render_trust_bar(confidence=95):
     """, unsafe_allow_html=True)
 
 def render_footer():
-    st.markdown("<br><br><center style='color:#ccc; font-size:0.8rem'>© 2025 PostAi</center>", unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="text-align:center; color:#94a3b8; font-size:0.8rem;">
+        <a href="?page=privacy" style="color:#94a3b8; text-decoration:none;">Privacy</a> &nbsp; · &nbsp; 
+        <a href="?page=terms" style="color:#94a3b8; text-decoration:none;">Voorwaarden</a> &nbsp; · &nbsp; 
+        🎁 14 dagen gratis
+        <br><br>
+        © 2025 PostAi - Made for Creators
+    </div>
+    """, unsafe_allow_html=True)
