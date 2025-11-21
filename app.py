@@ -7,20 +7,29 @@ from modules import analytics, ui, auth, ai_coach, data_loader
 
 # --- CONFIG ---
 st.set_page_config(page_title="PostAi – TikTok Growth", page_icon="📈", layout="wide")
+
+# 1. Laad de styling (CSS) wél direct, zodat de landingspagina mooi is
 ui.inject_style_and_hacks()
 
-# Chatbot url ophalen
+# --- AUTHENTICATIE (EERST CHECKEN!) ---
+auth.init_session()
+
+# Als de gebruiker nog NIET is ingelogd (geen licentie in sessie)
+if not auth.is_authenticated():
+    # Toon formulier
+    auth.render_landing_page()
+    # STOP hier. Laad de rest van de app (en de chatbot) niet.
+    st.stop()
+
+# =========================================================
+# HIERONDER KOMEN WE PAS ALS IEMAND INGELOGD IS (DEMO/PRO)
+# =========================================================
+
+# 2. NU pas de Chatbot laden (zodat hij niet op de landingspagina staat)
 chat_url = auth.get_secret("CHAT_SERVER_URL", "https://chatbot-2-0-3v8l.onrender.com")
 ui.inject_chat_widget(chat_url)
 
-# --- AUTH CHECK ---
-auth.init_session()
-
-if not auth.is_authenticated():
-    auth.render_landing_page()
-    st.stop()
-
-# --- APP START (Alleen voor ingelogden) ---
+# --- APP LOGICA ---
 
 # Data laden
 if "df" not in st.session_state: 
@@ -170,12 +179,8 @@ with t_set:
             st.markdown("#### 🔑 Licentie & PRO")
             key_in = st.text_input("Licentiesleutel")
             if st.button("Activeer PRO", type="primary"):
-                if key_in == "123-456-789" or key_in == auth.get_secret("PRO_LICENSE_KEY"):
-                    st.session_state.license_key = key_in
-                    st.toast("Welkom bij PRO!")
-                    st.rerun()
-                else:
-                    st.error("Ongeldig.")
+                if auth.activate_pro(key_in):
+                    pass # Refresh handled in activate_pro
             
             st.markdown("---")
             st.markdown("[Koop PRO Licentie](https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2)")
