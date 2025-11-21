@@ -1,116 +1,118 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-# --- STYLING & CSS ---
 def inject_style_and_hacks():
-    """Injecteert CSS voor de PRO-overlay, mobiele weergave en algemene styling."""
-    st.markdown("""
-    <style>
-        /* Mobiele hacks */
-        @media (max-width: 768px) {
-            section[data-testid="stSidebar"] {display: none;}
-        }
-        footer {visibility: hidden;}
-
-        /* PRO Ghost/Blur Styling */
-        .ghost-wrap {
-            position: relative;
-            border: 1px solid #eef2f7;
-            border-radius: 16px;
-            background: #ffffff;
-            padding: 14px;
-            margin-bottom: 12px;
-            overflow: hidden;
-        }
-        .ghost-blur-content {
-            filter: blur(3px);
-            opacity: 0.6;
-            pointer-events: none;
-            user-select: none;
-        }
-        
-        /* Overlay Card */
-        .pro-overlay-card {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 10;
-            background: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            padding: 20px;
-            width: 90%;
-            max-width: 420px;
-            text-align: center;
-        }
-        .pro-title { font-weight: 700; color: #111827; margin-bottom: 5px; font-size: 1.1rem; }
-        .pro-desc { font-size: 0.9rem; color: #6b7280; margin-bottom: 15px; }
-        .pro-badges { font-size: 0.8rem; color: #4b5563; margin-bottom: 15px; }
-        .pro-btn {
-            background: #22c55e; color: white !important; 
-            padding: 10px 20px; border-radius: 10px; 
-            text-decoration: none; font-weight: 700; display: inline-block;
-        }
-        .pro-btn:hover { opacity: 0.9; }
-
-        /* Ghost Elementen */
-        .g-bar { height: 40px; background: #f1f5f9; border-radius: 8px; margin-bottom: 10px; width: 100%; }
-        .g-txt { height: 14px; background: #f1f5f9; border-radius: 4px; margin-bottom: 6px; width: 70%; }
-        .g-row { display: flex; gap: 10px; margin-bottom: 10px; }
-    </style>
-    """, unsafe_allow_html=True)
+    """Laadt CSS."""
+    try:
+        with open("assets/styles.css") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    except:
+        pass # Fallback als bestand mist
 
 def inject_chat_widget(server_url):
-    """Injecteert de Chat Widget."""
+    """Injecteert Chatbot."""
+    # We gebruiken een iframe truc om hem over de app te leggen
     js_code = f"""
-    <html>
-    <head>
         <script>
             window.BMS_CHAT_SERVER = "{server_url}";
             window.BMS_CHAT_CSS_URL = "{server_url}/chat-widget.css";
         </script>
-        <link rel="stylesheet" href="{server_url}/chat-widget.css">
-    </head>
-    <body style="background:transparent;">
         <script src="{server_url}/chat-widget.js"></script>
-    </body>
-    </html>
     """
-    with st.sidebar:
-        components.html(js_code, height=0, width=0)
+    # Injectie onderaan de body
+    components.html(js_code, height=0)
 
-def render_locked_section(feature_name="Deze functie"):
-    """Toont de wazige achtergrond met de PRO overlay."""
+def render_trust_bar(confidence=95):
+    """Toont de balk met laatste update en vertrouwen."""
+    import datetime
+    nu = datetime.datetime.now().strftime("%d-%m %H:%M")
     
-    # HTML voor de 'Ghost' interface (nep content op de achtergrond)
-    ghost_html = """
-    <div class="ghost-wrap">
-        <div class="ghost-blur-content">
-            <div class="g-txt" style="width: 40%"></div>
-            <div class="g-bar"></div>
-            <div class="g-row">
-                <div class="g-bar"></div>
-                <div class="g-bar"></div>
-            </div>
-            <div class="g-txt" style="width: 60%"></div>
-            <div class="g-bar" style="height: 100px"></div>
-        </div>
-        
-        <div class="pro-overlay-card">
-            <div class="pro-title">🔒 {name} is een PRO-functie</div>
-            <div class="pro-desc">Ontgrendel alle AI-tools, playbooks en exports.</div>
-            <div class="pro-badges">🎁 14 dagen gratis · 💎 20% korting bij jaar</div>
-            <a href="https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2" target="_blank" class="pro-btn">
-              🔓 Ontgrendel PRO
-            </a>
+    st.markdown(f"""
+    <div class="trust-bar">
+        <div class="trust-badge">🕒 Laatste update: {nu}</div>
+        <div class="trust-badge">📂 Bron: Eigen Data</div>
+        <div class="trust-badge" style="background:#ecfdf5; color:#166534; border-color:#bbf7d0;">
+            <div class="trust-dot"></div> Vertrouwen in dit advies: {confidence}%
         </div>
     </div>
-    """.format(name=feature_name)
-    
-    st.markdown(ghost_html, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
+def render_kpi_row(views, engagement, viral_score):
+    """Toont de 3 grote kaarten bovenaan."""
+    st.markdown(f"""
+    <div class="kpi-container">
+        <div class="kpi-card">
+            <div class="kpi-label">Weergaven (7d)</div>
+            <div class="kpi-value">👁️ {views:,}</div>
+            <div class="kpi-delta delta-pos">+12.5%</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Gem. reactiescore</div>
+            <div class="kpi-value">💬 {engagement}%</div>
+            <div class="kpi-delta delta-pos">+2.1%</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Virale score</div>
+            <div class="kpi-value">🔥 {viral_score}/100</div>
+            <div class="kpi-delta delta-pos">+5 ptn</div>
+        </div>
+    </div>
+    """.replace(",", "."), unsafe_allow_html=True)
+
+def render_mission_card(time, reason, hook):
+    """Toont de 'Vandaag' missie kaart."""
+    st.markdown(f"""
+    <div class="mission-card">
+        <div class="mission-time-badge">Vandaag posten</div>
+        <div class="mission-header">
+            <div class="mission-icon">✅</div>
+            <div>
+                <h3 style="margin:0; font-size:1.1rem; color:#1e3a8a;">Vandaag: 1 simpele TikTok taak</h3>
+                <p style="margin:0; color:#64748b; font-size:0.9rem;">Doe alleen deze stappen. Dan is vandaag goed.</p>
+            </div>
+        </div>
+        <div style="margin-top:15px; padding-left:52px; color:#334155; line-height:1.6;">
+            <strong>Stap 1 - Tijd:</strong><br>
+            Post vandaag 1 video rond <strong>{time}:00</strong> ({reason}).<br><br>
+            <strong>Stap 2 - Hook:</strong><br>
+            "{hook}"
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_locked_section(title="Deze functie"):
+    """Toont de wazige PRO blokkade."""
+    st.markdown(f"""
+    <div class="ghost-wrapper">
+        <div class="pro-lock-overlay">
+            <div style="font-size:1.5rem; margin-bottom:10px;">🔒</div>
+            <h3 style="margin:0 0 5px 0; font-size:1.1rem;">{title} is een PRO-functie</h3>
+            <p style="color:#666; font-size:0.9rem; margin-bottom:15px;">
+                Ontgrendel alle AI-tools, playbooks en exports.
+            </p>
+            <div style="font-size:0.8rem; color:#888; margin-bottom:10px;">
+                🎁 14 dagen gratis · 💎 20% korting bij jaar
+            </div>
+            <a href="https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2" target="_blank" class="pro-btn">
+                ✨ Ontgrendel PRO
+            </a>
+        </div>
+        <div class="ghost-content">
+            <!-- Nep content voor de blur -->
+            <h3>Analyse overzicht</h3>
+            <p>Hier zouden gedetailleerde grafieken staan...</p>
+            <div style="height:150px; background:#f1f5f9; border-radius:10px; margin-top:10px;"></div>
+            <div style="height:40px; background:#f1f5f9; border-radius:5px; margin-top:10px; width:60%;"></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 def render_footer():
-    st.markdown("---")
-    st.markdown("<center style='color:#888; font-size: 0.8rem;'>© 2025 PostAi - Made for Creators</center>", unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="text-align:center; color:#94a3b8; font-size:0.8rem;">
+        🛡️ Privacy-vriendelijk &nbsp; · &nbsp; 📄 CSV/XLSX &nbsp; · &nbsp; 🎁 14 dagen gratis
+        <br><br>
+        © 2025 PostAi - Made for Creators
+    </div>
+    """, unsafe_allow_html=True)
