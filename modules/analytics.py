@@ -41,6 +41,24 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     
     return d.sort_values('Datum', ascending=False)
 
+def calculate_confidence(df):
+    """Berekent hoe betrouwbaar het advies is (0-100%)."""
+    if df.empty: return 0
+    
+    # Factoren: Aantal posts, recentheid, consistentie
+    n_posts = len(df)
+    score = 0
+    
+    if n_posts > 5: score += 30
+    if n_posts > 20: score += 30
+    if n_posts > 50: score += 20
+    
+    # Check of er data in de laatste 7 dagen is
+    # (Pseudo code, simpele aanname voor nu)
+    score += 20 
+    
+    return min(score, 100)
+
 def calculate_kpis(df: pd.DataFrame):
     """Berekent geavanceerde KPI's voor de 10/10 ervaring."""
     if df.empty: return df
