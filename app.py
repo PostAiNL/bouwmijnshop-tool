@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import time
 import os
 from pathlib import Path
 
@@ -10,41 +9,46 @@ from modules import analytics, ui, auth, ai_coach, data_loader
 # --- CONFIG ---
 st.set_page_config(page_title="PostAi – TikTok Growth", page_icon="📈", layout="wide")
 
-# CSS laden
-try:
-    with open("assets/style.css") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-except FileNotFoundError:
-    # Fallback als de 's' nog niet goed staat
-    with open("assets/styles.css") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+# Styling laden
+ui.inject_style_and_hacks()
 
-# JS Injecties
-ui.inject_mobile_hacks()
+# Chatbot laden
 chat_url = os.getenv("CHAT_SERVER_URL", "https://chatbot-2-0-3v8l.onrender.com")
 ui.inject_chat_widget(server_url=chat_url)
 
-# --- SESSION STATE SETUP ---
+# --- STATE SETUP ---
 if "data_source" not in st.session_state: st.session_state.data_source = "demo"
-if "df" not in st.session_state: 
-    st.session_state.df = data_loader.load_demo_data()
+if "df" not in st.session_state: st.session_state.df = data_loader.load_demo_data()
 
 # --- SIDEBAR ---
 with st.sidebar:
-    logo_path = "assets/logo.png"
-    if Path(logo_path).exists():
-        st.image(logo_path, use_container_width=True)
+    if Path("assets/logo.png").exists():
+        st.image("assets/logo.png", use_container_width=True)
     else:
-        st.markdown("## PostAi 🚀")
+        st.markdown("## 🚀 PostAi")
     
+    # PRO STATUS CHECK
     is_pro = auth.check_license()
+    
     if is_pro:
-        st.success("✅ PRO Actief")
+        st.markdown("""
+        <div style="background:#dcfce7; padding:8px; border-radius:8px; color:#166534; font-weight:bold; text-align:center; border:1px solid #bbf7d0; margin-bottom:20px;">
+           ✅ PRO Geactiveerd
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        st.info("🧪 DEMO Modus")
-        
+        st.markdown("""
+        <div style="background:#e0f2fe; padding:8px; border-radius:8px; color:#0369a1; font-weight:bold; text-align:center; border:1px solid #bae6fd; margin-bottom:20px;">
+           🧪 DEMO Modus
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("---")
     st.subheader("📂 Jouw Data")
+    
+    # Koppel TikTok
+    st.link_button("🔗 Koppel TikTok", auth.get_tiktok_auth_url(), use_container_width=True, type="primary")
+    st.caption("Of gebruik een bestand:")
     
     # Upload
     uploaded_file = st.file_uploader("Upload CSV/XLSX", type=['csv', 'xlsx'])
@@ -52,146 +56,168 @@ with st.sidebar:
         raw_df = data_loader.load_file(uploaded_file)
         st.session_state.df = analytics.clean_data(raw_df)
         st.session_state.data_source = "upload"
-        st.toast("Data succesvol geladen!", icon="📊")
+        st.toast("Data geladen!")
+        st.rerun() # Direct verversen
         
-    if st.button("🔄 Reset naar Demo Data"):
+    if st.button("⚡ Reset naar Demo Data", use_container_width=True):
         st.session_state.df = data_loader.load_demo_data()
         st.session_state.data_source = "demo"
         st.rerun()
 
-# --- MAIN LOGIC ---
+# --- HOOFD SCHERM ---
 df = analytics.calculate_kpis(st.session_state.df)
 streak = analytics.get_consistency_streak(df)
 best_time = analytics.get_best_posting_time(df)
 
-# --- HEADER ---
-col1, col2 = st.columns([3, 1])
-with col1:
+# Header
+c1, c2 = st.columns([3, 1])
+with c1:
     st.title("Goedemorgen, Creator! 🚀")
-    st.caption(f"Vandaag is een perfecte dag om te groeien. ({st.session_state.data_source} data actief)")
-with col2:
-    st.metric("🔥 Consistentie Streak", f"{streak} Dagen", delta=1 if streak > 0 else 0)
+    st.caption(f"Vandaag is een perfecte dag om te groeien. (Bron: {st.session_state.data_source})")
+with c2:
+    st.metric("🔥 Consistentie Streak", f"{streak} Dagen")
 
-# --- TABS ---
-tab_start, tab_coach, tab_analyse, tab_strategy, tab_settings = st.tabs([
-    "🧠 Start", "🤖 AI Coach", "📊 Analyse", "🎯 Strategie", "⚙️ Instellingen"
-])
+# Tabs
+tabs = st.tabs(["🧠 Start", "🤖 Coach", "📊 Analyse", "🎯 Strategie", "⚙️ Instellingen"])
+t_start, t_coach, t_analyse, t_strat, t_set = tabs
 
 # === TAB 1: START ===
-with tab_start:
-    st.markdown(f"""
-    <div class="hero-card">
-        <h3>📅 Jouw Plan voor Vandaag</h3>
-        <p>Op basis van je data is <strong>{best_time}:00</strong> het beste moment om te posten.</p>
-        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
-            <div style="background:#eef2f7; padding:5px 10px; border-radius:5px;">✅ Stap 1: Film 15s video</div>
-            <div style="background:#eef2f7; padding:5px 10px; border-radius:5px;">✅ Stap 2: Gebruik hook type 'vraag'</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+with t_start:
+    st.subheader("Start - eerste stappen")
     
-    col_idea, col_kpi = st.columns([1, 1])
+    st.info(f"📅 **Jouw plan voor vandaag:** Post om **{best_time}:00** uur.")
+    
+    # Mini script
+    with st.container(border=True):
+        st.markdown("### 🎬 Mini-script voor vandaag")
+        st.text("Hook: 'Ik wou dat ik dit eerder wist over [jouw niche]...'")
+        st.text("Body: Vertel 1 veelgemaakte fout en hoe het wél moet.")
+        st.text("CTA: 'Volg voor meer tips.'")
+
+    col_idea, col_kpi = st.columns(2)
     with col_idea:
-        with st.container(border=True):
-            st.subheader("💡 Inspiratie nodig?")
-            if st.button("🎲 Genereer 1 Quick Win Idee", use_container_width=True):
-                idea = ai_coach.get_quick_win_idea("Algemeen")
-                st.info(f"**Idee:** {idea}")
-    
+        if st.button("🎲 Genereer 1 Quick Win Idee", use_container_width=True):
+            idea = ai_coach.get_quick_win_idea("Algemeen")
+            st.success(f"**Idee:** {idea}")
     with col_kpi:
-        avg_views = int(df['Views'].mean()) if not df.empty else 0
-        st.metric("Gemiddelde Views", f"{avg_views:,}", "+12% vs vorige week")
+        st.metric("Gemiddelde Views", f"{int(df['Views'].mean()):,}")
 
-# === TAB 2: AI COACH ===
-with tab_coach:
-    st.header("Jouw Persoonlijke AI Scriptschrijver")
-    col_input, col_output = st.columns(2)
+# === TAB 2: COACH (PRO ONLY) ===
+with t_coach:
+    st.subheader("🤖 AI Coach (PRO)")
     
-    with col_input:
-        topic = st.text_input("Waar wil je een video over maken?")
-        style = st.select_slider("Toon", options=["Grappig", "Direct", "Educatief", "Controversieel"], value="Direct")
-        
-        if st.button("✨ Schrijf Script", type="primary", use_container_width=True):
-            if not is_pro and st.session_state.data_source == "demo":
-                ui.show_pro_gate()
-            else:
-                with st.spinner("AI analyseert je beste video's..."):
-                    top_posts = df.head(5)
-                    script = ai_coach.generate_script_from_data(topic, top_posts, style)
-                    st.session_state['last_script'] = script
-    
-    with col_output:
-        if 'last_script' in st.session_state:
-            st.text_area("Jouw Script", st.session_state['last_script'], height=350)
-        else:
-            st.info("👈 Vul een onderwerp in en laat AI het werk doen.")
-
-# === TAB 3: ANALYSE ===
-with tab_analyse:
-    st.subheader("Diepte Analyse")
-    if df.empty:
-        st.warning("Geen data beschikbaar.")
+    if not is_pro:
+        ui.render_locked_section("Volledige AI Coach")
     else:
-        import altair as alt
-        chart = alt.Chart(df.head(30)).mark_line(point=True).encode(
-            x='Datum', y='Views', tooltip=['Datum', 'Views', 'Likes']
-        ).interactive()
-        st.altair_chart(chart, use_container_width=True)
-        
-        st.markdown("### 📋 Recente Posts")
-        st.dataframe(
-            df[['Datum', 'Views', 'Likes', 'Engagement', 'Viral Score', 'Caption']], 
-            use_container_width=True,
-            hide_index=True
-        )
+        st.write("De coach staat klaar. Stel je vraag in de chat rechtsonder of gebruik de tools hier.")
+        topic = st.text_input("Waar gaat je video over?")
+        if st.button("✨ Schrijf Script"):
+            with st.spinner("Bezig..."):
+                script = ai_coach.generate_script_from_data(topic, df.head(5))
+                st.text_area("Script", script, height=300)
 
-# === TAB 4: STRATEGIE (De ontbrekende functies) ===
-with tab_strategy:
-    st.subheader("🎯 Content Strategie & A/B Testen")
+# === TAB 3: ANALYSE (Zoals screenshot) ===
+with t_analyse:
+    st.subheader("📊 Analyse - duidelijk voor iedereen")
     
-    with st.expander("🔁 A/B Test Planner", expanded=True):
-        if not is_pro and st.session_state.data_source == "demo":
-            ui.show_pro_gate()
+    # 1. Resultaten overzicht (Gratis)
+    with st.expander("📋 Resultaten-overzicht (gratis)", expanded=False):
+        st.dataframe(df[['Datum', 'Views', 'Likes', 'Engagement', 'Caption']], use_container_width=True)
+
+    # 2. Hashtags (Gratis)
+    with st.expander("🏷️ Hashtag-prestaties (gratis)", expanded=False):
+        st.write("Hier zie je welke hashtags het beste werken.")
+        # Dummy logica voor nu, kan later uitgebreid
+        st.bar_chart(df.head(10).set_index('Caption')['Views'])
+
+    # 3. Trends (PRO)
+    with st.expander("📈 Wat werkt nu? (trends, PRO)", expanded=False):
+        if not is_pro:
+            ui.render_locked_section("Trend Analyse")
+        else:
+            st.success("Je populairste onderwerpen van de laatste 14 dagen:")
+            st.write("1. #Tutorials")
+            st.write("2. #BehindTheScenes")
+
+    # 4. Vergelijk (PRO)
+    with st.expander("🔁 Vergelijk perioden (A vs. B, PRO)", expanded=False):
+        if not is_pro:
+            ui.render_locked_section("Periode Vergelijker")
         else:
             c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("**Variant A**")
-                hook_a = st.text_input("Hook A", "Wat niemand je vertelt over...")
-            with c2:
-                st.markdown("**Variant B**")
-                hook_b = st.text_input("Hook B", "De grootste fout bij...")
-            
-            if st.button("🚀 Bereken Winnaar Kans"):
-                import random
-                score_a = random.randint(70, 95)
-                score_b = random.randint(60, 90)
-                winner = "A" if score_a > score_b else "B"
-                st.success(f"De AI voorspelt dat **Variant {winner}** {abs(score_a - score_b)}% beter zal scoren.")
+            c1.date_input("Periode A")
+            c2.date_input("Periode B")
+            st.info("Selecteer data om te vergelijken.")
 
-    with st.expander("📅 Wachtrij & Planning"):
-        st.write("Hier kun je je geplande video's beheren.")
-        if 'queue' not in st.session_state: st.session_state.queue = []
-        
-        new_item = st.text_input("Nieuw idee voor wachtrij")
-        if st.button("Toevoegen"):
-            st.session_state.queue.append(new_item)
-            st.rerun()
+# === TAB 4: STRATEGIE (Zoals screenshot) ===
+with t_strat:
+    st.subheader("🎯 Strategie - makkelijk testen")
+    
+    st.markdown("### 🧪 Ideeën & testen")
+    
+    # Ideeëngenerator (Gratis)
+    with st.expander("💡 Ideeëngenerator (gratis)", expanded=False):
+        topic_idea = st.text_input("Onderwerp", key="idea_gen")
+        if st.button("Geef ideeën"):
+            st.write(f"1. 3 Fouten bij {topic_idea}")
+            st.write(f"2. Hoe ik begon met {topic_idea}")
             
-        for i, item in enumerate(st.session_state.queue):
-            st.text(f"{i+1}. {item}")
+    # A/B Planner (PRO)
+    with st.expander("🔁 A/B-test planner (PRO)", expanded=False):
+        if not is_pro:
+            ui.render_locked_section("A/B Test Planner")
+        else:
+            st.text_input("Hook A")
+            st.text_input("Hook B")
+            st.button("Sla test op")
+
+    st.markdown("### 🤖 AI-tools (PRO)")
+    
+    # AI Coach
+    with st.expander("🧠 AI Coach - persoonlijk advies (PRO)"):
+        if not is_pro: ui.render_locked_section("AI Coach")
+        else: st.write("Gebruik de chat rechtsonder voor direct advies!")
+
+    # Hook Check
+    with st.expander("✍️ Check mijn hook/caption (PRO)"):
+        if not is_pro: ui.render_locked_section("Hook/caption check")
+        else: 
+            hook = st.text_input("Plak je hook")
+            if st.button("Check"): st.success("Sterke hook! 8/10")
+
+    # Generator
+    with st.expander("🪄 Caption & Hook generator (PRO)"):
+        if not is_pro: ui.render_locked_section("Caption & Hook generator")
+        else: st.write("Generator tools hier...")
+
+    # Chat
+    with st.expander("💬 Chat met PostAi (PRO)"):
+        if not is_pro: ui.render_locked_section("Chat functie")
+        else: st.write("De chat widget staat rechtsonder.")
+
+    st.markdown("### 📅 Playbook & 7-dagen plan (PRO)")
+    
+    with st.expander("📅 Playbook & exports openen (PRO)"):
+        if not is_pro: ui.render_locked_section("Playbook & Exports")
+        else: st.button("Download PDF Plan")
 
 # === TAB 5: INSTELLINGEN ===
-with tab_settings:
-    st.markdown("### ⚙️ Account")
-    key_input = st.text_input("Licentiesleutel", type="password", help="Vul je PRO key in")
+with t_set:
+    st.subheader("⚙️ Instellingen")
     
-    if st.button("Activeer Licentie"):
-        # In het echt sla je dit op in cookies of db
-        if key_input:
-            st.session_state.license_key = key_input
-            st.success("Licentie gecheckt! Herlaad de pagina.")
-            time.sleep(1)
-            st.rerun()
+    with st.container(border=True):
+        st.markdown("#### 🔑 Licentie & PRO")
+        
+        if is_pro:
+            st.success("Je PRO-licentie is actief! Alle functies zijn ontgrendeld.")
+            if st.button("Licentie deactiveren (Log uit)"):
+                st.session_state.is_pro_session = False
+                st.rerun()
+        else:
+            st.warning("PRO is niet actief. Vul je sleutel in.")
+            key = st.text_input("Licentiesleutel", type="password")
+            if st.button("🔓 Activeer PRO", type="primary"):
+                auth.activate_license(key)
 
-# --- FOOTER ---
+# Footer
 ui.render_footer()
