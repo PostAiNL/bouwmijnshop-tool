@@ -31,7 +31,7 @@ def is_pro():
     if key == PRO_KEY_FIXED: return True
     return key == get_secret("PRO_LICENSE_KEY")
 
-# --- OPSLAG (User Data) ---
+# --- DATABASE LOGICA (OPSLAAN & LADEN) ---
 def load_progress():
     key = st.session_state.license_key
     if not key: return {}
@@ -42,12 +42,11 @@ def load_progress():
             return db.get(key, {})
     except: return {}
 
-def save_progress(xp=None, level=None, niche=None, streak=None):
+def save_progress(xp=None, level=None, niche=None, streak=None, my_style=None):
     key = st.session_state.license_key
     if not key: return
     
     data = {}
-    # Laad bestaande data veilig in
     if os.path.exists(USER_DB_FILE):
         try: 
             with open(USER_DB_FILE, 'r') as f: 
@@ -57,16 +56,91 @@ def save_progress(xp=None, level=None, niche=None, streak=None):
     
     if key not in data: data[key] = {}
     
-    # Update de velden
     if xp is not None: data[key]["xp"] = xp
     if level is not None: data[key]["level"] = level
     if niche is not None: data[key]["niche"] = niche
+    if my_style is not None: data[key]["my_style"] = my_style
     if streak is not None: 
         data[key]["streak"] = streak
         data[key]["last_active"] = str(datetime.now().date())
     
-    # Sla op
     try: 
+        with open(USER_DB_FILE, 'w') as f: 
+            json.dump(data, f)
+    except: 
+        pass
+
+# --- SCRIPT LIBRARY FUNCTIES (NIEUW) ---
+def save_script_to_library(topic, content, script_type="Viral"):
+    """Slaat een gegenereerd script op in de library."""
+    key = st.session_state.license_key
+    if not key: return
+    
+    new_script = {
+        "id": str(uuid.uuid4()),
+        "date": str(datetime.now().strftime("%Y-%m-%d")),
+        "topic": topic,
+        "content": content,
+        "type": script_type,
+        "status": "Te Filmen" # Statussen: Te Filmen -> Gefilmd -> Gepost
+    }
+
+    data = {}
+    if os.path.exists(USER_DB_FILE):
+        try: 
+            with open(USER_DB_FILE, 'r') as f: 
+                data = json.load(f)
+        except: 
+            data = {}
+        
+    if key not in data: data[key] = {}
+    if "library" not in data[key]: data[key]["library"] = []
+    
+    data[key]["library"].insert(0, new_script) # Nieuwste bovenaan
+    
+    try: 
+        with open(USER_DB_FILE, 'w') as f: 
+            json.dump(data, f)
+    except: 
+        pass
+
+def get_user_library():
+    """Haalt alle opgeslagen scripts op."""
+    data = load_progress()
+    return data.get("library", [])
+
+def update_script_status(script_id, new_status):
+    """Update de status (bv van Te Filmen naar Gepost)."""
+    key = st.session_state.license_key
+    if not os.path.exists(USER_DB_FILE): return
+    
+    try:
+        with open(USER_DB_FILE, 'r') as f: 
+            data = json.load(f)
+        
+        if key in data and "library" in data[key]:
+            for s in data[key]["library"]:
+                if s["id"] == script_id:
+                    s["status"] = new_status
+                    break
+        
+        with open(USER_DB_FILE, 'w') as f: 
+            json.dump(data, f)
+    except: 
+        pass
+
+def delete_script(script_id):
+    """Verwijdert een script."""
+    key = st.session_state.license_key
+    if not os.path.exists(USER_DB_FILE): return
+    
+    try:
+        with open(USER_DB_FILE, 'r') as f: 
+            data = json.load(f)
+        
+        if key in data and "library" in data[key]:
+            data[key]["library"] = [s for s in data[key]["library"] if s["id"] != script_id]
+        
         with open(USER_DB_FILE, 'w') as f: 
             json.dump(data, f)
     except: 
@@ -99,10 +173,8 @@ def save_lead(name, email, license_key):
         data.append(lead)
         with open(LEADS_FILE, 'w') as f: json.dump(data, f)
     except: pass
-    
-    admin_email = get_secret("ADMIN_EMAIL")
-    if admin_email: 
-        _send_mail_raw(admin_email, f"🔥 Nieuwe User: {name}", f"Key: {license_key}")
+    admin = get_secret("ADMIN_EMAIL")
+    if admin: _send_mail_raw(admin, f"🔥 Nieuwe User: {name}", f"Key: {license_key}")
 
 def render_landing_page():
     st.markdown("""
@@ -113,21 +185,16 @@ def render_landing_page():
         <p style="color:#6b7280; line-height:1.5;">Krijg elke dag een kant-en-klaar script.<br>Speciaal voor starters. Geen ervaring nodig.</p>
     </div>
     """, unsafe_allow_html=True)
-    
     with st.form("lp_form"):
         name = st.text_input("Je Naam")
         email = st.text_input("Je E-mailadres")
-        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-        
-        if st.form_submit_button("🚀 Start Gratis (Geen Creditcard)", use_container_width=True):
+        if st.form_submit_button("🚀 Start Gratis", use_container_width=True):
             if "@" in email and len(name) > 1:
                 key = str(uuid.uuid4())[:8].upper()
                 save_lead(name, email, key)
                 st.session_state.license_key = key
                 st.query_params["license"] = key
                 st.rerun()
-            else:
-                st.error("Vul alsjeblieft je naam en email in.")
 
 def activate_pro(key_input):
     if key_input == PRO_KEY_FIXED or key_input == get_secret("PRO_LICENSE_KEY"):
@@ -135,5 +202,4 @@ def activate_pro(key_input):
         st.query_params["license"] = key_input
         st.success("PRO Geactiveerd! 🎉")
         st.rerun()
-    else:
-        st.error("Ongeldige code.")
+    else: st.error("Ongeldige code.")

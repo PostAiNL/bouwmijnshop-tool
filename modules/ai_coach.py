@@ -1,7 +1,6 @@
 import streamlit as st
 from openai import OpenAI
 import os
-import datetime
 import json
 
 def get_client():
@@ -22,15 +21,14 @@ def get_viral_hooks_library():
         "Dit verandert alles aan {onderwerp}..."
     ]
 
-def generate_script(topic, video_format, tone, hook, cta, niche):
+# --- GENERATORS ---
+def generate_script(topic, video_format, tone, hook, cta, niche, user_style=""):
     client = get_client()
     if not client: return "⚠️ Geen API Key."
-    
+    style_ins = f"Stijl: {user_style}" if user_style else ""
     prompt = f"""
-    Expert TikTok Script.
-    Niche: {niche} | Topic: {topic} | Format: {video_format} | Toon: {tone}.
-    Hook: {hook} | CTA: {cta}.
-    Format: Markdown Tabel (Tijd | Visueel | Audio).
+    Expert TikTok Script. Niche: {niche} | Topic: {topic} | Format: {video_format} | Tone: {tone}.
+    Hook: {hook} | CTA: {cta}. {style_ins}. Output: Markdown Tabel (Tijd|Visueel|Audio).
     """
     try:
         res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}])
@@ -38,69 +36,80 @@ def generate_script(topic, video_format, tone, hook, cta, niche):
     except Exception as e: return f"Error: {str(e)}"
 
 def generate_sales_script(product, pain, strategy, niche):
-    """
-    De 'Money Maker'. Genereert scripts puur voor conversie.
-    """
     client = get_client()
     if not client: return "⚠️ Geen API Key."
-    
     prompt = f"""
-    Je bent een Direct Response Copywriter voor TikTok.
-    DOEL: VERKOOP. Product: '{product}'. Niche: '{niche}'.
-    Strategie: {strategy}.
-    Pijn die het oplost: {pain}.
-    
-    Schrijf een script dat de kijker direct grijpt en niet loslaat tot ze kopen.
-    
-    Structuur:
-    1. HOOK: Raak de pijn.
-    2. STORY/DEMO: Laat zien hoe het leven is MET product.
-    3. OFFER: Wat krijgen ze?
-    4. CTA: Dwingende reden om NU te klikken.
-    
-    Output: Markdown Tabel (Tijd | Visueel | Audio).
+    Direct Response Copywriting TikTok Script.
+    Product: {product}. Pain: {pain}. Strategy: {strategy}. Niche: {niche}.
+    Gebruik AIDA. Output: Markdown Tabel (Tijd|Visueel|Audio).
     """
     try:
         res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}])
         return res.choices[0].message.content
     except Exception as e: return f"Error: {str(e)}"
 
-def generate_digital_product(niche, audience):
+# --- ANALYTICS (DE DATA DETECTIVE) ---
+def analyze_data_patterns(df_summary, niche):
     """
-    De Passief Inkomen Bedenker.
+    Dit is de PRO functie die ruwe data omzet in goud.
     """
     client = get_client()
-    if not client: return "⚠️ Geen API Key."
+    if not client: return "Geen API Key."
     
     prompt = f"""
-    Ik ben een creator in de niche '{niche}' en mijn doelgroep is '{audience}'.
-    Bedenk HET perfecte digitale product om te verkopen (E-book, Cursus, Template).
+    Jij bent een Data Analist voor TikTok Creators.
+    Hier is een samenvatting van de account statistieken van een creator in de niche '{niche}':
     
-    Geef me een compleet Business Plan:
-    1. **De Titel** (Pakkend)
-    2. **Het Format** (Wat is het?)
-    3. **De Prijs** (Adviesprijs)
-    4. **De Hoofdstukindeling** (5-7 modules/hoofdstukken)
-    5. **De Marketing Hook** (Eén zin om het te verkopen)
+    DATA SAMENVATTING:
+    {df_summary}
     
-    Gebruik Markdown. Maak het aantrekkelijk.
+    OPDRACHT:
+    Zoek naar verborgen patronen. Waarom scoort de top video goed? Waarom faalt de rest?
+    Geef 3 CONCRETE inzichten.
+    
+    Output format (JSON):
+    {{
+        "insight_1": "Titel + Uitleg",
+        "insight_2": "Titel + Uitleg",
+        "insight_3": "Titel + Uitleg",
+        "strategy_tip": "Eén concrete actie voor de volgende video."
+    }}
     """
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o-mini", 
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        return json.loads(res.choices[0].message.content)
+    except: 
+        return {
+            "insight_1": "Focus op Hooks", 
+            "insight_2": "Korte video's werken beter", 
+            "insight_3": "Gebruik meer tekst", 
+            "strategy_tip": "Probeer de eerste 3 seconden sneller te maken."
+        }
+
+# --- OVERIGE FUNCTIES ---
+def generate_digital_product(niche, audience):
+    client = get_client()
+    prompt = f"Bedenk digitaal product voor {niche} doelgroep {audience}. Markdown: Titel, Format, Prijs, Hoofdstukken."
     try:
         res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}])
         return res.choices[0].message.content
-    except: return "Fout bij genereren."
+    except: return "Error."
 
 def audit_script(script_text, niche):
     client = get_client()
-    prompt = f"Beoordeel script ({niche}) op JSON: score (0-100), verdict, pros, cons, tip. Script: {script_text}"
+    prompt = f"Audit script ({niche}). JSON: score(0-100), verdict, pros, cons, tip. Script: {script_text}"
     try:
         res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"})
         return json.loads(res.choices[0].message.content)
-    except: return {"score": 75, "verdict": "Prima basis.", "pros": "Helder", "cons": "Kan scherper", "tip": "Meer energie."}
+    except: return {"score": 70, "verdict": "Prima", "pros": "-", "cons": "-", "tip": "-"}
 
 def check_viral_potential(idea, niche):
     client = get_client()
-    prompt = f"Beoordeel idee '{idea}' ({niche}) JSON: score (0-100), label, explanation, tip."
+    prompt = f"Rate idea '{idea}' ({niche}). JSON: score(0-100), label, explanation, tip."
     try:
         res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"})
         return json.loads(res.choices[0].message.content)
@@ -108,15 +117,15 @@ def check_viral_potential(idea, niche):
 
 def generate_series_ideas(topic, niche):
     client = get_client()
-    prompt = f"5-delige TikTok serie over '{topic}' ({niche}). Markdown. Titel, Hook, Inhoud per deel."
+    prompt = f"5-delige TikTok serie '{topic}' ({niche}). Markdown."
     try:
         res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}])
         return res.choices[0].message.content
     except: return "Error."
 
-def steal_format_and_rewrite(other_script, my_topic, niche):
+def steal_format_and_rewrite(other, mine, niche):
     client = get_client()
-    prompt = f"Analyseer structuur van '{other_script}'. Schrijf nieuw script over '{my_topic}' ({niche}) met die structuur."
+    prompt = f"Steel structuur van '{other}', schrijf over '{mine}' ({niche}). Markdown."
     try:
         res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}])
         return res.choices[0].message.content
@@ -124,7 +133,7 @@ def steal_format_and_rewrite(other_script, my_topic, niche):
 
 def generate_weekly_plan(niche):
     client = get_client()
-    prompt = f"7 Dagen content kalender '{niche}'. Tabel: Dag|Idee|Waarom."
+    prompt = f"7 Dagen content kalender '{niche}'. Tabel."
     try:
         res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}])
         return res.choices[0].message.content
