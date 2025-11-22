@@ -1,112 +1,88 @@
 import pandas as pd
 import numpy as np
+import re
 from datetime import datetime
 
-def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Schoont de data op, converteert datums en nummers."""
-    if df is None or df.empty:
-        return pd.DataFrame()
-    
-    # Kolom mapping (case insensitive)
-    cols = {c.lower().replace(" ", ""): c for c in df.columns}
-    
-    # Helper voor veilige conversie
-    def to_int(val):
-        try:
-            s = str(val).lower().replace(',', '').replace('.', '')
-            if 'k' in s: return int(float(s.replace('k', '')) * 1000)
-            if 'm' in s: return int(float(s.replace('m', '')) * 1000000)
-            return int(s)
-        except: return 0
+def parse_smart_number(val):
+    if pd.isna(val): return 0
+    s = str(val).lower().strip()
+    mult = 1
+    if 'k' in s: mult = 1000; s = s.replace('k', '')
+    if 'm' in s: mult = 1000000; s = s.replace('m', '')
+    s = re.sub(r"[^0-9.,]", "", s)
+    try:
+        if '.' in s and ',' in s: s = s.replace('.', '').replace(',', '.')
+        elif ',' in s: s = s.replace(',', '.')
+        return int(float(s) * mult)
+    except: return 0
 
-    # Standaardiseer DataFrame
-    d = pd.DataFrame()
+def clean_data(df):
+    if df.empty: return pd.DataFrame()
+    # Maak kolomnamen lowercase en strip spaties
+    df.columns = [c.lower().strip().replace(" ", "") for c in df.columns]
     
-    # Zoek kolommen (flexibel)
-    views_col = cols.get('views') or cols.get('weergaven') or cols.get('plays')
-    date_col = cols.get('date') or cols.get('datum') or cols.get('time') or cols.get('posttime')
-    likes_col = cols.get('likes') or cols.get('hartjes')
+    # Mapping
+    map_cols = {
+        'video_views': 'Views', 'views': 'Views', 'play_count': 'Views',
+        'likes': 'Likes', 'digg_count': 'Likes',
+        'publish_time': 'Datum', 'create_time': 'Datum', 'date': 'Datum',
+        'description': 'Caption', 'title': 'Caption', 'caption': 'Caption'
+    }
     
-    if not views_col or not date_col:
-        return pd.DataFrame() # Minimale vereisten
+    # Hernoem kolommen als ze bestaan
+    new_df = pd.DataFrame()
+    found_cols = df.columns
+    
+    # Zoek de juiste kolommen
+    for k, v in map_cols.items():
+        # Zoek naar partial match (bv 'video publish time')
+        for col in found_cols:
+            if k in col and v not in new_df.columns:
+                new_df[v] = df[col]
+    
+    # Als we minimale data hebben
+    if 'Views' in new_df.columns:
+        new_df['Views'] = new_df['Views'].apply(parse_smart_number)
+    else: return pd.DataFrame() # Geen views = nutteloos
+        
+    if 'Likes' in new_df.columns: new_df['Likes'] = new_df['Likes'].apply(parse_smart_number)
+    else: new_df['Likes'] = 0
+    
+    if 'Datum' in new_df.columns:
+        new_df['Datum'] = pd.to_datetime(new_df['Datum'], errors='coerce')
+    else:
+        new_df['Datum'] = datetime.now() # Fallback
 
-    d['Views'] = df[views_col].apply(to_int)
-    d['Likes'] = df[likes_col].apply(to_int) if likes_col else 0
-    d['Shares'] = df.get('Shares', 0) # Als deze kolom bestaat
-    d['Caption'] = df.get('Caption', df.get('Video titel', ''))
+    if 'Caption' not in new_df.columns: new_df['Caption'] = "-"
     
-    # Datum parsing (krachtig)
-    d['Datum'] = pd.to_datetime(df[date_col], errors='coerce', dayfirst=True)
-    d = d.dropna(subset=['Datum']) # Verwijder rijen zonder datum
-    
+    return new_df.dropna(subset=['Views'])
+
+def calculate_kpis(df):
+    if df.empty: return df
+    d = df.copy()
+    # Engagement: (Likes / Views) * 100
+    d['Engagement'] = (d['Likes'] / d['Views'].replace(0, 1)) * 100
     return d.sort_values('Datum', ascending=False)
 
-def calculate_confidence(df):
-    """Berekent hoe betrouwbaar het advies is (0-100%)."""
-    if df.empty: return 0
-    
-    # Factoren: Aantal posts, recentheid, consistentie
-    n_posts = len(df)
-    score = 0
-    
-    if n_posts > 5: score += 30
-    if n_posts > 20: score += 30
-    if n_posts > 50: score += 20
-    
-    # Check of er data in de laatste 7 dagen is
-    # (Pseudo code, simpele aanname voor nu)
-    score += 20 
-    
-    return min(score, 100)
+def get_best_posting_time(df):
+    if df.empty: return pd.DataFrame({'Uur': [12], 'Views': [0]})
+    d = df.copy()
+    d['Uur'] = d['Datum'].dt.hour
+    # Groepeer op uur en pak gemiddelde views
+    stats = d.groupby('Uur')['Views'].mean().reset_index()
+    return stats.sort_values('Views', ascending=False).head(24)
 
-def calculate_kpis(df: pd.DataFrame):
-    """Berekent geavanceerde KPI's voor de 10/10 ervaring."""
-    if df.empty: return df
+def get_trending_hashtags(df):
+    if df.empty or 'Caption' not in df.columns: return pd.DataFrame()
     
-    # 1. Engagement Rate (Likes + Shares / Views)
-    # We voegen een kleine epsilon toe om deling door nul te voorkomen
-    df['Engagement'] = ((df['Likes'] + df.get('Shares', 0)) / (df['Views'] + 1)) * 100
-    
-    # 2. Viral Score (Weighted: Views tellen zwaarder, maar engagement corrigeert)
-    # We gebruiken logaritmische schaal voor views om viral hits te normaliseren
-    log_views = np.log1p(df['Views'])
-    scaled_views = (log_views - log_views.min()) / (log_views.max() - log_views.min() + 0.001)
-    df['Viral Score'] = (scaled_views * 70) + (np.clip(df['Engagement'], 0, 20) * 1.5)
-    df['Viral Score'] = df['Viral Score'].clip(0, 100).round(0)
-    
-    return df
-
-def get_best_posting_time(df: pd.DataFrame) -> int:
-    """Bepaalt het beste uur obv historische prestaties (mediaan views per uur)."""
-    if df.empty: return 19 # Fallback
-    
-    df['Hour'] = df['Datum'].dt.hour
-    # We filteren uren met minder dan 3 posts om toeval te voorkomen
-    hourly_stats = df.groupby('Hour')['Views'].median()
-    
-    if hourly_stats.empty: return 19
-    return int(hourly_stats.idxmax())
-
-def get_consistency_streak(df: pd.DataFrame) -> int:
-    """Nieuwe Feature: Berekent hoeveel dagen op rij er gepost is (Gamification)."""
-    if df.empty: return 0
-    
-    dates = df['Datum'].dt.date.sort_values(ascending=False).unique()
-    if len(dates) == 0: return 0
-    
-    today = datetime.now().date()
-    streak = 0
-    
-    # Check of de laatste post vandaag of gisteren was om streak te behouden
-    if (today - dates[0]).days > 1:
-        return 0
+    # Extract hashtags
+    tags = []
+    for txt in df['Caption'].astype(str):
+        found = re.findall(r"#(\w+)", txt)
+        tags.extend(found)
         
-    # Tel terug
-    current_check = dates[0]
-    for d in dates:
-        if (current_check - d).days <= 1:
-            streak += 1
-            current_check = d
-        else:
-            break
-    return streak
+    if not tags: return pd.DataFrame(columns=["Hashtag", "Aantal"])
+    
+    from collections import Counter
+    c = Counter(tags)
+    return pd.DataFrame(c.most_common(10), columns=["Hashtag", "Aantal"])

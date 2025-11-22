@@ -1,57 +1,147 @@
 import streamlit as st
 from openai import OpenAI
-import pandas as pd
-import os  # <--- Importeer os
+import os
+import datetime
+import json
 
 def get_client():
-    # Vervang st.secrets door os.getenv
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key: return None
+    if not api_key:
+        try: api_key = st.secrets["OPENAI_API_KEY"]
+        except: return None
     return OpenAI(api_key=api_key)
 
-def generate_script_from_data(topic: str, top_posts: pd.DataFrame, style="Direct"):
-    """Genereert een script gebaseerd op wat eerder werkte voor deze gebruiker."""
+def get_viral_hooks_library():
+    # Hooks zijn de openingzinnen die zorgen dat mensen blijven kijken
+    return [
+        "Stop met {onderwerp} op deze manier...",
+        "Waarom niemand praat over {onderwerp}...",
+        "Ik testte {onderwerp} voor 7 dagen...",
+        "3 signalen dat je {onderwerp} verkeerd doet...",
+        "De #1 hack voor {onderwerp}...",
+        "POV: Je snapt eindelijk {onderwerp}...",
+        "Dit verandert alles aan {onderwerp}..."
+    ]
+
+def generate_script(topic, video_format, tone, hook, cta, niche):
     client = get_client()
-    if not client: return "⚠️ Configureer je OpenAI API key om deze functie te gebruiken."
-
-    # Context bouwen uit eerdere successen
-    context = ""
-    if not top_posts.empty:
-        best_post = top_posts.iloc[0]
-        context = f"Mijn beste video ooit ging over '{best_post.get('Caption', 'onbekend')}' en haalde {best_post['Views']} views."
-
+    if not client: return "⚠️ Geen API Key. Check je instellingen."
+    
     prompt = f"""
-    Je bent een expert TikTok strateeg.
-    Context: {context}
-    Doel: Schrijf een script voor een nieuwe video over '{topic}'.
-    Stijl: {style} (Kort, punchy, geen cringe).
+    Je bent een expert TikTok Scripter.
+    DOEL: Een script schrijven dat de kijker vasthoudt tot het einde.
     
-    Format:
-    HOOK (0-2s): [Pakkende zin]
-    BODY (15-30s): [Bullet points met wat te zeggen/doen]
-    CTA: [Eén duidelijke actie]
+    INFO:
+    - Niche: {niche}
+    - Onderwerp: {topic}
+    - Manier van filmen: {video_format}
+    - Sfeer/Toon: {tone}
+    - Opening (Hook): {hook}
+    - Einde (Actie): {cta}
+    
+    FORMAT (Markdown Tabel):
+    | Tijd | Wat te zien (Visueel) | Wat te zeggen (Audio) |
+    
+    EISEN:
+    - Schrijf in spreektaal (Kort, krachtig, menselijk).
+    - Geef duidelijke visuele instructies (Bv. "Wijs naar boven", "Tekst in beeld: ...").
+    - Geef onder de tabel een suggestie voor "Tekst op Cover/Thumbnail".
     """
-
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini", # Snel & Goedkoop
-            messages=[{"role": "system", "content": "Je bent een TikTok expert."},
-                      {"role": "user", "content": prompt}],
-            temperature=0.7
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"AI Fout: {str(e)}"
+        res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}])
+        return res.choices[0].message.content
+    except Exception as e: return f"Fout bij genereren: {str(e)}"
 
-def get_quick_win_idea(niche: str):
-    """Genereert 1 direct uitvoerbaar idee."""
+def audit_script(script_text, niche):
     client = get_client()
-    if not client: return "Maak een 'Behind the Scenes' van je werkplek."
+    if not client: return {"score": 0, "verdict": "Geen verbinding", "pros": "-", "cons": "-", "tip": "-"}
     
-    prompt = f"Geef mij 1 uniek, direct uitvoerbaar TikTok idee voor de niche: {niche}. Geef alleen de titel en de hook."
+    prompt = f"""
+    Jij bent het TikTok Algoritme. Beoordeel dit script ({niche}) streng.
+    Script: {script_text}
     
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content
+    Geef JSON terug:
+    {{
+        "score": (0-100),
+        "verdict": (Zeer korte mening),
+        "pros": (Sterke punten, max 5 woorden),
+        "cons": (Zwakke punten, max 5 woorden),
+        "tip": (1 actiegerichte tip)
+    }}
+    """
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o-mini", 
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        return json.loads(res.choices[0].message.content)
+    except:
+        return {"score": 70, "verdict": "Prima, maar kan spannender.", "pros": "Duidelijk", "cons": "Beetje saai", "tip": "Voeg meer energie toe."}
+
+def check_viral_potential(idea, niche):
+    client = get_client()
+    prompt = f"""
+    Beoordeel dit video-idee voor de niche '{niche}'.
+    Idee: '{idea}'
+    
+    Geef antwoord als JSON:
+    {{
+        "score": (getal 0-100),
+        "label": (Kort label: "Viral Hit", "Prima", "Saai", of "Flop"),
+        "explanation": (Korte uitleg waarom),
+        "tip": (Eén concrete tip om de score te verhogen)
+    }}
+    """
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o-mini", 
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        return json.loads(res.choices[0].message.content)
+    except: 
+        return {"score": 50, "label": "Foutje", "explanation": "Kon niet verbinden.", "tip": "Probeer opnieuw."}
+
+def generate_series_ideas(topic, niche):
+    """
+    Genereert een 5-delige serie structuur.
+    """
+    client = get_client()
+    if not client: return "⚠️ Geen API Key."
+    
+    prompt = f"""
+    Ik wil een 'TikTok Serie' maken om volgers te binden (Deel 1 t/m 5).
+    Niche: {niche}
+    Onderwerp van de serie: {topic}
+    
+    Bedenk 5 video's die op elkaar aansluiten.
+    Zorg voor een "Cliffhanger" effect tussen de delen.
+    
+    Format: Markdown.
+    Gebruik emojis.
+    Voor elk deel: 
+    1. Titel (Tekst op Cover)
+    2. De Hook (Eerste zin)
+    3. Korte inhoud (Wat gebeurt er?)
+    """
+    try:
+        res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}])
+        return res.choices[0].message.content
+    except: return "Kon serie niet maken."
+
+def steal_format_and_rewrite(other_script, my_topic, niche):
+    client = get_client()
+    prompt = f"Analyseer de structuur van dit script: '{other_script}'. Schrijf een NIEUW script over '{my_topic}' ({niche}) dat exact die structuur volgt."
+    try:
+        res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}])
+        return res.choices[0].message.content
+    except: return "Fout."
+
+def generate_weekly_plan(niche):
+    client = get_client()
+    prompt = f"7 Dagen content kalender voor '{niche}'. Tabelvorm: Dag|Format|Idee|Waarom dit werkt."
+    try:
+        res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}])
+        return res.choices[0].message.content
+    except: return "Fout."
