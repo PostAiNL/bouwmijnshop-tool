@@ -56,116 +56,124 @@ with t_studio:
     st.markdown(f"<h3 style='margin-bottom:10px;'>Nieuwe Video Maken</h3>", unsafe_allow_html=True)
     
     with st.container(border=True):
-        # STAP 1
-        col_in, col_dice = st.columns([0.85, 0.15], vertical_alignment="bottom")
-        with col_in:
-            default_val = st.session_state.get("idea_input", "")
-            topic = st.text_input(
-                "1. Waar gaat de video over?", 
-                value=default_val, 
-                placeholder="Bv. 3 fouten die starters maken...", 
-                help="Typ hier kort het onderwerp. De AI bedenkt de rest."
-            )
-        with col_dice:
-            if st.button("🎲", help="Geef mij een willekeurig idee"):
-                ideas = [f"De grootste fout in {st.session_state.user_niche}", "Handige tool die ik gebruik", "Snelle tip voor beginners", "Mijn eerlijke mening"]
-                st.session_state.idea_input = random.choice(ideas); st.rerun()
-
-        # STAP 2 & 3
-        c_fmt, c_tone = st.columns(2)
-        with c_fmt: 
-            vid_format = st.selectbox(
-                "2. Format (Hoe film je?)", 
-                ["🗣️ Ik vertel iets", "🟩 Green Screen", "📸 Vlog / Sfeer", "📝 Lijstje (Tekst)"], 
-                help="Kies hoe de video eruit ziet. 'Ik vertel iets' is jij pratend in de camera."
-            )
-        with c_tone: 
-            tone = st.selectbox(
-                "3. Toon (Sfeer)", 
-                ["⚡ Energiek & Snel", "😌 Rustig & Uitleggend", "😂 Grappig", "🎓 Serieus"],
-                help="Hoe wil je overkomen op de kijker?"
-            )
-
-        # STAP 4 & 5
-        hooks = ai_coach.get_viral_hooks_library()
-        selected_hook = st.selectbox(
-            "4. Kies de Opening (Hook)", 
-            hooks,
-            help="De eerste 3 seconden zijn cruciaal. Kies een zin die nieuwsgierig maakt."
+        # KEUZE: NORMAAL OF GELD VERDIENEN (DE GROTE SPLITSING)
+        mode = st.radio(
+            "Kies je doel:", 
+            ["👀 Viral gaan (Views & Groei)", "💸 Geld Verdienen (Sales & UGC)"], 
+            horizontal=True,
+            label_visibility="collapsed"
         )
-        cta_type = st.selectbox(
-            "5. Doel van de video", 
-            ["➕ Volgers erbij", "💬 Reacties krijgen", "💰 Klikken op link", "↗️ Viraal gaan (Delen)"],
-            help="Wat moet de kijker doen na het kijken?"
-        )
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        if st.button("✨ Schrijf Script", type="primary", use_container_width=True):
-            if not is_pro and st.session_state.get("daily_gen_count", 0) >= 1:
-                # GRATIS GEBRUIKERS KRIJGEN HIER EEN LIMIET MELDING
-                st.error("⚠️ Je hebt je gratis script voor vandaag gehad. Upgrade naar PRO voor onbeperkt.")
-            else:
-                with st.spinner("De regisseur schrijft je script..."):
-                    final_hook = selected_hook.replace("{onderwerp}", topic if topic else "dit")
-                    script = ai_coach.generate_script(topic, vid_format, tone, final_hook, cta_type, st.session_state.user_niche)
-                    st.session_state.last_script = script
-                    if "script_score" in st.session_state: del st.session_state.script_score
-                    st.session_state.daily_gen_count = st.session_state.get("daily_gen_count", 0) + 1
-                    st.session_state.xp += 10
-                    auth.save_progress(xp=st.session_state.xp); st.rerun()
 
-    # RESULTAAT
+        # --- MODUS A: VIRAL GAAN (GRATIS/STANDAARD) ---
+        if mode == "👀 Viral gaan (Views & Groei)":
+            st.caption("Focus: Veel views, nieuwe volgers en bereik.")
+            
+            col_in, col_dice = st.columns([0.85, 0.15], vertical_alignment="bottom")
+            with col_in:
+                default_val = st.session_state.get("idea_input", "")
+                topic = st.text_input("1. Onderwerp", value=default_val, placeholder="Bv. 3 fouten die starters maken...")
+            with col_dice:
+                if st.button("🎲"):
+                    ideas = [f"De grootste fout in {st.session_state.user_niche}", "Handige tool", "Snelle tip", "Mijn mening"]
+                    st.session_state.idea_input = random.choice(ideas); st.rerun()
+
+            c_fmt, c_tone = st.columns(2)
+            with c_fmt: vid_format = st.selectbox("2. Format", ["🗣️ Ik vertel iets", "🟩 Green Screen", "📸 Vlog", "📝 Lijstje"])
+            with c_tone: tone = st.selectbox("3. Toon", ["⚡ Energiek", "😌 Rustig", "😂 Humor", "🎓 Serieus"])
+
+            hooks = ai_coach.get_viral_hooks_library()
+            selected_hook = st.selectbox("4. Opening (Hook)", hooks)
+            cta_type = st.selectbox("5. Doel", ["➕ Volgers", "💬 Reacties", "↗️ Delen"])
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            if st.button("✨ Schrijf Viral Script", type="primary", use_container_width=True):
+                if not is_pro and st.session_state.get("daily_gen_count", 0) >= 1:
+                    st.error("⚠️ Daglimiet bereikt. Upgrade naar PRO.")
+                else:
+                    with st.spinner("De regisseur schrijft..."):
+                        final_hook = selected_hook.replace("{onderwerp}", topic if topic else "dit")
+                        script = ai_coach.generate_script(topic, vid_format, tone, final_hook, cta_type, st.session_state.user_niche)
+                        st.session_state.last_script = script
+                        if "script_score" in st.session_state: del st.session_state.script_score
+                        st.session_state.daily_gen_count = st.session_state.get("daily_gen_count", 0) + 1
+                        st.session_state.xp += 10
+                        auth.save_progress(xp=st.session_state.xp); st.rerun()
+
+        # --- MODUS B: GELD VERDIENEN (PRO LOCK) ---
+        else:
+            st.markdown("""
+            <div style="background:#ecfdf5; border-left:4px solid #10b981; padding:10px; border-radius:4px; font-size:0.9rem;">
+            💰 <b>Cashflow Modus:</b> De AI gebruikt geavanceerde sales-psychologie (PAS/AIDA) om kijkers om te zetten in kopers.
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # We tonen de velden WEL (Tease), maar de knop is gelocked
+            col_p, col_pain = st.columns(2)
+            with col_p: product_name = st.text_input("Wat verkoop je?", placeholder="Mijn E-book / Huidcreme...")
+            with col_pain: pain_point = st.text_input("Welk probleem los je op?", placeholder="Puistjes / Geldzorgen...")
+            
+            sales_angle = st.selectbox("Verkoop Strategie", [
+                "😱 Problem-Agitate-Solution (Klassieker)", 
+                "📦 Unboxing / Demo (Visueel)", 
+                "⭐ Testimonial / Resultaat (Social Proof)", 
+                "🛑 Stop met X, Doe Y (Controversieel)"
+            ])
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            if st.button("💸 Schrijf Sales Script", type="primary", use_container_width=True):
+                if not is_pro:
+                    ui.render_locked_section(
+                        feature_name="Cashflow Script", 
+                        tease_text="Zet views om in Euro's. Krijg toegang tot scripts die bewezen verkopen (UGC & Sales)."
+                    )
+                else:
+                    if not product_name or not pain_point:
+                        st.error("Vul in wat je verkoopt en welk probleem het oplost.")
+                    else:
+                        with st.spinner("De copywriter schrijft een gelkmachine..."):
+                            script = ai_coach.generate_sales_script(product_name, pain_point, sales_angle, st.session_state.user_niche)
+                            st.session_state.last_script = script
+                            if "script_score" in st.session_state: del st.session_state.script_score
+                            st.session_state.xp += 20
+                            auth.save_progress(xp=st.session_state.xp); st.rerun()
+
+    # RESULTAAT SECTIE
     if "last_script" in st.session_state:
         st.success("💡 Script is klaar!")
         
-        # --- HIER IS DE AANPASSING: VIRAL AUDIT NU ACHTER SLOT ---
+        # Viral Audit (Alleen PRO)
         if "script_score" not in st.session_state:
             st.markdown("---")
             if not is_pro:
-                # Voor GRATIS gebruikers: Toon de lock
-                st.info("🚀 **Wil je weten of dit script viraal gaat?**")
-                ui.render_locked_section(
-                    feature_name="Viral Audit", 
-                    tease_text="Laat het AI-algoritme je script vooraf beoordelen met een score van 0-100. Voorkom dat je slechte video's filmt."
-                )
+                st.info("🚀 **Gaat dit viraal?**")
+                ui.render_locked_section("Viral Audit", "Laat het AI-algoritme je script beoordelen voordat je filmt.")
             else:
-                # Voor PRO gebruikers: Toon de knop
-                st.info("🚀 **Pro Tip:** Laat de AI je script controleren voordat je gaat filmen.")
-                if st.button("🔍 Start Viral Audit (Score 0-100)", type="secondary", use_container_width=True):
-                    with st.spinner("Het algoritme kijkt mee..."):
+                st.info("🚀 **Pro Tip:** Check de kwaliteit.")
+                if st.button("🔍 Start Audit", type="secondary", use_container_width=True):
+                    with st.spinner("Analyseren..."):
                         score_data = ai_coach.audit_script(st.session_state.last_script, st.session_state.user_niche)
                         st.session_state.script_score = score_data
                         st.rerun()
         
-        # SCORECARD (Alleen zichtbaar als pro erop geklikt heeft)
         if "script_score" in st.session_state:
             score = st.session_state.script_score
             color = "#ef4444" if score['score'] < 60 else "#f59e0b" if score['score'] < 80 else "#10b981"
-            
             st.markdown(f"""
             <div style="background:#f9fafb; border-radius:10px; padding:15px; border:1px solid #e5e7eb; margin-bottom:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h3 style="margin:0; color:#374151;">Viral Score</h3>
+                <div style="display:flex; justify-content:space-between;">
+                    <h3 style="margin:0;">Score</h3>
                     <span style="font-size:24px; font-weight:800; color:{color};">{score['score']}/100</span>
                 </div>
-                <p style="font-weight:bold; margin-top:5px;">{score['verdict']}</p>
-                <div style="font-size:0.9rem; color:#4b5563;">
-                    <p>✅ <b>Goed:</b> {score['pros']}</p>
-                    <p>⚠️ <b>Pas op:</b> {score['cons']}</p>
-                    <p>💡 <b>Verbetering:</b> {score['tip']}</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+                <p>{score['verdict']}</p>
+            </div>""", unsafe_allow_html=True)
 
-        # TABS
-        t1, t2 = st.tabs(["📄 Script Lezen", "🎥 Teleprompter"])
-        with t1: 
-            st.markdown(st.session_state.last_script)
+        t1, t2 = st.tabs(["📄 Script", "🎥 Teleprompter"])
+        with t1: st.markdown(st.session_state.last_script)
         with t2:
-            st.info("Zet je telefoon neer en lees de tekst van het scherm.")
             clean = st.session_state.last_script.replace("|", "").replace("---", "")
-            st.markdown(f"<div style='font-size:22px; line-height:1.6; background:#f3f4f6; padding:20px; border-radius:10px; border-left: 5px solid #10b981;'>{clean}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:22px; line-height:1.6; background:#f3f4f6; padding:20px; border-radius:10px;'>{clean}</div>", unsafe_allow_html=True)
 
         st.markdown("---")
         if st.button("✅ Gefilmd & Klaar!", type="secondary"):
@@ -178,140 +186,82 @@ with t_studio:
 with t_tools:
     st.markdown("### 🛠️ Creator Tools")
     
-    # --- GRATIS TOOL ---
+    # GRATIS TOOL
     with st.expander("🔥 Idee Checker (Gratis)", expanded=True):
-        st.info("🤷‍♂️ **Wat doet dit?** Twijfel je over een onderwerp? De AI voorspelt of het viral gaat.")
-        c_in, c_btn = st.columns([0.75, 0.25], vertical_alignment="bottom")
-        with c_in:
-            idea = st.text_input("Jouw ruwe idee:", placeholder="bv. Ik strik mijn veter...", label_visibility="collapsed")
-        with c_btn:
-            check_btn = st.button("Check", type="primary", use_container_width=True)
-
-        if check_btn and idea:
-            with st.spinner("Analyseren..."):
-                st.session_state.idea_score = ai_coach.check_viral_potential(idea, st.session_state.user_niche)
-
+        idea = st.text_input("Jouw ruwe idee:", placeholder="bv. Ik strik mijn veter...")
+        if st.button("Check"): 
+            st.session_state.idea_score = ai_coach.check_viral_potential(idea, st.session_state.user_niche)
         if "idea_score" in st.session_state:
-            data = st.session_state.idea_score
-            score = data.get('score', 0)
-            color = "green" if score >= 80 else "orange" if score >= 60 else "red"
-            icon = "🚀" if score >= 80 else "👌" if score >= 60 else "💤"
+            d = st.session_state.idea_score
+            st.markdown(f"**Score: {d.get('score')}** - {d.get('label')}")
+            st.info(d.get('tip'))
 
-            st.markdown("---")
-            c_s, c_t = st.columns([0.3, 0.7])
-            with c_s:
-                st.markdown(f"""
-                <div style="text-align:center; border: 2px solid {color}; border-radius: 15px; padding: 10px; background: #f9fafb;">
-                    <div style="font-size: 2.5rem; font-weight: 800; color: {color}; line-height: 1;">{score}</div>
-                    <div style="font-size: 0.7rem; font-weight: bold; color: #6b7280; text-transform: uppercase;">SCORE</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with c_t:
-                st.progress(score)
-                st.markdown(f"**{icon} {data.get('label', 'Analyse')}**")
-                st.caption(data.get('explanation'))
-                st.info(f"💡 **Tip:** {data.get('tip')}")
-        else:
-             st.markdown("<div style='opacity:0.5; margin-top:10px; font-size:0.8rem;'>Typ iets om de meter te starten...</div>", unsafe_allow_html=True)
-
-    # --- PRO TOOL 1: SERIE MAKEN ---
-    with st.expander("🎬 5 Video's in 1 klik (PRO)", expanded=False):
+    # PRO TOOL: PASSIVE INCOME GENERATOR
+    with st.expander("📦 Passief Inkomen Bedenker (PRO)", expanded=False):
         if not is_pro:
-            ui.render_locked_section(
-                feature_name="Serie Generator", 
-                tease_text="Maak in 1 klik een verslavende 5-delige serie. Groei 5x sneller door kijkers te binden."
-            )
+            ui.render_locked_section("Business Plan Generator", "Laat AI je complete digitale product bedenken (E-book, Cursus) inclusief hoofdstukken en prijs.")
         else:
-            st.info("💎 **Waarde:** De snelste manier om te groeien is een serie. Maak hier 5 video-ideeën in 1 klik.")
-            serie_topic = st.text_input("Waar moet de serie over gaan?", placeholder="bv. Budget koken, Fit worden...")
-            if st.button("Bouw mijn 5-delige Serie"):
-                if serie_topic:
-                    with st.spinner("De AI bedenkt 5 virale delen..."):
-                        st.markdown(ai_coach.generate_series_ideas(serie_topic, st.session_state.user_niche))
+            st.info("De AI analyseert je niche en bouwt een compleet product-plan.")
+            target_audience = st.text_input("Voor wie is het?", placeholder="bv. Drukke moeders, beginnende sporters...")
+            if st.button("Bouw mijn Business"):
+                if target_audience:
+                    with st.spinner("Brainstormen over jouw imperium..."):
+                        st.markdown(ai_coach.generate_digital_product(st.session_state.user_niche, target_audience))
 
-    # --- PRO TOOL 2: FORMAT NADOEN ---
+    # PRO TOOL: SERIE MAKER
+    with st.expander("🎬 5 Video's in 1 klik (PRO)"):
+        if not is_pro: ui.render_locked_section("Serie Generator", "Maak in 1 klik een 5-delige serie.")
+        else:
+            topic = st.text_input("Serie onderwerp:")
+            if st.button("Bouw Serie"): st.markdown(ai_coach.generate_series_ideas(topic, st.session_state.user_niche))
+
+    # PRO TOOL: FORMAT DIEF
     with st.expander("🕵️ Viral Video Nadoen (PRO)"):
-        if not is_pro:
-            ui.render_locked_section(
-                feature_name="Viral Kopiëren", 
-                tease_text="Steel de geheime succes-formule van je concurrenten zonder te plagieëren."
-            )
+        if not is_pro: ui.render_locked_section("Viral Kopiëren", "Steel de succes-formule.")
         else:
-            st.info("🧠 **Wat doet dit?** Plak tekst van een concurrent. De AI steelt de *formule* (niet de tekst) en past die toe op jouw onderwerp.")
-            other = st.text_area("Plak script van concurrent:", height=100)
-            mine = st.text_area("Waar wil jij het over hebben?", height=100)
-            if st.button("Herschrijf met Formule"): 
-                with st.spinner("Kraken..."):
-                    st.markdown(ai_coach.steal_format_and_rewrite(other, mine, st.session_state.user_niche))
+            other = st.text_area("Concurrent script:")
+            mine = st.text_area("Mijn onderwerp:")
+            if st.button("Herschrijf"): st.markdown(ai_coach.steal_format_and_rewrite(other, mine, st.session_state.user_niche))
 
-    # --- PRO TOOL 3: WEEKPLANNER ---
+    # PRO TOOL: WEEKPLANNER
     with st.expander("📅 Content voor de hele Week (PRO)"):
-        if not is_pro:
-             ui.render_locked_section(
-                 feature_name="Weekplanner", 
-                 tease_text="Nooit meer stress. Je complete content strategie voor 7 dagen in 10 seconden geregeld."
-             )
+        if not is_pro: ui.render_locked_section("Weekplanner", "Content strategie voor 7 dagen.")
         else:
-            st.info("📅 **Wat doet dit?** Een schema voor 7 dagen, zodat je precies weet wat je moet maken.")
-            if st.button("Maak Planning"): 
-                with st.spinner("Plannen..."):
-                    st.markdown(ai_coach.generate_weekly_plan(st.session_state.user_niche))
+            if st.button("Maak Planning"): st.markdown(ai_coach.generate_weekly_plan(st.session_state.user_niche))
 
 # 3. DATA TAB
 with t_data:
-    st.info("📊 **Waarom dit gebruiken?** Upload je TikTok data (CSV) om te zien wat werkt.")
-    uploaded_file = st.file_uploader("Upload TikTok Data", type=['csv', 'xlsx'])
-    
-    if uploaded_file: st.session_state.df = data_loader.load_file(uploaded_file)
-    
+    st.info("📊 Upload TikTok Data (CSV) voor inzicht.")
+    up = st.file_uploader("Upload", type=['csv', 'xlsx'])
+    if up: st.session_state.df = data_loader.load_file(up)
     if not st.session_state.df.empty:
         df = analytics.clean_data(st.session_state.df)
         kpis = analytics.calculate_kpis(df)
-        c1,c2,c3 = st.columns(3)
-        c1.metric("Views", f"{kpis['Views'].sum()/1000:.1f}k")
-        c2.metric("Engagement", f"{kpis['Engagement'].mean():.1f}%", help="Hoger dan 5% is super!")
-        st.bar_chart(analytics.get_best_posting_time(df), x="Uur", y="Views", color="#10b981")
+        st.metric("Views", f"{kpis['Views'].sum()/1000:.1f}k")
     else:
-        if st.button("Laad Demo Data (Voorbeeld)"): st.session_state.df = data_loader.load_demo_data(); st.rerun()
+        if st.button("Demo Data"): st.session_state.df = data_loader.load_demo_data(); st.rerun()
 
-# 4. SETTINGS (DEZE IS GE-UPDATE MET FOMO)
+# 4. SETTINGS
 with t_set:
     if not is_pro:
-        # HIER BEGINT DE NIEUWE FOMO KAART
         st.markdown("### 🔓 Word een Pro Creator")
-        
         with st.container(border=True):
-            st.markdown("<h4 style='margin-top:0'>Upgrade naar PostAi PRO 🚀</h4>", unsafe_allow_html=True)
-            st.markdown("Stop met gokken. Start met groeien met de tools die pro's gebruiken.")
-            
+            st.markdown("#### Upgrade naar PostAi PRO 🚀")
+            st.markdown("Stop met hobbyen. Start met verdienen.")
             st.markdown("""
-            **Wat je direct krijgt:**
-            *   ✅ **Onbeperkt Scripts** (Geen dagelijkse limiet meer)
-            *   🎬 **Serie Generator** (5 video's in 1 klik)
-            *   🕵️ **Concurrentie Spy** (Steel succesformules)
-            *   📅 **Weekplanner** (Je week gevuld in 10 seconden)
-            *   🔍 **Viral Audit** (Laat AI je video keuren)
+            **Direct toegang tot:**
+            *   💸 **Sales Script Modus** (Verkoop je producten)
+            *   📦 **Passief Inkomen Bedenker** (Vind je goudmijn)
+            *   🎬 **Serie Generator** (5x sneller groeien)
+            *   ✅ **Onbeperkt Scripts**
             """)
-            
-            st.markdown("---")
-            st.caption("🎁 **Eerste 14 dagen gratis** • 💎 20% korting bij jaar • 🔓 Altijd opzegbaar")
-            
-            st.link_button(
-                "👉 Start 14 Dagen Gratis", 
-                "https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2", 
-                type="primary", 
-                use_container_width=True
-            )
-
-        # Licentie invoer verborgen in een expander
-        st.markdown("<br>", unsafe_allow_html=True)
-        with st.expander("Heb je al een licentie code?"):
-            code = st.text_input("Vul je code in", label_visibility="collapsed", placeholder="Plak je code hier...")
-            if st.button("Activeer Licentie"): auth.activate_pro(code)
-            
+            st.link_button("👉 Start 14 Dagen Gratis", "https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2", type="primary", use_container_width=True)
+        
+        with st.expander("Heb je al een code?"):
+            c = st.text_input("Code")
+            if st.button("Activeer"): auth.activate_pro(c)
     else:
         st.success("Je bent PRO lid! 🚀")
-        st.caption("Bedankt voor je support.")
         if st.button("Uitloggen"): st.session_state.clear(); st.rerun()
 
 ui.inject_chat_widget(auth.get_secret("CHAT_SERVER_URL", "https://chatbot.com"))
