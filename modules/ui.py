@@ -1,14 +1,47 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import base64
-from pathlib import Path
+import os
+
+def get_img_as_base64(file_path):
+    """Hulpfunctie om afbeelding naar base64 string om te zetten"""
+    if not os.path.exists(file_path):
+        return None
+    with open(file_path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
 
 def inject_style_and_hacks(brand_color="#10b981"):
     st.markdown(f"""
     <style>
-        /* ALGEMENE STIJL */
-        .block-container {{ padding-top: 1rem; padding-bottom: 5rem; max-width: 900px; }} /* Iets breder voor kolommen */
+        /* ALGEMENE STIJL & THEMA FORCEREN */
+        .stApp {{
+            background-color: #ffffff;
+            color: #111827;
+        }}
+        .block-container {{ padding-top: 1rem; padding-bottom: 5rem; max-width: 900px; }} 
         header[data-testid="stHeader"], [data-testid="stToolbar"], footer {{ display: none !important; }}
+        
+        /* INPUT VELDEN (Specifiek voor Mobiel/Leesbaarheid) */
+        /* Forceer witte achtergrond en zwarte tekst voor alle inputs */
+        div[data-baseweb="input"] > div, 
+        div[data-baseweb="base-input"] > input, 
+        div[data-baseweb="textarea"] > textarea,
+        div[data-baseweb="select"] > div {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            border: 1px solid #e5e7eb !important;
+        }}
+        /* Zorg dat placeholder tekst ook leesbaar is (grijs) */
+        ::placeholder {{
+            color: #6b7280 !important;
+            opacity: 1 !important;
+        }}
+        /* Dropdown menu items */
+        ul[data-baseweb="menu"] {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+        }}
         
         /* KNOPPEN */
         div.stButton > button {{
@@ -17,7 +50,7 @@ def inject_style_and_hacks(brand_color="#10b981"):
             border: none !important;
             border-radius: 10px !important;
             font-weight: 700 !important;
-            padding: 10px 20px !important; /* Iets compacter */
+            padding: 10px 20px !important;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
             transition: transform 0.1s;
         }}
@@ -33,7 +66,7 @@ def inject_style_and_hacks(brand_color="#10b981"):
         /* MINI CHALLENGE MAP (COMPACT) */
         .challenge-grid {{
             display: grid;
-            grid-template-columns: repeat(5, 1fr); /* 5 per rij ipv 6 */
+            grid-template-columns: repeat(5, 1fr);
             gap: 6px;
             margin-top: 10px;
         }}
@@ -44,20 +77,13 @@ def inject_style_and_hacks(brand_color="#10b981"):
             justify-content: center;
             border-radius: 6px;
             font-weight: bold;
-            font-size: 0.75rem; /* Kleiner lettertype */
+            font-size: 0.75rem;
             cursor: default;
-            height: 35px; /* Vaste kleine hoogte */
+            height: 35px;
         }}
         .day-done {{ background: #10b981; color: white; border: 1px solid #10b981; }}
         .day-active {{ background: white; color: #10b981; border: 2px solid #10b981; font-size:0.9rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
         .day-locked {{ background: #f3f4f6; color: #d1d5db; border: 1px solid #e5e7eb; }}
-
-        /* HELPER BOX (VOOR STARTERS) */
-        .helper-box {{
-            background: #eff6ff; border-left: 4px solid #3b82f6;
-            padding: 10px 15px; border-radius: 4px; font-size: 0.9rem;
-            color: #1e40af; margin-bottom: 20px;
-        }}
 
         /* LOCK OVERLAY */
         .lock-container {{
@@ -93,16 +119,26 @@ def render_header(is_pro=False, level=1):
     b_color = "#dcfce7" if is_pro else "#eff6ff"
     t_color = "#166534" if is_pro else "#1e40af"
     
+    # Logo logica
+    logo_path = "assets/logo.png"
+    img_b64 = get_img_as_base64(logo_path)
+    
+    if img_b64:
+        # Als logo bestaat: toon afbeelding (max hoogte 50px)
+        logo_html = f'<img src="data:image/png;base64,{img_b64}" style="height: 50px; width: auto; object-fit: contain;">'
+    else:
+        # Fallback als logo niet bestaat: De groene P
+        logo_html = '<div style="width:40px; height:40px; background:#10b981; border-radius:10px; display:flex; align-items:center; justify-content:center; color:white; font-weight:900; font-size:1.2rem;">P</div>'
+
     st.markdown(f"""
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-        <div style="width:40px; height:40px; background:#10b981; border-radius:10px; display:flex; align-items:center; justify-content:center; color:white; font-weight:900; font-size:1.2rem;">P</div>
+    <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
+        {logo_html}
         <div>
             <div style="display:flex; align-items:center; gap:8px;">
-                <h1 style="margin:0; font-size:1.2rem; line-height:1.2;">PostAi - Dé TikTokgroeier</h1>
-                <span style="background:{b_color}; color:{t_color}; padding:2px 6px; border-radius:4px; font-size:0.7rem; font-weight:800; border:1px solid {b_color};">{badge}</span>
-                <span style="background:linear-gradient(90deg, #f59e0b, #d97706); color:white; padding:2px 6px; border-radius:99px; font-size:0.7rem; font-weight:bold;">LVL {level}</span>
+                <h1 style="margin:0; font-size:1.4rem; line-height:1.2; font-weight: 800; color: #111827;">PostAi</h1>
+                <span style="background:{b_color}; color:{t_color}; padding:2px 8px; border-radius:6px; font-size:0.75rem; font-weight:800; border:1px solid {b_color}; letter-spacing: 0.5px;">{badge}</span>
             </div>
-            <p style="margin:0; color:#6b7280; font-size:0.75rem;">Jouw AI Social Media Manager</p>
+            <p style="margin:0; color:#6b7280; font-size:0.85rem;">Jouw AI Social Media Manager</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
