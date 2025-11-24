@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import uuid
 import json
+import time  # <--- DEZE WAS VERGETEN
 import smtplib
 from email.message import EmailMessage
 from datetime import datetime, timedelta
@@ -241,9 +242,10 @@ def render_landing_page():
                     st.error("Vul een geldig e-mailadres in.")
 
 def activate_pro(key_input):
+    # Hier ging het mis in de vorige versie (time was niet geimporteerd)
     if key_input == PRO_KEY_FIXED or key_input == get_secret("PRO_LICENSE_KEY"):
         save_progress(is_pro=True)
-        st.session_state.license_key = key_input # Update sessie indien nodig
+        st.session_state.license_key = key_input 
         st.balloons()
         st.success("PRO Geactiveerd! 🎉")
         time.sleep(2)
