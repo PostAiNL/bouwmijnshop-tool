@@ -135,7 +135,7 @@ def render_header(is_pro=False, level=1):
         {logo_html}
         <div>
             <div style="display:flex; align-items:center; gap:8px;">
-                <h1 style="margin:0; font-size:1.4rem; line-height:1.2; font-weight: 800; color: #111827;">PostAi</h1>
+                <h1 style="margin:0; font-size:1.4rem; line-height:1.2; font-weight: 800; color: #111827;">PostAi - Dé TikTokgroeier</h1>
                 <span style="background:{b_color}; color:{t_color}; padding:2px 8px; border-radius:6px; font-size:0.75rem; font-weight:800; border:1px solid {b_color}; letter-spacing: 0.5px;">{badge}</span>
             </div>
             <p style="margin:0; color:#6b7280; font-size:0.85rem;">Jouw AI Social Media Manager</p>
