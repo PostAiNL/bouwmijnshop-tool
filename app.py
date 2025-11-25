@@ -556,10 +556,10 @@ if st.session_state.page == "settings":
         # Pricing Box
         st.markdown("""
         <div class="pricing-box">
-            <div class="fomo-badge">🔥 Populairste Keuze</div>
+            <div class="fomo-badge">🔥Populairste Keuze</div>
             <div class="pricing-header">
                 <h3>Upgrade naar PRO</h3>
-                <div class="price-tag">€9,95<span class="price-period">/maand</span></div>
+                <div class="price-tag">€14,95<span class="price-period">/maand</span></div>
                 <small style="color:#ef4444; font-weight:bold;">(Normaal €19,95 - Early Bird Deal)</small>
             </div>
             <div style="margin-bottom: 20px;">
