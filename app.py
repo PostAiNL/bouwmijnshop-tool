@@ -189,10 +189,10 @@ if st.session_state.page == "home":
                 <div class="metric-val" style="color:#ef4444;">{st.session_state.streak}</div><div class="metric-lbl">🔥 Streakdagen</div>
             </div>
             <div class="metric-card" title="Tickets: Zet in om functies te unlocken.">
-                <div class="metric-val" style="color:#f59e0b;">{st.session_state.golden_tickets}</div><div class="metric-lbl">🎫 Tickets</div>
+                <div class="metric-val" style="color:#f59e0b;">{st.session_state.golden_tickets}</div><div class="metric-lbl">🎫 Golden Tickets</div>
             </div>
             <div class="metric-card" title="XP: 100 XP = Level Up + Ticket.">
-                <div class="metric-val" style="color:#3b82f6;">{st.session_state.xp}</div><div class="metric-lbl">🎁 XP (Lvl {st.session_state.level})</div>
+                <div class="metric-val" style="color:#3b82f6;">{st.session_state.xp}</div><div class="metric-lbl">🎁 XP Punten (Lvl {st.session_state.level})</div>
             </div>
         </div>"""
     
