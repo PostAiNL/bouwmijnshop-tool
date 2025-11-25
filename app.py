@@ -8,620 +8,500 @@ import os
 import base64
 from modules import analytics, ui, auth, ai_coach, data_loader
 
-# --- CONFIG ---
+# --- 1. CONFIGURATIE ---
 st.set_page_config(page_title="PostAi", page_icon="🚀", layout="centered", initial_sidebar_state="collapsed")
 auth.init_session()
 ui.inject_style_and_hacks(brand_color="#10b981")
 
-# --- CSS ---
-st.markdown("""
-<style>
-    .stButton button { border-radius: 12px !important; }
-    div[data-testid="stExpander"] { border-radius: 16px !important; overflow: hidden; border: 1px solid #e4e4e7; }
-    div[data-testid="stImage"] { border-radius: 15px !important; overflow: hidden !important; }
-    div[data-testid="stImage"] > div { border-radius: 15px !important; }
-    div[data-testid="stImage"] img { border-radius: 15px !important; object-fit: cover !important; }
-    img { border-radius: 15px !important; }
+# --- 2. NAVIGATIE FUNCTIES ---
+def go_home(): st.session_state.page = "home"
+def go_studio(): st.session_state.page = "studio"
+def go_tools(): st.session_state.page = "tools"
+def go_stats(): st.session_state.page = "stats"
+def go_settings(): st.session_state.page = "settings"
+def go_privacy(): st.session_state.page = "privacy"
+def go_terms(): st.session_state.page = "terms"
 
-    /* Custom Metrics */
-    .metrics-container { display: flex; flex-direction: row; justify-content: space-between; gap: 10px; width: 100%; margin-bottom: -5px; }
-    .metric-box { 
-        flex: 1; border-radius: 12px; padding: 10px 5px; text-align: center; 
-        display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 80px; 
-        transition: transform 0.2s; cursor: help;
-    }
-    .metric-box:hover { transform: scale(1.02); }
-    
-    .mbox-orange { background: #fff7ed; border: 1px solid orange; }
-    .mbox-yellow { background: #fefce8; border: 1px solid #facc15; }
-    .mbox-green  { background: #f0fdf4; border: 1px solid #10b981; }
-    
-    .metric-val { margin: 0; font-size: 1.6rem; font-weight: 800; line-height: 1.2; }
-    .metric-lbl { margin: 0; font-size: 0.75rem; text-transform: uppercase; font-weight: 600; opacity: 0.8; white-space: nowrap; }
-    
-    /* Footer */
-    .footer-text { text-align: center; font-size: 0.85rem; color: #6b7280; margin-top: 15px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-    .footer-sub { text-align: center; font-size: 0.75rem; color: #9ca3af; margin-top: 5px; }
-    .legal-title { font-size: 1.8rem; font-weight: 800; color: #111827; margin-bottom: 10px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-
-    /* Teleprompter */
-    .teleprompter-box {
-        background-color: #000; color: #fff; padding: 40px 20px; border-radius: 15px;
-        min-height: 300px; overflow-y: auto; text-align: center; margin-top: 10px;
-    }
-
-    /* Ticket Box */
-    .ticket-box {
-        background-color: #fffbeb; border: 1px solid #fcd34d; color: #92400e; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 0.9rem; text-align: center;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# --- NAVIGATIE ---
-if "current_page" not in st.session_state: st.session_state.current_page = "app"
+# --- 3. AUTH & DATA LADEN ---
 if not auth.is_authenticated():
     auth.render_landing_page()
     st.stop()
 
-# --- LEGAL PAGES ---
-def render_legal_header(title):
-    col_l, col_r = st.columns([0.2, 0.8])
-    with col_l:
-        if st.button("⬅️ Terug", use_container_width=True, type="secondary"):
-            st.session_state.current_page = "app"
-            st.rerun()
-    st.markdown(f"<div class='legal-title'>{title}</div>", unsafe_allow_html=True)
-
-if st.session_state.current_page == "privacy":
-    render_legal_header("Privacybeleid")
-    with st.container(border=True): st.markdown("""**Laatst bijgewerkt:** 24 november 2025...""")
-    st.stop()
-
-if st.session_state.current_page == "terms":
-    render_legal_header("Algemene Voorwaarden")
-    with st.container(border=True): st.markdown("""Welkom bij PostAi...""")
-    st.stop()
-
-# --- STATE ---
 user_data = auth.load_progress()
-current_streak = auth.check_daily_streak()
-if "df" not in st.session_state: st.session_state.df = pd.DataFrame() 
-if "streak" not in st.session_state: st.session_state.streak = current_streak
-if "level" not in st.session_state: st.session_state.level = user_data.get("level", 1)
-if "xp" not in st.session_state: st.session_state.xp = user_data.get("xp", 50)
-if "user_niche" not in st.session_state: st.session_state.user_niche = user_data.get("niche", "")
-if "challenge_day" not in st.session_state: st.session_state.challenge_day = user_data.get("challenge_day", 1)
-if "golden_tickets" not in st.session_state: st.session_state.golden_tickets = user_data.get("golden_tickets", 0)
 
-if "weekly_goal" not in st.session_state: 
-    st.session_state.weekly_goal = user_data.get("weekly_goal", 0)
-if "weekly_progress" not in st.session_state: 
-    st.session_state.weekly_progress = user_data.get("weekly_progress", 0)
+# State Variabelen
+if "page" not in st.session_state: st.session_state.page = "home"
+if "streak" not in st.session_state: st.session_state.streak = auth.check_daily_streak()
+if "xp" not in st.session_state: st.session_state.xp = user_data.get("xp", 50)
+if "level" not in st.session_state: st.session_state.level = user_data.get("level", 1)
+if "golden_tickets" not in st.session_state: st.session_state.golden_tickets = user_data.get("golden_tickets", 0)
+if "user_niche" not in st.session_state: st.session_state.user_niche = user_data.get("niche", "")
+if "brand_voice" not in st.session_state: st.session_state.brand_voice = user_data.get("brand_voice", "De Expert 🧠")
+if "daily_xp_earned" not in st.session_state: st.session_state.daily_xp_earned = user_data.get("daily_xp_earned", 0)
+if "last_xp_date" not in st.session_state: st.session_state.last_xp_date = user_data.get("last_xp_date", str(datetime.datetime.now().date()))
+if "challenge_day" not in st.session_state: st.session_state.challenge_day = user_data.get("challenge_day", 1)
+if "weekly_goal" not in st.session_state: st.session_state.weekly_goal = user_data.get("weekly_goal", 0)
+if "weekly_progress" not in st.session_state: st.session_state.weekly_progress = user_data.get("weekly_progress", 0)
 
 is_pro = auth.is_pro()
 niche = st.session_state.user_niche
 
-# --- HELPER FUNCTIES ---
-def handle_daily_streak():
-    """Verwerkt streak, datum en beloningen in één keer."""
-    today_str = str(datetime.date.today())
-    last_active = user_data.get("last_active_date", "")
-    
-    if today_str != last_active:
-        st.session_state.streak += 1
-        
-        # Check voor beloning elke 5 dagen (ALLEEN ALS JE GEEN PRO BENT)
-        give_reward = False
-        if not auth.is_pro() and st.session_state.streak > 0 and st.session_state.streak % 5 == 0:
-            give_reward = True
-        
-        if give_reward:
-            auth.save_progress(last_active_date=today_str, streak=st.session_state.streak, unclaimed_reward=True)
-        else:
-            auth.save_progress(last_active_date=today_str, streak=st.session_state.streak)
-            
-        st.toast("🔥 Streak verhoogd! Goed bezig!")
-        return True
-    else:
-        st.toast("Je hebt je streak voor vandaag al binnen! 🔥")
-        return False
+# --- 4. HELPER LOGICA ---
+
+def check_feature_access(feature_key):
+    if is_pro: return True
+    active_feat = user_data.get("active_trial_feature", "")
+    end_time_str = user_data.get("trial_end_time", "")
+    if active_feat == feature_key and end_time_str:
+        try:
+            end_time = datetime.datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S")
+            if datetime.datetime.now() < end_time: return True
+            else: auth.save_progress(active_trial_feature=None, trial_end_time=None); return False
+        except: return False
+    return False
 
 def add_xp(amount):
-    """Voegt XP toe en checkt voor Level Up + Golden Ticket."""
-    st.session_state.xp += amount
-    
-    calculated_level = 1 + (st.session_state.xp // 100)
-    if calculated_level > st.session_state.level:
-        levels_gained = calculated_level - st.session_state.level
-        st.session_state.level = calculated_level
-        st.session_state.golden_tickets += levels_gained
-        st.balloons()
-        st.toast(f"🎉 LEVEL UP! +{levels_gained} Golden Ticket(s) gekregen!", icon="🎟️")
-        time.sleep(2)
-    else:
-        st.toast(f"💪 +{amount} XP erbij!")
-    
-    auth.save_progress(xp=st.session_state.xp, level=st.session_state.level, golden_tickets=st.session_state.golden_tickets)
+    today = str(datetime.datetime.now().date())
+    if st.session_state.last_xp_date != today:
+        st.session_state.daily_xp_earned = 0
+        st.session_state.last_xp_date = today
+        auth.save_progress(daily_xp_earned=0, last_xp_date=today)
 
-def use_ticket():
-    """Verbruikt 1 ticket."""
+    if st.session_state.daily_xp_earned >= 80:
+        st.toast("⚠️ Daglimiet XP bereikt (80/80)")
+        return
+
+    allowed = min(amount, 80 - st.session_state.daily_xp_earned)
+    if allowed > 0:
+        st.session_state.xp += allowed
+        st.session_state.daily_xp_earned += allowed
+        if st.session_state.xp >= 100:
+            st.session_state.xp -= 100
+            st.session_state.level += 1
+            st.session_state.golden_tickets += 1
+            st.balloons()
+            st.toast(f"🎉 LEVEL UP! Lvl {st.session_state.level}")
+            if not is_pro: st.toast("🎫 +1 Golden Ticket!")
+        else:
+            st.toast(f"+{allowed} XP ({st.session_state.xp}/100)")
+        auth.save_progress(xp=st.session_state.xp, level=st.session_state.level, golden_tickets=st.session_state.golden_tickets, daily_xp_earned=st.session_state.daily_xp_earned, last_xp_date=today)
+
+def use_golden_ticket(feature_name):
     if st.session_state.golden_tickets > 0:
         st.session_state.golden_tickets -= 1
-        auth.save_progress(golden_tickets=st.session_state.golden_tickets)
-        st.toast("🎟️ Ticket ingezet! Functie ontgrendeld.")
-        return True
-    else:
-        st.error("Geen tickets meer! Level up om nieuwe te verdienen.")
-        return False
+        end_time = (datetime.datetime.now() + datetime.timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+        auth.save_progress(golden_tickets=st.session_state.golden_tickets, active_trial_feature=feature_name, trial_end_time=end_time)
+        st.balloons()
+        st.success(f"🔓 {feature_name} is 24 uur geactiveerd!")
+        time.sleep(2); st.rerun()
+    else: st.error("Geen tickets genoeg!")
 
 def create_pdf(text):
     try:
         from fpdf import FPDF
         class PDF(FPDF):
             def header(self):
-                self.set_font('Arial', 'B', 15)
-                self.cell(0, 10, 'PostAi - Masterplan', 0, 1, 'C')
-                self.ln(10)
-        pdf = PDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=11)
+                self.set_font('Arial', 'B', 15); self.cell(0, 10, 'PostAi - Masterplan', 0, 1, 'C'); self.ln(10)
+        pdf = PDF(); pdf.add_page(); pdf.set_font("Arial", size=11)
         safe_text = text.encode('latin-1', 'replace').decode('latin-1')
         for line in safe_text.split('\n'): pdf.multi_cell(0, 7, line)
         return pdf.output(dest='S').encode('latin-1')
     except: return None
 
-# --- HEADER & ONBOARDING ---
-ui.render_header(is_pro, st.session_state.level)
+# --- 5. HEADER ---
+col_head, col_set = st.columns([0.85, 0.15])
+with col_head:
+    if os.path.exists("assets/logo.png"):
+        with open("assets/logo.png", "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+            logo_src = f"data:image/png;base64,{img_b64}"
+    else: logo_src = "https://via.placeholder.com/50/10b981/ffffff?text=P"
+    badge = "PRO" if is_pro else "DEMO"
+    badge_style = "background:#dcfce7; color:#166534; border:1px solid #bbf7d0;" if is_pro else "background:#eff6ff; color:#1e40af; border:1px solid #dbeafe;"
+    
+    st.markdown(f"""
+    <div class="header-container">
+        <div class="header-logo"><img src="{logo_src}"></div>
+        <div class="header-text">
+            <div class="header-title">PostAi <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; vertical-align:middle; margin-left:12px; {badge_style}">{badge}</span></div>
+            <p class="header-subtitle">Dé Tiktokgroeier</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# --- POPUP BELONING ---
+with col_set:
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    if st.button("⚙️", key="head_set"): go_settings(); st.rerun()
+
+st.markdown("---")
+
+# --- 6. REWARD POPUP ---
 has_reward = user_data.get("unclaimed_reward", False)
 if has_reward and not is_pro:
-    @st.dialog("🎁 Cadeautje voor jou")
+    @st.dialog("🎁 Gefeliciteerd: 5 Dagen Streak!")
     def show_reward_popup():
-        st.markdown(f"<h2 style='text-align:center'>🎉 {st.session_state.streak} Dagen Streak!</h2>", unsafe_allow_html=True)
-        st.write("Wat goed bezig! Als beloning mag je **24 uur lang** één PRO-functie gratis gebruiken.")
-        c1, c2, c3 = st.columns(3)
-        future = (datetime.datetime.now() + datetime.timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
-        with c1: 
-            if st.button("Sales Mode 💸", help="Maak scripts die écht verkopen"): 
-                auth.save_progress(unclaimed_reward=False, active_trial_feature="Sales Mode", trial_end_time=future)
-                st.toast("Geactiveerd! Veel plezier.")
-                time.sleep(1); st.rerun()
+        st.markdown("""<div style="text-align:center;"><div style="font-size:3rem;">🔥</div><h3>Lekker bezig!</h3><p>Kies 1 PRO tool om <b>24 uur gratis</b> te gebruiken:</p></div>""", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        end_time = (datetime.datetime.now() + datetime.timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+        with c1:
+            if st.button("📈 Conversie Story", use_container_width=True): 
+                auth.save_progress(unclaimed_reward=False, active_trial_feature="Sales Mode", trial_end_time=end_time)
+                st.balloons(); time.sleep(1); st.rerun()
         with c2:
-            if st.button("Product 📦", help="Laat AI een digitaal product bedenken"): 
-                auth.save_progress(unclaimed_reward=False, active_trial_feature="Product Bedenker", trial_end_time=future)
-                st.toast("Geactiveerd! Veel plezier.")
-                time.sleep(1); st.rerun()
-        with c3:
-            if st.button("Data 📊", help="Diepe analyse van je cijfers"): 
-                auth.save_progress(unclaimed_reward=False, active_trial_feature="Data Detective", trial_end_time=future)
-                st.toast("Geactiveerd! Veel plezier.")
-                time.sleep(1); st.rerun()
+            if st.button("🕵️ Viral Remix", use_container_width=True):
+                auth.save_progress(unclaimed_reward=False, active_trial_feature="Viral Remix", trial_end_time=end_time)
+                st.balloons(); time.sleep(1); st.rerun()
     show_reward_popup()
 
 if not st.session_state.user_niche:
-    st.markdown("---")
-    with st.container(border=True):
-        st.info("Ik ben PostAi, jouw persoonlijke social media coach.")
-        niche_in = st.text_input("Jouw Niche / Onderwerp:", placeholder="bv. Kapper, Boekhouder...", help="Waarover ga je content maken?")
-        if st.button("🚀 Start mijn reis", type="primary"):
-            if niche_in: st.session_state.user_niche = niche_in; auth.save_progress(niche=niche_in, xp=50); st.rerun()
+    st.info("Welkom! Wat is je niche?")
+    n = st.text_input("Niche:", placeholder="bv. Kapper")
+    if st.button("Start"):
+        if n: st.session_state.user_niche = n; auth.save_progress(niche=n, xp=50); st.rerun()
     st.stop()
 
-c1, c2 = st.columns([0.85, 0.15])
-with c1: st.markdown(f"<div class='niche-edit-bar'><span>🎯 Je focus: <b>{niche}</b></span></div>", unsafe_allow_html=True)
-with c2:
-    if st.button("✏️", key="edit_niche", help="Verander je onderwerp"): st.session_state.user_niche = ""; auth.save_progress(niche=""); st.rerun()
-
-# --- UITLEG BLOK ---
-with st.expander("ℹ️ Hoe werkt PostAi? (Klik hier voor uitleg)", expanded=False):
-    st.markdown("""
-    **Welkom! Zo gebruik je deze app om te groeien op TikTok:**
+# ==========================
+# 🏠 HOME DASHBOARD
+# ==========================
+if st.session_state.page == "home":
+    st.markdown(f"**👋 Hi {niche}-creator!**")
     
-    🔥 **Streakdagen:**  
-    Consistentie is het geheim. Kom elke dag terug en maak (of plaats) een video om je vlammetje aan te houden.
-    *   **Beloning:** Bij elke **5 dagen streak** krijg je als gratis gebruiker 24 uur toegang tot een PRO-functie!
+    # METRICS LOGICA: PRO vs DEMO
+    if is_pro:
+        # PRO VERSIE: Geen Tickets, maar LEVEL (Status)
+        # XP blijft wel staan voor Leaderboard competitie
+        metrics_html = f"""
+        <div class="metrics-strip">
+            <div class="metric-card" title="Streak: Houd dit vol!">
+                <div class="metric-val" style="color:#ef4444;">{st.session_state.streak}</div><div class="metric-lbl">🔥 Streakdagen</div>
+            </div>
+            <div class="metric-card" title="Jouw status. Stijg op het leaderboard!">
+                <div class="metric-val" style="color:#10b981;">{st.session_state.level}</div><div class="metric-lbl">🏆 Jouw Level</div>
+            </div>
+            <div class="metric-card" title="XP Punten: Blijf klimmen!">
+                <div class="metric-val" style="color:#3b82f6;">{st.session_state.xp}</div><div class="metric-lbl">🎁 XP Punten</div>
+            </div>
+        </div>"""
+    else:
+        # DEMO VERSIE: Tickets tonen
+        metrics_html = f"""
+        <div class="metrics-strip">
+            <div class="metric-card" title="Streak: Houd dit vol voor beloningen!">
+                <div class="metric-val" style="color:#ef4444;">{st.session_state.streak}</div><div class="metric-lbl">🔥 Streakdagen</div>
+            </div>
+            <div class="metric-card" title="Tickets: Zet in om functies te unlocken.">
+                <div class="metric-val" style="color:#f59e0b;">{st.session_state.golden_tickets}</div><div class="metric-lbl">🎫 Tickets</div>
+            </div>
+            <div class="metric-card" title="XP: 100 XP = Level Up + Ticket.">
+                <div class="metric-val" style="color:#3b82f6;">{st.session_state.xp}</div><div class="metric-lbl">🎁 XP (Lvl {st.session_state.level})</div>
+            </div>
+        </div>"""
     
-    🎫 **Golden Tickets:**  
-    Dit zijn jouw 'jokers'. Heb je geen inspiratie of wil je een gesloten PRO-functie gebruiken? Zet een ticket in om er éénmalig gebruik van te maken. 
-    *   **Hoe verdien je ze?** Door XP te halen! Elke 100 XP ga je een Level omhoog en krijg je 1 Ticket.
-    
-    🚀 **De Bootcamp:**  
-    Weet je niet waar je moet beginnen? Volg simpelweg de Bootcamp. Elke dag krijg je 1 duidelijke opdracht. Na 14 dagen ben je klaar voor het echte werk.
-    """)
+    st.markdown(metrics_html, unsafe_allow_html=True)
 
-t_chal, t_studio, t_workflow, t_tools, t_data, t_set = st.tabs(["🥾 Bootcamp", "🎬 Studio", "🗂️ Workflow", "✨ Tools", "📊 Cijfers", "⚙️"])
-
-# 1. BOOTCAMP
-with t_chal:
-    # METRICS MET HOVER TITLES (HERSTELD)
-    html_metrics = f"""
-    <div class="metrics-container">
-        <div class="metric-box mbox-orange" title="Houd dit elke dag vol! Bij elke 5 dagen krijg je een cadeau.">
-            <h2 class="metric-val" style="color:orange;">🔥 {st.session_state.streak}</h2>
-            <small class="metric-lbl">Streakdagen</small>
-        </div>
-        <div class="metric-box mbox-yellow" title="Jokers om PRO functies te gebruiken. Verdien ze door te levelen (elke 100 XP).">
-            <h2 class="metric-val" style="color:#ca8a04;">🎫 {st.session_state.golden_tickets}</h2>
-            <small class="metric-lbl">Golden Tickets</small>
-        </div>
-        <div class="metric-box mbox-green" title="Verdien 100 XP om te levelen. Elk nieuw level = +1 Ticket!">
-            <h2 class="metric-val" style="color:#10b981;">{st.session_state.xp}</h2>
-            <small class="metric-lbl">XP Punten (Lvl {st.session_state.level})</small>
-        </div>
+    # TREND BOX
+    trend = ai_coach.get_weekly_trend()
+    st.markdown(f"""
+    <div class="trend-box">
+        <div class="trend-label">🔥 Trend van de Week</div>
+        <div class="trend-title">{trend['title']}</div>
+        <div style="font-size:0.9rem; margin-top:5px;">{trend['desc']}</div>
+        <div style="margin-top:10px; font-size:0.8rem; background:rgba(255,255,255,0.2); padding:5px 10px; border-radius:6px;">🎵 {trend['sound']}</div>
     </div>
-    """
-    st.markdown(html_metrics, unsafe_allow_html=True)
-    st.markdown("---")
-    st.caption("Volg dit programma om consistentie op te bouwen. Elke dag 1 taak.")
+    """, unsafe_allow_html=True)
 
+    st.markdown("<div class='panic-btn-red'>", unsafe_allow_html=True)
+    if st.button("🚨 PANIC BUTTON: IK HEB NU EEN IDEE NODIG!", use_container_width=True):
+        with st.spinner("AI zoekt viral kans..."):
+            script = ai_coach.generate_instant_script(niche)
+            st.session_state.last_script = script
+            go_studio(); st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("---")
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("<div class='nav-card'><div class='nav-icon'>🚀</div><div class='nav-title'>Bootcamp</div><div class='nav-desc'>Jouw missie.</div></div>", unsafe_allow_html=True)
+        if st.button("Ga naar Bootcamp", key="btn_boot", use_container_width=True): st.session_state.page = "bootcamp"; st.rerun()
+        st.markdown("<div class='nav-card'><div class='nav-icon'>📊</div><div class='nav-title'>Cijfers</div><div class='nav-desc'>Check je groei.</div></div>", unsafe_allow_html=True)
+        if st.button("Bekijk Cijfers", key="btn_stats", use_container_width=True): go_stats(); st.rerun()
+    with col_b:
+        st.markdown("<div class='nav-card'><div class='nav-icon'>🎬</div><div class='nav-title'>Studio</div><div class='nav-desc'>Maak scripts.</div></div>", unsafe_allow_html=True)
+        if st.button("Open Studio", key="btn_studio", use_container_width=True): go_studio(); st.rerun()
+        st.markdown("<div class='nav-card'><div class='nav-icon'>🛠️</div><div class='nav-title'>Tools</div><div class='nav-desc'>Remix & Bio.</div></div>", unsafe_allow_html=True)
+        if st.button("Open Tools", key="btn_tools", use_container_width=True): go_tools(); st.rerun()
+
+# ==========================
+# 🚀 BOOTCAMP
+# ==========================
+if st.session_state.page == "bootcamp":
+    if st.button("⬅️ Terug"): go_home(); st.rerun()
+    st.markdown("## 🚀 Bootcamp")
     if st.session_state.weekly_goal == 0:
         with st.container(border=True):
-            st.markdown("### 🎯 Weekdoel Stellen")
-            st.write("Commitment is alles. Hoeveel video's ga je deze week maken?")
-            goal = st.slider("Aantal video's", 1, 7, 3, help="Wees realistisch. 3 is een mooi begin.")
-            if st.button("Ik beloof het! 🤝", help="Start je week"): 
-                st.session_state.weekly_goal = goal
-                auth.save_progress(weekly_goal=goal)
-                st.toast("Doel opgeslagen! Zet 'm op!")
-                time.sleep(4)
-                st.rerun()
+            st.markdown("### 🎯 Weekdoel")
+            goal = st.slider("Aantal video's", 1, 7, 3)
+            if st.button("Ik beloof het! 🤝", use_container_width=True): 
+                st.session_state.weekly_goal = goal; auth.save_progress(weekly_goal=goal); st.rerun()
     else:
-        st.markdown(f"**Weekdoel: {st.session_state.weekly_progress} / {st.session_state.weekly_goal} Video's**")
-        prog = min(st.session_state.weekly_progress / st.session_state.weekly_goal, 1.0)
-        st.progress(prog)
-        if st.session_state.weekly_progress >= st.session_state.weekly_goal: st.success("🎉 Doel bereikt!")
+        st.progress(min(st.session_state.weekly_progress / st.session_state.weekly_goal, 1.0))
+        st.caption(f"Doel: {st.session_state.weekly_progress}/{st.session_state.weekly_goal} Video's")
 
-    col_main, col_sidebar = st.columns([0.65, 0.35], gap="medium")
     current_day = st.session_state.challenge_day
-    
-    if current_day > 14:
-        daily_info = ai_coach.get_daily_maintenance_task()
-        task_today = daily_info['task']
-        header_text = f"### 📅 Vandaag: {daily_info['type']}"
-    else:
-        tasks = ai_coach.get_challenge_tasks()
-        task_today = tasks.get(current_day, "Gefeliciteerd! Bootcamp volbracht.")
-        header_text = f"#### 🥾 Dag {current_day}: Bootcamp Opdracht"
+    tasks = ai_coach.get_challenge_tasks()
+    task_txt = tasks.get(current_day, "Klaar!")
 
-    with col_main:
-        with st.container(border=True):
-            st.markdown(header_text)
-            
-            if current_day > 14:
-                 st.info(f"**Focus:** {task_today}")
-                 st.markdown("**Hoe wil je dit maken?**")
-                 chal_format = st.radio("Format", ["🎥 Video (Filmen)", "📸 Foto Slider (Carrousel)"], horizontal=True, label_visibility="collapsed", help="Kies de vorm van je content")
-                 if st.button("✨ Schrijf Dagelijks Script", type="primary", use_container_width=True):
-                        with st.spinner("De coach schrijft je script..."):
-                            st.session_state.chal_script = ai_coach.generate_challenge_script(current_day, task_today, niche, chal_format)
-                            st.rerun()
-            else:
-                st.info(f"**Missie:** {task_today}")
-                
-                is_locked = current_day > 3 and not is_pro
-                if not is_locked:
-                    st.markdown("**Hoe wil je dit maken?**")
-                    chal_format = st.radio("Format", ["🎥 Video (Filmen)", "📸 Foto Slider (Carrousel)"], horizontal=True, label_visibility="collapsed", help="Kies video voor bereik, foto's voor educatie.")
-                    if st.button("✨ Schrijf Bootcamp Script", type="primary", use_container_width=True, help="Laat AI het werk doen"):
-                        with st.spinner("De coach schrijft je script..."):
-                            st.session_state.chal_script = ai_coach.generate_challenge_script(current_day, task_today, niche, chal_format)
-                            st.rerun()
-                else:
-                    if st.session_state.golden_tickets > 0:
-                        st.markdown(f"<div class='ticket-box'>🔒 <b>Deze dag is voor PRO's.</b><br>Je hebt <b>{st.session_state.golden_tickets}</b> Ticket(s). Inzetten?</div>", unsafe_allow_html=True)
-                        if st.button("🎫 Gebruik Ticket & Open", use_container_width=True):
-                            if use_ticket():
-                                with st.spinner("Ticket geaccepteerd! Schrijven..."):
-                                    st.session_state.chal_script = ai_coach.generate_challenge_script(current_day, task_today, niche, "Video")
-                                    st.rerun()
-                    else:
-                        ui.render_locked_section("AI Coach", "Upgrade naar PRO voor de rest van de bootcamp.")
-
-        if "chal_script" in st.session_state:
-            st.success("Script gereed!")
-            with st.expander("Bekijk Script", expanded=True):
-                st.markdown(st.session_state.chal_script)
-                if st.button("✅ Gefilmd & Geplaatst (+50 XP)", type="secondary", use_container_width=True, help="Klik hier als je de video op TikTok hebt gezet"):
-                    st.balloons()
-                    handle_daily_streak()
-                    add_xp(50)
-                    st.session_state.challenge_day += 1
-                    st.session_state.weekly_progress += 1
-                    auth.save_progress(challenge_day=st.session_state.challenge_day, weekly_progress=st.session_state.weekly_progress)
-                    del st.session_state.chal_script
-                    time.sleep(4) 
-                    st.rerun()
-
-    with col_sidebar:
-        ui.render_challenge_map(current_day)
-        st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
-        st.info(f"💡 **Tip:** {ai_coach.get_daily_pro_tip(current_day)}")
-
-# 2. STUDIO
-with t_studio:
-    st.markdown("### 🎬 Studio")
-    st.caption("Hier maak je scripts voor je eigen ideeën, los van de bootcamp.")
-    
     with st.container(border=True):
-        st.markdown("#### 1. Wat is je doel?")
-        mode = st.radio("Doel", ["👀 Viral gaan (Meer views)", "💸 Geld Verdienen (Verkoop)"], horizontal=True, label_visibility="collapsed", help="Wil je groeien of verkopen?")
-        
-        if mode == "👀 Viral gaan (Meer views)":
-            if st.button("🔥 Gebruik 'Viral Formats' (Bewezen)", use_container_width=True, type="secondary", help="Gebruik een structuur die vaak viraal gaat"):
-                with st.spinner("Trend zoeken..."):
-                    st.session_state.last_script = ai_coach.generate_script("Trending", "Vlog", "Humor", f"{niche} life", "Volg", niche)
-                    st.session_state.generated_img = ai_coach.generate_ai_image_url("Trending", "Vlog", niche)
-                    st.rerun()
-            st.markdown("---")
-            st.markdown("#### 2. Waar gaat het over?")
-            template = st.selectbox("💡 Template (Optioneel):", ["✨ Eigen idee", "🚫 Mythe Ontkrachten", "📚 How-To", "😲 Reactie"], help="Een template helpt je verhaal structuur te geven.")
-            col_in, col_dice = st.columns([0.85, 0.15], vertical_alignment="bottom")
-            with col_in:
-                ph = "Welke mythe?" if "Mythe" in template else "Onderwerp..."
-                topic = st.text_input("Onderwerp:", value=st.session_state.get("idea_input", ""), placeholder=ph, help="Waarover wil je het hebben?")
-            with col_dice:
-                if st.button("🎲", help="Geef mij een willekeurig idee"): st.session_state.idea_input = random.choice([f"Fout in {niche}", "Snelle tip"]); st.rerun()
-            
-            st.markdown("#### 3. Details")
-            c_f, c_t = st.columns(2)
-            with c_f: vid_format = st.selectbox("Format", ["🗣️ Talking Head", "📸 Vlog", "🟩 Green Screen"], help="Wat ziet de kijker?")
-            with c_t: tone = st.selectbox("Toon", ["⚡ Energiek", "😌 Rustig", "😂 Humor"], help="Welke sfeer heeft de video?")
-            
-            hooks = ai_coach.get_viral_hooks_library(niche)
-            hook = st.selectbox("Hook", hooks, help="De eerste zin die de aandacht grijpt.")
-            cta = st.selectbox("CTA", ["➕ Volgen", "💬 Reageren"], help="Wat moet de kijker doen na het kijken?")
-            
-            if st.button("✨ Schrijf Viral Script (+10 XP)", type="primary", use_container_width=True):
-                if not is_pro and st.session_state.get("daily_gen_count", 0) >= 1: st.error("⚠️ Daglimiet bereikt. Upgrade voor meer.")
-                else:
-                    with st.spinner("Magie toepassen..."):
-                        final_hook = hook.replace("{onderwerp}", topic if topic else "dit")
-                        st.session_state.last_script = ai_coach.generate_script(topic, vid_format, tone, final_hook, cta, niche)
-                        st.session_state.generated_img = ai_coach.generate_ai_image_url(topic, vid_format, niche)
-                        st.session_state.daily_gen_count = st.session_state.get("daily_gen_count", 0) + 1
-                        add_xp(10)
-                        st.session_state.current_topic = topic
-                        st.rerun()
-        
+        st.markdown(f"#### 🥾 Dag {current_day}: Opdracht")
+        st.info(f"**Missie:** {task_txt}")
+        if not (current_day > 3 and not is_pro):
+            chal_format = st.radio("Format", ["🎥 Video", "📸 Foto"], horizontal=True, label_visibility="collapsed")
+            if st.button("✨ Schrijf Script", use_container_width=True):
+                st.session_state.chal_script = ai_coach.generate_challenge_script(current_day, task_txt, niche, chal_format); st.rerun()
         else:
-            st.markdown("<div style='background:#ecfdf5; border-left:4px solid #10b981; padding:10px; font-size:0.9rem;'>💰 <b>Cashflow Modus</b></div>", unsafe_allow_html=True)
-            col_p, col_pain = st.columns(2)
-            with col_p: product_name = st.text_input("Product", placeholder="E-book...", help="Wat verkoop je?")
-            with col_pain: pain_point = st.text_input("Probleem", placeholder="Tijdgebrek...", help="Welk probleem lost het op?")
-            sales_angle = st.selectbox("Strategie", ["😱 Pijn & Oplossing", "📦 Demo", "⭐ Testimonial"], help="Hoe wil je het presenteren?")
-            
-            if auth.has_access("Sales Mode"):
-                if st.button("💸 Schrijf Sales Script (+10 XP)", type="primary", use_container_width=True):
-                    if not product_name: st.error("Vul product in.")
-                    else:
-                        with st.spinner("Schrijven..."):
-                            st.session_state.last_script = ai_coach.generate_sales_script(product_name, pain_point, sales_angle, niche)
-                            st.session_state.generated_img = None
-                            add_xp(10)
-                            st.session_state.current_topic = f"Sales: {product_name}"; st.rerun()
+            if st.session_state.golden_tickets > 0 and not is_pro:
+                st.markdown(f"<div class='ticket-box'>🔒 <b>PRO Dag.</b><br>Inzetten: 1 Ticket?</div>", unsafe_allow_html=True)
+                if st.button("🎫 Gebruik Ticket"):
+                    if auth.use_ticket(): st.session_state.chal_script = ai_coach.generate_challenge_script(current_day, task_txt, niche, "Video"); st.rerun()
+            elif is_pro:
+                # PRO Directe Toegang
+                chal_format = st.radio("Format", ["🎥 Video", "📸 Foto"], horizontal=True, label_visibility="collapsed")
+                if st.button("✨ Schrijf Script", use_container_width=True):
+                    st.session_state.chal_script = ai_coach.generate_challenge_script(current_day, task_txt, niche, chal_format); st.rerun()
+            else: ui.render_locked_section("AI Coach", "Upgrade naar PRO")
+
+    if "chal_script" in st.session_state:
+        with st.expander("📜 Jouw Script", expanded=True):
+            st.markdown(st.session_state.chal_script)
+            if st.button("✅ Gedaan! (+50 XP)", use_container_width=True):
+                st.balloons(); auth.handle_daily_streak(); add_xp(50)
+                st.session_state.challenge_day += 1; st.session_state.weekly_progress += 1
+                auth.save_progress(challenge_day=st.session_state.challenge_day, weekly_progress=st.session_state.weekly_progress)
+                del st.session_state.chal_script; time.sleep(2); st.rerun()
+
+# ==========================
+# 🎬 STUDIO
+# ==========================
+if st.session_state.page == "studio":
+    if st.button("⬅️ Terug"): go_home(); st.rerun()
+    st.markdown("## 🎬 Studio")
+    if "last_script" in st.session_state:
+        if st.session_state.get("generated_img"): st.image(st.session_state.generated_img, caption="AI Sfeerbeeld", use_container_width=True)
+        t1, t2 = st.tabs(["Script", "Teleprompter"])
+        with t1:
+            st.markdown(st.session_state.last_script)
+            if st.button("💾 Opslaan"): 
+                if is_pro: auth.save_script_to_library("Script", st.session_state.last_script); st.toast("Opgeslagen!")
+                else: st.toast("🔒 Alleen PRO")
+            if st.button("❌ Nieuw"): del st.session_state.last_script; st.rerun()
+        with t2:
+            font = st.slider("Grootte", 16, 50, 24)
+            st.markdown(f"<div class='teleprompter-box' style='font-size:{font}px;'>{st.session_state.last_script}</div>", unsafe_allow_html=True)
+    else:
+        tab_viral, tab_conv, tab_hook = st.tabs(["👀 Viral Maker", "📈 Conversie", "🪝 Hook Rater"])
+        with tab_viral:
+            if st.button("🔥 Gebruik Viral Format (Bewezen)", type="secondary"):
+                st.session_state.last_script = ai_coach.generate_script("Trending", "Vlog", "Energiek", "Wait", "Volg", niche, st.session_state.brand_voice)
+                st.session_state.generated_img = ai_coach.generate_ai_image_url("Trending", "Vlog", niche)
+                st.rerun()
+            st.markdown("---")
+            template = st.selectbox("💡 Template", ["✨ Eigen idee", "🚫 Mythe Ontkrachten", "📚 How-To", "😲 Reactie"])
+            topic = st.text_input("Onderwerp:", placeholder="Waar gaat het over?")
+            if st.button("🎲 Idee"): st.session_state.idea_input = random.choice(["Veelgemaakte fout", "Geheim trucje", "Mijn mening"]); st.rerun()
+            st.caption("Toon:"); tone = st.radio("Tone", ["⚡ Energiek", "😌 Rustig", "😂 Humor"], horizontal=True, label_visibility="collapsed")
+            c1, c2 = st.columns(2)
+            with c1: fmt = st.selectbox("Format", ["Talking Head", "Vlog", "Green Screen"])
+            with c2: hook = st.selectbox("Hook", ai_coach.get_viral_hooks_library(niche))
+            if st.button("✨ Schrijf Viral Script (+10 XP)", type="primary", use_container_width=True):
+                st.session_state.last_script = ai_coach.generate_script(topic if topic else "Algemeen", fmt, tone.split()[1], hook, "Volg", niche, st.session_state.brand_voice)
+                st.session_state.generated_img = ai_coach.generate_ai_image_url(topic, fmt, niche)
+                add_xp(10); st.session_state.current_topic = topic; st.rerun()
+        with tab_conv:
+            prod = st.text_input("Product/Dienst"); pain = st.text_input("Probleem klant")
+            if check_feature_access("Sales Mode"):
+                if st.button("✍️ Schrijf Story (+10 XP)", type="primary", use_container_width=True):
+                    st.session_state.last_script = ai_coach.generate_sales_script(prod, pain, "Story", niche)
+                    add_xp(10); st.session_state.current_topic = f"Sales: {prod}"; st.rerun()
+                if not is_pro: st.caption("🔓 Tijdelijk ontgrendeld")
             else:
                 if st.session_state.golden_tickets > 0:
-                    st.markdown(f"<div class='ticket-box'>🔒 <b>Sales Modus is PRO.</b><br>Je hebt {st.session_state.golden_tickets} Ticket(s). Inzetten?</div>", unsafe_allow_html=True)
-                    if st.button("🎫 Gebruik 1 Ticket & Schrijf", use_container_width=True):
-                        if use_ticket():
-                            with st.spinner("Schrijven..."):
-                                st.session_state.last_script = ai_coach.generate_sales_script(product_name, pain_point, sales_angle, niche)
-                                st.session_state.generated_img = None
-                                add_xp(10)
-                                st.session_state.current_topic = f"Sales: {product_name}"; st.rerun()
-                else:
-                    ui.render_locked_section("Cashflow Script", "Upgrade naar PRO.")
+                    if st.button("🎫 Unlock Story (24u)"): use_golden_ticket("Sales Mode")
+                else: ui.render_locked_section("Conversie Storytelling", "Zet conversie op nummer 1.")
+        with tab_hook:
+            st.markdown("Twijfel je over je openingszin? Test hem hier.")
+            user_hook = st.text_input("Jouw Hook:")
+            if st.button("Test Hook"):
+                if user_hook:
+                    res = ai_coach.rate_user_hook(user_hook, niche)
+                    st.markdown(f"### Score: {res['score']}/10")
+                    st.info(res['feedback'])
+                else: st.error("Vul iets in!")
 
-    if "last_script" in st.session_state:
-        st.markdown("---")
-        tab_scr, tab_tel, tab_seo = st.tabs(["📄 Script", "🎥 Teleprompter", "#️⃣ Caption"])
-        with tab_scr:
-            st.success("Klaar!")
-            if st.session_state.get("generated_img"):
-                st.image(st.session_state.generated_img, caption="AI Visuele Suggestie", use_container_width=True)
-            
-            st.markdown(st.session_state.last_script)
-            c_sv, c_aud = st.columns(2)
-            with c_sv: 
-                if st.button("💾 Opslaan", use_container_width=True):
-                    if is_pro: auth.save_script_to_library(st.session_state.get("current_topic", "Script"), st.session_state.last_script, "Script"); st.toast("Opgeslagen!"); time.sleep(4); st.rerun()
-                    else: st.toast("🔒 Alleen PRO"); time.sleep(2)
-            with c_aud:
-                if st.button("🔍 Audit", use_container_width=True, help="Check hoe goed dit script is"): st.info(ai_coach.audit_script(st.session_state.last_script, niche)['verdict'])
-        with tab_tel:
-            font_size = st.slider("Lettergrootte", 16, 50, 24)
-            st.markdown(f"<div class='teleprompter-box' style='font-size:{font_size}px; line-height:1.5;'>{st.session_state.last_script.replace('**','').replace('---','')}</div>", unsafe_allow_html=True)
-        with tab_seo:
-            st.code(f"{st.session_state.get('current_topic','Video')} 👇\n\n#{niche.replace(' ','')} #fyp", language="text")
-
-# 3. WORKFLOW
-with t_workflow:
-    st.caption("Hier vind je al je opgeslagen werk terug.")
-    if is_pro:
-        st.markdown("### 🗂️ Script Archief")
-        library = auth.get_user_library()
-        if not library: st.info("Leeg.")
-        for s in library:
-            with st.expander(f"{s.get('status')} | {s.get('topic')}"):
-                st.markdown(s.get('content'))
-                if st.button("🗑️", key=s['id']): auth.delete_script(s['id']); st.rerun()
-    else: ui.render_locked_section("Workflow", "Bewaar scripts.")
-
-# 4. TOOLS
-with t_tools:
-    st.markdown("### 🛠️ Creator Tools")
-    st.caption("Handige hulpmiddelen om je leven makkelijker te maken.")
-    
-    with st.expander("🧬 Bio Optimalisator (Nieuw)", expanded=True):
-        curr_bio = st.text_input("Huidige bio:", help="Plak hier je huidige TikTok bio")
-        if st.button("Optimaliseer"): st.markdown(ai_coach.generate_bio_options(curr_bio, niche))
-
-    with st.expander("🔥 Idee Checker (Gratis)"):
-        idea = st.text_input("Jouw idee:", key="chk_free", help="Heb je een video idee? Check het hier.")
+# ==========================
+# 🛠️ TOOLS
+# ==========================
+if st.session_state.page == "tools":
+    if st.button("⬅️ Terug"): go_home(); st.rerun()
+    st.markdown("## 🛠️ Tools")
+    with st.expander("🧬 Bio Optimalisator"):
+        bio = st.text_input("Huidige bio")
+        if st.button("Verbeter"): st.markdown(ai_coach.generate_bio_options(bio, niche))
+    with st.expander("🔥 Idee Checker"):
+        idea = st.text_input("Jouw idee")
         if st.button("Check"): st.info(ai_coach.check_viral_potential(idea, niche)['verdict'])
-
-    with st.expander("📦 Passief Inkomen Bedenker (PRO)"):
-        if not auth.has_access("Product Bedenker"):
+    with st.expander("🕵️ Viral Remix Tool (PRO)"):
+        if check_feature_access("Viral Remix"):
+            other = st.text_area("Script om te stelen:")
+            if st.button("🔀 Remix Script"): st.markdown(ai_coach.steal_format_and_rewrite(other, "Mijn Onderwerp", niche))
+            if not is_pro: st.caption("🔓 Tijdelijk ontgrendeld")
+        else:
             if st.session_state.golden_tickets > 0:
-                st.markdown(f"<div class='ticket-box'>🔒 <b>Dit is een PRO tool.</b><br>Wil je 1 Ticket inzetten?</div>", unsafe_allow_html=True)
-                target = st.text_input("Doelgroep:", help="Voor wie is het?")
-                if st.button("🎫 Gebruik Ticket & Genereer"):
-                    if use_ticket():
-                        with st.spinner("Genereren..."):
-                            st.session_state.biz_plan = ai_coach.generate_digital_product_plan(niche, target)
-            else:
-                ui.render_locked_section("Business Plan", "Laat AI je product bedenken.")
+                if st.button("🎫 Unlock Remix (24u)", key="btn_remix"): use_golden_ticket("Viral Remix")
+            ui.render_locked_section("Viral Remix", "Steel formats van virale video's.")
+    with st.expander("📦 Passief Inkomen (PRO)"):
+        if check_feature_access("Product Bedenker"):
+             tgt = st.text_input("Doelgroep")
+             if st.button("Genereer Plan"):
+                 plan = ai_coach.generate_digital_product_plan(niche, tgt); st.markdown(plan)
+                 pdf = create_pdf(plan); 
+                 if pdf: st.download_button("📥 Download PDF", data=pdf, file_name="plan.pdf", mime="application/pdf")
+             if not is_pro: st.caption("🔓 Tijdelijk ontgrendeld")
         else:
-            target = st.text_input("Doelgroep:", help="Voor wie is het product?")
-            if st.button("Genereer Masterplan"):
-                if not target: st.error("Vul een doelgroep in.")
-                else:
-                    with st.spinner("Schrijven..."):
-                        st.session_state.biz_plan = ai_coach.generate_digital_product_plan(niche, target)
-        
-        if "biz_plan" in st.session_state:
-            st.markdown(st.session_state.biz_plan)
-            pdf_data = create_pdf(st.session_state.biz_plan)
-            if pdf_data: st.download_button("📥 Download PDF", data=pdf_data, file_name="plan.pdf", mime="application/pdf")
-
+            if st.session_state.golden_tickets > 0:
+                if st.button("🎫 Unlock Product (24u)", key="btn_prod"): use_golden_ticket("Product Bedenker")
+            ui.render_locked_section("Product Bedenker", "Verdien geld terwijl je slaapt.")
     with st.expander("🎬 5 Video's in 1 klik (PRO)"):
-        if not is_pro:
-             ui.render_locked_section("Serie Generator", "Maak 5 video's in 1 klik.")
+        if check_feature_access("Serie Generator"):
+            series_topic = st.text_input("Onderwerp Serie:")
+            if st.button("Bouw Serie"): st.markdown(ai_coach.generate_series_ideas(series_topic, niche))
+            if not is_pro: st.caption("🔓 Tijdelijk ontgrendeld")
         else:
-            topic = st.text_input("Serie onderwerp:", help="Waar moet de serie over gaan?")
-            if st.button("Bouw Serie"): st.markdown(ai_coach.generate_series_ideas(topic, niche))
-
-    with st.expander("🕵️ Viral Video Nadoen (PRO)"):
-        if not is_pro:
-            ui.render_locked_section("Format Dief", "Kopieer succesformules.")
-        else:
-            other = st.text_area("Script concurrent:", help="Plak hier de tekst van een video die je goed vindt.")
-            mine = st.text_area("Mijn onderwerp:", help="Waar wil jij het over hebben?")
-            if st.button("Herschrijf"): st.markdown(ai_coach.steal_format_and_rewrite(other, mine, niche))
-
+            if st.session_state.golden_tickets > 0:
+                if st.button("🎫 Unlock Serie (24u)", key="btn_serie"): use_golden_ticket("Serie Generator")
+            ui.render_locked_section("Serie Generator", "Binge-waardige content.")
     with st.expander("📅 Weekplanner (PRO)"):
-        if not is_pro:
-            ui.render_locked_section("Weekplanner", "7 dagen content in 1 klik.")
+        if check_feature_access("Weekplanner"):
+            if st.button("Plan Week"): st.markdown(ai_coach.generate_weekly_plan(niche))
+            if st.button("📥 Download voor Agenda (.ics)"):
+                ics_data = ai_coach.create_ics_file(niche)
+                st.download_button("Klik om te downloaden", ics_data, file_name="content_kalender.ics", mime="text/calendar")
+            if not is_pro: st.caption("🔓 Tijdelijk ontgrendeld")
         else:
-            if st.button("Maak Planning"): 
-                with st.spinner("Plannen..."):
-                    st.markdown(ai_coach.generate_weekly_plan(niche))
+            if st.session_state.golden_tickets > 0:
+                if st.button("🎫 Unlock Planner (24u)", key="btn_plan"): use_golden_ticket("Weekplanner")
+            ui.render_locked_section("Weekplanner", "Nooit meer stress over wat je moet posten.")
 
-# 5. DATA
-with t_data:
-    st.markdown("### 📊 Jouw Cijfers")
-    st.caption("Houd bij hoe je video's presteren.")
+# ==========================
+# 📊 STATS
+# ==========================
+if st.session_state.page == "stats":
+    if st.button("⬅️ Terug"): go_home(); st.rerun()
+    st.markdown("## 📊 Cijfers")
+    if auth.is_tiktok_connected():
+        st.success("✅ Data wordt automatisch opgehaald.")
+        st.bar_chart({"Views": [100, 450, 300, 900, 1200]})
+    else:
+        st.warning("⚠️ Koppel TikTok op het dashboard.")
+        v = st.number_input("Views laatste video", step=100)
+        if st.button("Claim XP (+20)"): auth.handle_daily_streak(); add_xp(20); st.rerun()
+    st.markdown("#### 🏆 Leaderboard")
+    st.dataframe(ai_coach.get_leaderboard(niche, st.session_state.xp), use_container_width=True, hide_index=True)
+
+# ==========================
+# ⚙️ SETTINGS
+# ==========================
+if st.session_state.page == "settings":
+    if st.button("⬅️ Terug"): go_home(); st.rerun()
+    st.markdown("## ⚙️ Instellingen")
     
     with st.container(border=True):
-        st.markdown("#### 🚀 Snelle Check-in")
-        st.write("Vul je resultaten in voor punten (XP).")
-        col_i, col_t, col_b = st.columns([0.4, 0.4, 0.2], vertical_alignment="bottom")
-        with col_i: v = st.number_input("Views laatste video", min_value=0, step=100, help="Aantal weergaven")
-        with col_t: r = st.number_input("Kijktijd (sec) [Optioneel]", min_value=0, step=1, help="Hoe lang keken mensen gemiddeld?")
-        with col_b: 
-            if st.button("Claim XP", type="primary", use_container_width=True): 
-                if v>0: 
-                    st.balloons()
-                    handle_daily_streak() # Streak check
-                    add_xp(20)
-                    msg = "+20 XP! "
-                    if r > 0 and r < 3: msg += "Tip: Werk aan je hook, mensen haken snel af."
-                    elif r > 3: msg += "Lekker bezig! Retentie is koning."
-                    st.toast(msg)
-                    time.sleep(4)
-                    st.rerun()
-
-    st.markdown("#### 🏆 Leaderboard: " + niche)
-    # Leaderboard update met huidige XP
-    lb = ai_coach.get_leaderboard(niche, st.session_state.xp)
-    st.dataframe(lb, use_container_width=True, hide_index=True)
-
-    with st.expander("📂 Geavanceerd: TikTok CSV Upload"):
-        up = st.file_uploader("Upload CSV", type=['csv','xlsx'])
-        if up: st.session_state.df = data_loader.load_file(up)
-        if not st.session_state.df.empty:
-            df = analytics.clean_data(st.session_state.df)
-            kpis = analytics.calculate_kpis(df)
-            if auth.has_access("Data Detective"):
-                if st.button("🔍 AI Analyse"): st.info(ai_coach.analyze_data_patterns(f"Views: {kpis['Views'].sum()}", niche)['strategy_tip'])
-            st.metric("Totaal Views", f"{kpis['Views'].sum()/1000:.1f}k")
-            st.bar_chart(analytics.get_best_posting_time(df), x="Uur", y="Views")
-
-# 6. SETTINGS
-with t_set:
-    st.markdown("### ⚙️ Instellingen")
-    st.caption("Beheer je account en voorkeuren.")
-    
-    with st.container(border=True):
-        st.markdown("#### 👤 Jouw Profiel")
-        new_niche = st.text_input("Jouw Niche:", value=niche, help="Dit past alle AI suggesties aan.")
-        if new_niche != niche:
-            if st.button("💾 Niche Opslaan"):
-                auth.save_progress(niche=new_niche)
-                st.session_state.user_niche = new_niche
-                st.toast("Niche aangepast! Pagina herlaadt...")
-                time.sleep(2)
-                st.rerun()
-
-    with st.container(border=True):
-        st.markdown("#### 📅 Weekdoel")
-        st.write(f"Huidig doel: {st.session_state.weekly_goal} video's")
-        if st.button("🔄 Reset Weekdoel"):
-            st.session_state.weekly_goal = 0
-            st.session_state.weekly_progress = 0
-            auth.save_progress(weekly_goal=0, weekly_progress=0)
-            st.toast("Weekdoel gereset!")
-            time.sleep(2)
+        new_niche = st.text_input("Niche", value=niche)
+        st.markdown("### 🗣️ Jouw Stijl (Brand Voice)")
+        voice = st.selectbox("Hoe wil je klinken?", ["De Expert 🧠", "De Beste Vriendin 💖", "De Harde Waarheid 🔥", "De Grappenmaker 😂"], index=0)
+        
+        if st.button("Opslaan"): 
+            st.session_state.brand_voice = voice
+            auth.save_progress(niche=new_niche, brand_voice=voice)
+            st.success("Opgeslagen!")
+            time.sleep(1)
             st.rerun()
 
-    st.markdown("---")
-    
-    if not is_pro:
-        st.markdown("### 🔓 Upgrade naar PostAi PRO 🚀")
-        st.markdown("Voorkom dat je je Streak en Scripts verliest! Upgrade voor onbeperkte toegang.")
-        with st.container(border=True):
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("❌ **Max 1 script** per dag")
-                st.markdown("❌ **Geen** Sales Modus")
-                st.markdown("❌ **Geen** Product Bedenker")
-            with c2:
-                st.markdown("✅ **Onbeperkt** Scripts")
-                st.markdown("✅ **Geld Verdienen** Tools")
-                st.markdown("✅ **Volledige** Roadmap")
-            
-            st.markdown("""
-            <div style='text-align:center; margin-top:10px; margin-bottom:10px;'>
-                <span class='pricing-strike'>€29,95</span> <span class='pricing-deal'>Nu €19,95 / maand</span>
-            </div>
-            """, unsafe_allow_html=True)
-            st.link_button("👉 Start 14 Dagen Gratis", "https://postai.lemonsqueezy.com/buy/...", type="primary", use_container_width=True)
-        
-        with st.expander("Heb je al een code?"):
-            c = st.text_input("Code")
-            if st.button("Activeer"): auth.activate_pro(c)
+    if is_pro:
+        st.success("✅ Je bent een PRO lid. Geniet van alle functies!")
+        st.info(f"Level: {st.session_state.level} | XP: {st.session_state.xp}/100")
+        # Misschien een progress bar hier voor XP tot volgend level?
+        st.progress(st.session_state.xp / 100)
+        st.caption("XP tot volgend level")
     else:
-        st.success("Je bent PRO lid! 🚀")
-        if st.button("Uitloggen"): st.session_state.clear(); st.rerun()
-    
-    # TEST KNOP
-    st.markdown("---")
-    if st.button("🧪 Test Beloning (Zet Streak op 5)"):
-        st.session_state.streak = 5
-        auth.save_progress(streak=5, unclaimed_reward=True)
-        st.toast("Streak op 5 gezet! Ververs de pagina.")
-        time.sleep(2)
-        st.rerun()
+        st.markdown("""
+        <div class="pricing-box">
+            <div class="fomo-badge">🔥 Populairste Keuze</div>
+            <div class="pricing-header">
+                <h3>🚀 Upgrade naar PRO</h3>
+                <div class="price-tag">€9,95<span class="price-period">/maand</span></div>
+                <small style="color:#ef4444; font-weight:bold;">(Normaal €19,95 - Early Bird Deal)</small>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div style="flex:1;">
+                    <ul class="feature-list">
+                        <li class="feature-item"><span class="check-icon">✅</span> Onbeperkt Scripts</li>
+                        <li class="feature-item"><span class="check-icon">✅</span> Viral Remix Tool</li>
+                        <li class="feature-item"><span class="check-icon">✅</span> Passief Inkomen Generator</li>
+                        <li class="feature-item"><span class="check-icon">✅</span> Wekelijkse Trends</li>
+                    </ul>
+                </div>
+                <div style="flex:1;">
+                    <ul class="feature-list">
+                        <li class="feature-item"><span class="cross-icon">❌</span> <span class="strike-text">Max 1 script/dag</span></li>
+                        <li class="feature-item"><span class="cross-icon">❌</span> <span class="strike-text">Geen Sales Modus</span></li>
+                        <li class="feature-item"><span class="cross-icon">❌</span> <span class="strike-text">Geen Kalender Export</span></li>
+                    </ul>
+                </div>
+            </div>
+            <div style="text-align:center; margin-top:20px;">
+                <a href="https://postai.lemonsqueezy.com/buy/..." target="_blank" style="text-decoration:none;">
+                    <button style="background:#10b981; color:white; border:none; padding:12px 25px; border-radius:10px; font-weight:800; font-size:1.1rem; cursor:pointer; width:100%; box-shadow:0 4px 10px rgba(16,185,129,0.3);">
+                        👉 Claim 50% Korting & Start Direct
+                    </button>
+                </a>
+                <p style="font-size:0.7rem; color:#9ca3af; margin-top:10px;">14 dagen niet-goed-geld-terug garantie.</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        with st.expander("Heb je al een licentiecode?"):
+            c = st.text_input("Vul je code in")
+            if st.button("Activeer Licentie"): auth.activate_pro(c)
 
-ui.inject_chat_widget(auth.get_secret("CHAT_SERVER_URL", "https://chatbot.com"))
+    st.markdown("---")
+    if st.button("🧪 DEV: Zet Streak op 5 (Popup Test)"): st.session_state.streak = 5; auth.save_progress(streak=5, unclaimed_reward=True); st.rerun()
+
+# ==========================
+# 📄 PRIVACY & VOORWAARDEN
+# ==========================
+if st.session_state.page == "privacy":
+    if st.button("⬅️ Terug"): go_home(); st.rerun()
+    st.markdown("## 🔒 Privacy Policy")
+    st.markdown("""**Laatst bijgewerkt: 2025**\n\nBij PostAi nemen we jouw privacy serieus.\n1. **Gegevensverzameling:** We slaan alleen je voortgang (XP, streak) en niche op. Scripts worden lokaal verwerkt.\n2. **Derden:** We delen geen data met derden, behalve voor betalingsverwerking (LemonSqueezy).\n3. **AI Gebruik:** Je inputs worden verwerkt door AI om content te genereren, maar niet gebruikt om modellen te trainen.\n\nVoor vragen: support@postai.nl""")
+
+if st.session_state.page == "terms":
+    if st.button("⬅️ Terug"): go_home(); st.rerun()
+    st.markdown("## 📜 Algemene Voorwaarden")
+    st.markdown("""**1. Gebruik:** PostAi is een hulpmiddel. Jij blijft verantwoordelijk voor de content die je plaatst.\n**2. Abonnement:** Het PRO abonnement is maandelijks opzegbaar. \n**3. Aansprakelijkheid:** Wij garanderen geen specifieke resultaten (zoals viral gaan).\n**4. Refund:** Niet tevreden? 14 dagen geld terug garantie.""")
 
 # --- FOOTER ---
-st.markdown("<div style='margin-top:50px; border-top:1px solid #f3f4f6; margin-bottom:20px;'></div>", unsafe_allow_html=True)
-c_space_left, c_btn1, c_btn2, c_space_right = st.columns([3, 2, 2, 3])
-with c_btn1:
-    if st.button("Privacy Policy", key="foot_priv", use_container_width=True, type="secondary"): st.session_state.current_page = "privacy"; st.rerun()
-with c_btn2:
-    if st.button("Voorwaarden", key="foot_terms", use_container_width=True, type="secondary"): st.session_state.current_page = "terms"; st.rerun()
+ui.inject_chat_widget(auth.get_secret("CHAT_URL", ""))
+st.markdown("<div style='height: 50px;'></div>", unsafe_allow_html=True)
 
-st.markdown("""<div class="footer-text">14 dagen gratis • Gemaakt voor TikTok</div><div class="footer-sub">© 2025 PostAi. Alle rechten voorbehouden.</div>""", unsafe_allow_html=True)
+c1, c2, c3 = st.columns([1, 2, 1])
+with c2:
+    f1, f2 = st.columns(2)
+    with f1: 
+        if st.button("Privacy Policy", key="f_priv", use_container_width=True):
+            st.session_state.page = "privacy"
+            st.rerun()
+    with f2: 
+        if st.button("Voorwaarden", key="f_terms", use_container_width=True):
+            st.session_state.page = "terms"
+            st.rerun()
+
+st.markdown("""<div class="footer-container"><div class="footer-text">14 dagen gratis • Gemaakt voor TikTok</div><div class="footer-sub">© 2025 PostAi. Alle rechten voorbehouden.</div></div>""", unsafe_allow_html=True)
