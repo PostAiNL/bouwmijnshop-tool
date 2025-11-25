@@ -27,26 +27,33 @@ if not auth.is_authenticated():
     auth.render_landing_page()
     st.stop()
 
-user_data = auth.load_progress()
+# OPTIMALISATIE: Laad data alleen als het nog niet in het geheugen zit
+if "xp" not in st.session_state:
+    # Dit gebeurt nu nog maar 1x per sessie (ipv elke klik)
+    user_data = auth.load_progress()
+    
+    # Init alle variabelen direct uit de database
+    st.session_state.page = "home"
+    st.session_state.streak = auth.check_daily_streak()
+    st.session_state.xp = user_data.get("xp", 50)
+    st.session_state.level = user_data.get("level", 1)
+    st.session_state.golden_tickets = user_data.get("golden_tickets", 0)
+    st.session_state.user_niche = user_data.get("niche", "")
+    st.session_state.brand_voice = user_data.get("brand_voice", "De Expert 🧠")
+    st.session_state.openai_key = user_data.get("openai_key", "")
+    st.session_state.daily_xp_earned = user_data.get("daily_xp_earned", 0)
+    st.session_state.last_xp_date = user_data.get("last_xp_date", str(datetime.datetime.now().date()))
+    st.session_state.challenge_day = user_data.get("challenge_day", 1)
+    st.session_state.weekly_goal = user_data.get("weekly_goal", 0)
+    st.session_state.weekly_progress = user_data.get("weekly_progress", 0)
+else:
+    # Als data er al is, doen we NIETS (dus supersnel)
+    pass
 
-# State Variabelen
-if "page" not in st.session_state: st.session_state.page = "home"
-if "streak" not in st.session_state: st.session_state.streak = auth.check_daily_streak()
-if "xp" not in st.session_state: st.session_state.xp = user_data.get("xp", 50)
-if "level" not in st.session_state: st.session_state.level = user_data.get("level", 1)
-if "golden_tickets" not in st.session_state: st.session_state.golden_tickets = user_data.get("golden_tickets", 0)
-if "user_niche" not in st.session_state: st.session_state.user_niche = user_data.get("niche", "")
-if "brand_voice" not in st.session_state: st.session_state.brand_voice = user_data.get("brand_voice", "De Expert 🧠")
-if "openai_key" not in st.session_state: st.session_state.openai_key = user_data.get("openai_key", "")
-if "daily_xp_earned" not in st.session_state: st.session_state.daily_xp_earned = user_data.get("daily_xp_earned", 0)
-if "last_xp_date" not in st.session_state: st.session_state.last_xp_date = user_data.get("last_xp_date", str(datetime.datetime.now().date()))
-if "challenge_day" not in st.session_state: st.session_state.challenge_day = user_data.get("challenge_day", 1)
-if "weekly_goal" not in st.session_state: st.session_state.weekly_goal = user_data.get("weekly_goal", 0)
-if "weekly_progress" not in st.session_state: st.session_state.weekly_progress = user_data.get("weekly_progress", 0)
-
+# Deze variabelen halen we nu uit de snelle session_state in plaats van user_data
 is_pro = auth.is_pro()
 niche = st.session_state.user_niche
-
+user_data = st.session_state.get("local_user_data", {}) # Fallback voor functies die user_data nodig hebben
 # Init AI
 ai_coach.init_ai()
 
@@ -167,6 +174,13 @@ if not st.session_state.user_niche:
 # 🏠 HOME DASHBOARD
 # ==========================
 if st.session_state.page == "home":
+    # --- NIEUW: Account Info Blokje ---
+    with st.expander("🔑 Jouw Account Gegevens (Bewaar dit!)"):
+        st.caption("Dit is jouw unieke sleutel. Bewaar deze om later weer in te loggen en verder te gaan met je streak!")
+        st.code(st.session_state.license_key, language=None)
+        st.info("Tip: Sla deze pagina op in je favorieten ⭐, dan ben je de volgende keer direct ingelogd!")
+    # ----------------------------------
+
     st.markdown(f"**👋 Hi {niche}-creator!**")
     
     if is_pro:
@@ -537,14 +551,14 @@ if st.session_state.page == "settings":
         st.success("✅ Je bent een PRO lid. Geniet van alle functies!")
         st.info(f"Level: {st.session_state.level} | XP: {st.session_state.xp}/100")
     else:
-        st.markdown("### Upgrade naar PRO")
+        st.markdown("###")
         
         # Pricing Box
         st.markdown("""
         <div class="pricing-box">
             <div class="fomo-badge">🔥 Populairste Keuze</div>
             <div class="pricing-header">
-                <h3>🚀 Upgrade naar PRO</h3>
+                <h3>Upgrade naar PRO</h3>
                 <div class="price-tag">€9,95<span class="price-period">/maand</span></div>
                 <small style="color:#ef4444; font-weight:bold;">(Normaal €19,95 - Early Bird Deal)</small>
             </div>
@@ -566,8 +580,6 @@ if st.session_state.page == "settings":
             c = st.text_input("Vul je code in")
             if st.button("Activeer Licentie"): auth.activate_pro(c)
 
-    st.markdown("---")
-    if st.button("🧪 DEV: Reset Streak"): st.session_state.streak = 0; auth.save_progress(streak=0); st.rerun()
 
 # ==========================
 # 📄 PRIVACY & VOORWAARDEN
