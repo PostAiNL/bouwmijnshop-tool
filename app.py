@@ -16,15 +16,21 @@ st.set_page_config(page_title="PostAi", page_icon="🚀", layout="centered", ini
 ui.inject_style_and_hacks(brand_color="#10b981")
 
 # --- 2. PUBLIEKE LINKS LOGICA (VOOR PADDLE) ---
-# Dit moet VOOR de auth check gebeuren!
 qp = st.query_params
 target_view = qp.get("view", "")
 
-# Als de URL ?view=privacy of ?view=terms bevat, zetten we de pagina direct goed
+# Als de URL ?view=privacy of ?view=terms bevat
 if target_view in ["privacy", "terms"]:
     st.session_state.page = target_view
-    # We faken een sessie zodat de app niet crasht, maar geven geen toegang tot de rest
     st.session_state.license_key = "public_visitor"
+    
+    # --- FIX: DUMMY VARIABELEN AANMAKEN OM CRASH TE VOORKOMEN ---
+    if "user_niche" not in st.session_state: st.session_state.user_niche = ""
+    if "xp" not in st.session_state: st.session_state.xp = 0
+    if "streak" not in st.session_state: st.session_state.streak = 0
+    if "level" not in st.session_state: st.session_state.level = 1
+    if "golden_tickets" not in st.session_state: st.session_state.golden_tickets = 0
+    # -------------------------------------------------------------
 else:
     # Normale initialisatie voor echte gebruikers
     auth.init_session()
@@ -39,7 +45,6 @@ def go_privacy(): st.session_state.page = "privacy"
 def go_terms(): st.session_state.page = "terms"
 
 # --- 4. AUTH CHECK ---
-# We blokkeren de toegang ALLEEN als het geen publieke pagina is
 if target_view not in ["privacy", "terms"]:
     if not auth.is_authenticated():
         auth.render_landing_page()
@@ -62,7 +67,7 @@ if target_view not in ["privacy", "terms"] and "xp" not in st.session_state:
     st.session_state.weekly_goal = user_data.get("weekly_goal", 0)
     st.session_state.weekly_progress = user_data.get("weekly_progress", 0)
 
-# Variabelen instellen om crashes verderop te voorkomen bij public view
+# Variabelen instellen (Ook voor public view, anders crasht de rest van de code)
 if target_view in ["privacy", "terms"]:
     is_pro = False
     niche = ""
@@ -73,6 +78,8 @@ else:
     user_data = st.session_state.get("local_user_data", {}) 
     ai_coach.init_ai()
 
+# --- EINDE AANPASSING ---
+# Hieronder gaat je code gewoon verder met: def check_feature_access...
 # --- EINDE AANPASSING ---
 # Hieronder gaat je code gewoon verder met: def check_feature_access...
 # --- 4. HELPER FUNCTIES ---
