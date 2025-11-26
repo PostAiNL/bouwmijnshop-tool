@@ -14,8 +14,9 @@ from google.oauth2.service_account import Credentials
 # CONFIG
 PRO_KEY_FIXED = "123-456-789" 
 
-# --- GOOGLE SHEETS VERBINDING (MET CACHE) ---
-@st.cache_resource(ttl=600)
+# --- GOOGLE SHEETS VERBINDING (MET CACHE & ZONDER TEKST) ---
+# show_spinner=False zorgt dat de gebruiker niet ziet: "Running get_db..."
+@st.cache_resource(ttl=600, show_spinner=False)
 def get_db_connection():
     """Maakt verbinding met Google Sheets. Cached voor 10 min."""
     if "gcp_service_account" not in st.secrets:
@@ -65,7 +66,6 @@ def load_progress():
         else:
             return {}
     except Exception as e:
-        print(f"⚠️ Load Error: {e}")
         return {}
 
 def save_progress(**kwargs):
@@ -86,7 +86,7 @@ def save_progress(**kwargs):
             try:
                 cell = sheet.find(key)
                 sheet.update_cell(cell.row, 2, json_data)
-            except gspread.exceptions.CellNotFound:
+            except Exception: 
                 sheet.append_row([key, json_data])
         except Exception as e:
             print(f"❌ Save Error: {e}")
@@ -127,17 +127,17 @@ def render_landing_page():
                     key = "DEMO-" + str(uuid.uuid4())[:8]
                     st.session_state.license_key = key
                     
-                    # 2. Sla op in database
+                    # 2. Sla op in database (zonder spinner tekst van db)
                     save_progress(name=name, email=email, start_date=str(datetime.now().date()))
                     
                     # 3. Verstuur mail (met feedback)
-                    with st.spinner("📧 Account aanmaken en mail versturen..."):
+                    with st.spinner("📧 Account aanmaken..."):
                         email_sent = send_login_email(email, name, key)
                     
                     if email_sent:
                         st.toast("✅ Mail verstuurd! Check je inbox.", icon="📩")
                     else:
-                        st.warning("⚠️ Kon mail niet versturen (check spam), maar je bent wel ingelogd. Bewaar je code!")
+                        st.warning("⚠️ Kon mail niet versturen (check spam), maar je bent wel ingelogd.")
 
                     # 4. Login en refresh
                     time.sleep(1.5)
@@ -246,7 +246,7 @@ def get_ai_usage_text():
     current = user_data.get("ai_daily_count", 0)
     return f"{current}/{limit}"
 
-# --- STRATO EMAIL FUNCTIE (AANGEPAST MET TIP) ---
+# --- STRATO EMAIL FUNCTIE ---
 
 def send_login_email(to_email, name, license_key):
     # 1. Haal variabelen op uit environment

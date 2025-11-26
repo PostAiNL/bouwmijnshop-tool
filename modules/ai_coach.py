@@ -5,6 +5,7 @@ import datetime
 import os
 import streamlit as st
 import re # Nodig om scores uit tekst te vissen
+import base64
 
 # Probeer OpenAI te importeren
 try:
@@ -218,19 +219,65 @@ def get_challenge_tasks():
         10: "Klantresultaat / Case Study"
     }
 
-def analyze_analytics_screenshot(img_file):
+def analyze_analytics_screenshot(uploaded_file):
     """
-    Simuleert Vision API. 
-    Om dit ECHT te maken, moet je de image base64 encoden en naar GPT-4o sturen.
-    Voor nu simuleren we een slimme analyse om de UX te testen.
+    ECHTE ANALYSE: Stuurt het plaatje naar GPT-4o voor feedback.
+    Versie 2.0: Met extra foutopsporing en null-checks.
     """
-    time.sleep(3) # "AI is thinking..."
-    return {
-        "totaal_views": 12500,
-        "beste_video": "Die over tips (3.2k views)",
-        "advies": "Je video's op dinsdag doen het goed. Je retentie zakt na 3 seconden: werk aan je hooks!",
-        "views_history": {"Ma": 1200, "Di": 3400, "Wo": 800, "Do": 2100, "Vr": 5000}
-    }
+    # Zorg dat de imports lokaal beschikbaar zijn voor deze functie
+    import base64
+    import json
+
+    if not HAS_OPENAI or not client:
+        return {"advies": "AI niet verbonden (Check API Key).", "beste_video": "-", "totaal_views": 0}
+
+    try:
+        # 1. Zet plaatje om naar base64
+        # We gebruiken .getvalue() voor Streamlit uploaded files
+        uploaded_file.seek(0) # Reset pointer voor de zekerheid
+        bytes_data = uploaded_file.getvalue()
+        base64_image = base64.b64encode(bytes_data).decode('utf-8')
+
+        # 2. De Prompt naar GPT-4o
+        response = client.chat.completions.create(
+            model="gpt-4o", 
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Je bent een TikTok expert. Analyseer deze screenshot. Geef JSON antwoord met keys: 'totaal_views' (getal of schatting), 'beste_video' (korte tekst), advies (2 zinnen concreet advies waarom de views stoppen). Als je het niet kan lezen, zet null."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                    ],
+                }
+            ],
+            max_tokens=400,
+            response_format={ "type": "json_object" } # Dwingt JSON af
+        )
+        
+        # 3. Verwerk antwoord
+        result_text = response.choices[0].message.content
+        
+        # CHECK: Is het antwoord leeg?
+        if result_text is None:
+            return {
+                "totaal_views": 0, 
+                "beste_video": "Geen tekst", 
+                "advies": "AI gaf geen tekst terug. Probeer een duidelijkere screenshot."
+            }
+
+        # Schoonmaken (soms zet AI er ```json omheen)
+        clean_text = result_text.replace("```json", "").replace("```", "").strip()
+        
+        return json.loads(clean_text)
+
+    except Exception as e:
+        # Print de error ook in je terminal/console voor debugging
+        print(f"❌ Vision Error: {e}")
+        return {
+            "totaal_views": 0,
+            "beste_video": "Fout",
+            "advies": f"Fout bij analyse: {str(e)}"
+        }
 
 def create_ics_file(niche):
     now = datetime.datetime.now()
@@ -249,3 +296,82 @@ def get_leaderboard(niche, xp):
         "Naam": ["Pro Creator", "Jij", "Starter", "Newbie"], 
         "XP": [5000, xp, 200, 50]
     })
+
+def generate_viral_image(topic, style, niche):
+    """
+    Genereert een realistisch TikTok-shot concept.
+    Vraagt specifiek om 9:16, POV en realisme.
+    """
+    if not HAS_OPENAI or not client:
+        return None
+
+    try:
+        # Een veel slimmere prompt:
+        prompt = f"""
+        A high-quality, vertical (9:16 aspect ratio) photo acting as a TikTok thumbnail for the niche: '{niche}'.
+        Topic of the video: '{topic}'.
+        
+        Visual Style: {style}.
+        Camera Angle: POV (Point of View) or Close-up shot taken with an iPhone 15 Pro.
+        Lighting: Bright, natural lighting or Ring light studio setup.
+        Atmosphere: Authentic User Generated Content (UGC), not too cartoony.
+        
+        No text overlays, just the visual scene.
+        """
+        
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size="1024x1792", # DALL-E 3 ondersteunt staand formaat!
+            quality="standard",
+            n=1,
+        )
+        
+        return response.data[0].url
+    except Exception as e:
+        print(f"DALL-E Error: {e}")
+        return None
+
+# --- VOEG DIT TOE AAN ai_coach.py ---
+
+def analyze_writing_style(sample_text):
+    """
+    CLONE MY VOICE: Analyseert tekst en maakt een persona beschrijving.
+    """
+    ai_sys = "Je bent een linguïstisch expert. Analyseer de schrijfstijl van deze tekst. Let op: Toon, zinslengte, gebruik van emoji's, humor, jargon en formatterig."
+    ai_user = f"Beschrijf de schrijfstijl van deze tekst in 1 korte zin zodat ik het als instructie aan een AI kan geven (bv: 'Schrijf als...'). Tekst: {sample_text}"
+    
+    llm_out = call_llm(ai_sys, ai_user)
+    if llm_out: return llm_out
+    return "Een authentieke, persoonlijke schrijfstijl."
+
+def get_personalized_trend(niche):
+    """
+    SLIMME TRENDS: Bedenkt een trend specifiek voor de niche.
+    """
+    import json # Zorg dat dit bovenaan staat of hier
+    
+    ai_sys = f"Je bent een virale trendwatcher voor de niche '{niche}'. Bedenk 1 actueel, concreet video-format dat NU zou werken."
+    # We vragen om JSON format voor makkelijke verwerking
+    ai_user = "Geef antwoord in JSON formaat met de keys: 'title', 'desc' (korte uitleg wat je moet doen) en 'sound' (suggestie voor muziek/audio)."
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": ai_sys},
+                {"role": "user", "content": ai_user}
+            ],
+            temperature=0.7,
+            response_format={ "type": "json_object" }
+        )
+        content = response.choices[0].message.content
+        return json.loads(content)
+    except Exception as e:
+        print(f"Trend Error: {e}")
+        # Fallback als AI faalt
+        return {
+            "title": f"De {niche} Fout", 
+            "desc": "Laat zien wat iedereen fout doet en hoe jij het oplost.", 
+            "sound": "Trending Audio"
+        }

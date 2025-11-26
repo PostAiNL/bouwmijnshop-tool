@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import base64
 import os
 
@@ -10,7 +11,7 @@ def get_img_as_base64(file_path):
     return base64.b64encode(data).decode()
 
 def inject_style_and_hacks(brand_color="#10b981"):
-    # CSS apart gedefinieerd om syntax errors te voorkomen
+    # 1. CSS STYLING
     css = f"""
     <style>
         /* ALGEMENE STIJL */
@@ -18,18 +19,50 @@ def inject_style_and_hacks(brand_color="#10b981"):
         .block-container {{ padding-top: 1rem; padding-bottom: 5rem; max-width: 900px; }} 
         header[data-testid="stHeader"], [data-testid="stToolbar"], footer {{ display: none !important; }}
         
-        /* INPUTS & KNOPPEN */
+        /* INPUTS */
         div[data-baseweb="input"] > div, div[data-baseweb="base-input"] > input, 
         div[data-baseweb="textarea"] > textarea, div[data-baseweb="select"] > div {{
             background-color: #ffffff !important; color: #000000 !important; border: 1px solid #e5e7eb !important;
         }}
-        div.stButton > button {{
+        
+        /* --- KNOPPEN STYLING (SPLITSING) --- */
+        
+        /* 1. PRIMARY BUTTONS (Acties) -> GROEN */
+        button[kind="primary"] {{
             background: linear-gradient(135deg, {brand_color} 0%, #059669 100%) !important;
-            color: white !important; border: none !important; border-radius: 12px !important;
-            font-weight: 700 !important; padding: 12px 20px !important;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+            color: white !important; 
+            border: none !important; 
+            border-radius: 12px !important;
+            font-weight: 700 !important; 
+            padding: 12px 20px !important;
+            box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2) !important;
+            transition: all 0.2s ease;
+        }}
+        button[kind="primary"]:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3) !important;
+        }}
+
+        /* 2. SECONDARY BUTTONS (Navigatie/Settings) -> WIT/GRIJS */
+        button[kind="secondary"] {{
+            background-color: #ffffff !important;
+            color: #4b5563 !important;
+            border: 1px solid #e5e7eb !important;
+            border-radius: 12px !important;
+            font-weight: 600 !important;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+        }}
+        button[kind="secondary"]:hover {{
+            background-color: #f9fafb !important;
+            color: #111827 !important;
+            border-color: #d1d5db !important;
         }}
         
+        /* 3. ALGEMENE BUTTON FIXES */
+        div.stButton > button {{
+            width: 100%; /* Zorgt dat full-width buttons goed werken */
+        }}
+
         /* --- HEADER --- */
         .header-container {{
             display: flex; align-items: center; gap: 20px; width: 100%; margin-bottom: 15px;
@@ -46,7 +79,7 @@ def inject_style_and_hacks(brand_color="#10b981"):
             text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); min-width: 0; cursor: help; transition: transform 0.2s;
         }}
-        .metric-card:hover {{ transform: translateY(-2px); }}
+        .metric-card:hover {{ transform: translateY(-2px); border-color: {brand_color}; }}
         .metric-val {{ font-size: 1.6rem; font-weight: 900; line-height: 1.1; margin-bottom: 4px; white-space: nowrap; }}
         .metric-lbl {{ font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #6b7280 !important; white-space: nowrap; width: 100%; overflow: hidden; text-overflow: ellipsis; }}
 
@@ -73,16 +106,6 @@ def inject_style_and_hacks(brand_color="#10b981"):
         }}
         .unlock-btn:hover {{ transform: scale(1.02); }}
 
-        /* NOODKNOP */
-        .panic-btn-red button {{
-            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
-            color: white !important; font-weight: 900 !important; border-radius: 99px !important;
-            height: 60px !important; font-size: 1.2rem !important;
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.5) !important; margin-bottom: 25px;
-            animation: pulse 2s infinite; border: 2px solid #fee2e2 !important;
-        }}
-        @keyframes pulse {{ 0% {{ box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }} 70% {{ box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }} 100% {{ box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }} }}
-
         /* TREND BOX */
         .trend-box {{
             background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white !important; padding: 15px;
@@ -100,10 +123,46 @@ def inject_style_and_hacks(brand_color="#10b981"):
         .nav-icon {{ font-size: 2.5rem; margin-bottom: 8px; }}
         .nav-title {{ font-weight: 800; color: #111827 !important; font-size: 1.1rem; }}
         .nav-desc {{ color: #6b7280 !important; font-size: 0.85rem; }}
-        .tiktok-box {{ background: #ffffff; border-left: 5px solid #fe2c55; border-radius: 12px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
+
+    # 2. JS HACK (AGRESSIEVE STYLING)
+    components.html("""
+    <script>
+        function styleButtons() {
+            const buttons = window.parent.document.querySelectorAll('button');
+            buttons.forEach(btn => {
+                
+                // --- 1. PANIC BUTTON (ROOD) ---
+                if (btn.innerText.includes("PANIC BUTTON")) {
+                    btn.style.setProperty('background', 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)', 'important');
+                    btn.style.setProperty('color', 'white', 'important');
+                    btn.style.setProperty('border', '2px solid #fee2e2', 'important');
+                    btn.style.setProperty('box-shadow', '0 4px 15px rgba(239, 68, 68, 0.4)', 'important');
+                    
+                    // Hover overrides
+                    btn.onmouseenter = function() { this.style.setProperty('transform', 'scale(1.02)', 'important'); };
+                    btn.onmouseleave = function() { this.style.setProperty('transform', 'scale(1)', 'important'); };
+                }
+
+                // --- 2. DAILY DROP KNOP (PAARS) ---
+                // Zo matcht hij mooi bij het paarse blok erboven
+                if (btn.innerText.includes("Gebruik deze Daily")) {
+                    btn.style.setProperty('background', 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', 'important');
+                    btn.style.setProperty('color', 'white', 'important');
+                    btn.style.setProperty('border', 'none', 'important');
+                    
+                    // Hover overrides
+                    btn.onmouseenter = function() { this.style.setProperty('opacity', '0.9', 'important'); this.style.setProperty('transform', 'translateY(-2px)', 'important'); };
+                    btn.onmouseleave = function() { this.style.setProperty('opacity', '1', 'important'); this.style.setProperty('transform', 'translateY(0)', 'important'); };
+                }
+            });
+        }
+        styleButtons();
+        setInterval(styleButtons, 500);
+    </script>
+    """, height=0, width=0)
 
 def render_locked_section(feature_name, tease_text):
     buy_link = "https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2"
