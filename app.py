@@ -6,27 +6,30 @@ import json
 import time
 import os
 import base64
-import streamlit.components.v1 as components # Nodig voor de teleprompter
+import streamlit.components.v1 as components 
 from modules import analytics, ui, auth, ai_coach, data_loader
 
 # --- 1. CONFIGURATIE ---
 st.set_page_config(page_title="PostAi", page_icon="🚀", layout="centered", initial_sidebar_state="collapsed")
-auth.init_session()
-# --- CODE OM DIRECTE LINKS TE MAKEN VOOR PADDLE ---
-# Plaats dit direct onder st.set_page_config in app.py
-qp = st.query_params
-if "view" in qp:
-    target = qp["view"]
-    if target == "privacy":
-        st.session_state.page = "privacy"
-    elif target == "terms":
-        st.session_state.page = "terms"
-# --------------------------------------------------
 
 # Style laden
 ui.inject_style_and_hacks(brand_color="#10b981")
 
-# --- 2. NAVIGATIE ---
+# --- 2. PUBLIEKE LINKS LOGICA (VOOR PADDLE) ---
+# Dit moet VOOR de auth check gebeuren!
+qp = st.query_params
+target_view = qp.get("view", "")
+
+# Als de URL ?view=privacy of ?view=terms bevat, zetten we de pagina direct goed
+if target_view in ["privacy", "terms"]:
+    st.session_state.page = target_view
+    # We faken een sessie zodat de app niet crasht, maar geven geen toegang tot de rest
+    st.session_state.license_key = "public_visitor"
+else:
+    # Normale initialisatie voor echte gebruikers
+    auth.init_session()
+
+# --- 3. NAVIGATIE FUNCTIES ---
 def go_home(): st.session_state.page = "home"
 def go_studio(): st.session_state.page = "studio"
 def go_tools(): st.session_state.page = "tools"
@@ -35,13 +38,15 @@ def go_settings(): st.session_state.page = "settings"
 def go_privacy(): st.session_state.page = "privacy"
 def go_terms(): st.session_state.page = "terms"
 
-# --- 3. AUTH CHECK ---
-if not auth.is_authenticated():
-    auth.render_landing_page()
-    st.stop()
+# --- 4. AUTH CHECK ---
+# We blokkeren de toegang ALLEEN als het geen publieke pagina is
+if target_view not in ["privacy", "terms"]:
+    if not auth.is_authenticated():
+        auth.render_landing_page()
+        st.stop()
 
-# OPTIMALISATIE
-if "xp" not in st.session_state:
+# OPTIMALISATIE & DATA LADEN (Alleen als we echt ingelogd zijn)
+if target_view not in ["privacy", "terms"] and "xp" not in st.session_state:
     user_data = auth.load_progress()
     st.session_state.page = "home"
     st.session_state.streak = auth.check_daily_streak()
@@ -57,11 +62,19 @@ if "xp" not in st.session_state:
     st.session_state.weekly_goal = user_data.get("weekly_goal", 0)
     st.session_state.weekly_progress = user_data.get("weekly_progress", 0)
 
-is_pro = auth.is_pro()
-niche = st.session_state.user_niche
-user_data = st.session_state.get("local_user_data", {}) 
-ai_coach.init_ai()
+# Variabelen instellen om crashes verderop te voorkomen bij public view
+if target_view in ["privacy", "terms"]:
+    is_pro = False
+    niche = ""
+    user_data = {}
+else:
+    is_pro = auth.is_pro()
+    niche = st.session_state.user_niche
+    user_data = st.session_state.get("local_user_data", {}) 
+    ai_coach.init_ai()
 
+# --- EINDE AANPASSING ---
+# Hieronder gaat je code gewoon verder met: def check_feature_access...
 # --- 4. HELPER FUNCTIES ---
 def check_feature_access(feature_key):
     if is_pro: return True
