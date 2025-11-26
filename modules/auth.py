@@ -110,52 +110,77 @@ def is_pro():
     data = load_progress()
     return data.get("is_pro", False)
 
-# --- LANDING PAGE MET EMAIL LOGICA ---
 def render_landing_page():
-    st.markdown("<h1 style='text-align:center;'>🚀 PostAi - Dé TikTokgroeier</h1>", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
-        st.info("👋 **Nieuw hier?**")
-        with st.form("lp"):
-            name = st.text_input("Naam")
-            email = st.text_input("Email")
-            submitted = st.form_submit_button("Start Gratis Demo")
-            
-            if submitted:
-                if name and email and "@" in email:
-                    # 1. Genereer Key
-                    key = "DEMO-" + str(uuid.uuid4())[:8]
-                    st.session_state.license_key = key
-                    
-                    # 2. Sla op in database (zonder spinner tekst van db)
-                    save_progress(name=name, email=email, start_date=str(datetime.now().date()))
-                    
-                    # 3. Verstuur mail (met feedback)
-                    with st.spinner("📧 Account aanmaken..."):
-                        email_sent = send_login_email(email, name, key)
-                    
-                    if email_sent:
-                        st.toast("✅ Mail verstuurd! Check je inbox.", icon="📩")
-                    else:
-                        st.warning("⚠️ Kon mail niet versturen (check spam), maar je bent wel ingelogd.")
+    # Een wat hippere header
+    st.markdown("""
+        <div style='text-align:center; padding-bottom: 20px;'>
+            <h1 style='color:#111827; margin-bottom:0;'>🚀 PostAi</h1>
+            <p style='font-size:1.2rem; color:#6b7280;'>Jouw persoonlijke AI TikTok Coach</p>
+        </div>
+    """, unsafe_allow_html=True)
 
-                    # 4. Login en refresh
-                    time.sleep(1.5)
-                    st.query_params["license"] = key
-                    st.rerun()
-                else:
-                    st.error("Vul alsjeblieft een naam en een geldig e-mailadres in.")
+    # We maken een layout: Links de "Sales Pitch", Rechts het "Formulier"
+    c1, c2 = st.columns([1.2, 1])
+    
+    with c1:
+        st.markdown("### 📈 Stop met gokken, start met groeien.")
+        st.markdown("""
+        PostAi is de enige tool die je **hele workflow** automatiseert:
+        
+        *   ✅ **Nooit meer inspiratieloos** (Dagelijkse trends & scripts)
+        *   ✅ **AI Vision Analyse** (Weet precies waarom je video flopt)
+        *   ✅ **Teleprompter & Visuals** (Film sneller en professioneler)
+        *   ✅ **Clone My Voice** (Scripts in JOUW schrijfstijl)
+        
+        👇 **Start vandaag nog gratis.**
+        """)
+        
+        # Als je een screenshot hebt, uncomment de volgende regels:
+        # st.image("assets/dashboard_preview.png", caption="Het PostAi Dashboard", use_column_width=True)
+        
+        st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang tot de demo omgeving.")
 
     with c2:
-        st.success("🔑 **Heb je al een account?**")
-        exist_key = st.text_input("Plak je licentiecode:")
-        if st.button("Inloggen"):
-            if exist_key:
-                st.session_state.license_key = exist_key
-                st.query_params["license"] = exist_key
-                if "local_user_data" in st.session_state:
-                    del st.session_state.local_user_data
-                st.rerun()
+        # Een mooie kader om het formulier
+        with st.container(border=True):
+            st.markdown("#### 👋 Start direct (Gratis)")
+            
+            # TABS: Zodat Inloggen en Aanmelden gescheiden zijn maar op dezelfde plek
+            tab_signup, tab_login = st.tabs(["Nieuw Account", "Inloggen"])
+            
+            with tab_signup:
+                with st.form("lp_signup"):
+                    st.write("Maak binnen 10 seconden een account aan.")
+                    name = st.text_input("Voornaam")
+                    email = st.text_input("Emailadres")
+                    submitted = st.form_submit_button("🚀 Start Gratis Demo", type="primary", use_container_width=True)
+                    
+                    if submitted:
+                        if name and email and "@" in email:
+                            key = "DEMO-" + str(uuid.uuid4())[:8]
+                            st.session_state.license_key = key
+                            save_progress(name=name, email=email, start_date=str(datetime.now().date()))
+                            
+                            with st.spinner("📧 Account aanmaken..."):
+                                send_login_email(email, name, key)
+                            
+                            st.toast("✅ Welkom! Je bent ingelogd.")
+                            time.sleep(1.5)
+                            st.query_params["license"] = key
+                            st.rerun()
+                        else:
+                            st.error("Vul je naam en email in.")
+
+            with tab_login:
+                st.write("Welkom terug, creator!")
+                exist_key = st.text_input("Jouw Licentiecode:", type="password") # Password type verbergt het, wel zo netjes
+                if st.button("Inloggen", type="secondary", use_container_width=True):
+                    if exist_key:
+                        st.session_state.license_key = exist_key
+                        st.query_params["license"] = exist_key
+                        if "local_user_data" in st.session_state:
+                            del st.session_state.local_user_data
+                        st.rerun()
 
 def activate_pro(key_input):
     if len(key_input) > 5: 
