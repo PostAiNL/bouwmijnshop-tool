@@ -132,7 +132,7 @@ def render_landing_page():
         *   ✅ **Teleprompter & Visuals** (Film sneller en professioneler)
         *   ✅ **Clone My Voice** (Scripts in JOUW schrijfstijl)
         
-        👇 **Start vandaag nog gratis.**
+        👇 **Probeer 14 dagen gratis, daarna €14,95 per maand (PRO)**
         """)
         
         # Als je een screenshot hebt, uncomment de volgende regels:
