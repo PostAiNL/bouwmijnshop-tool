@@ -12,6 +12,16 @@ from modules import analytics, ui, auth, ai_coach, data_loader
 # --- 1. CONFIGURATIE ---
 st.set_page_config(page_title="PostAi", page_icon="🚀", layout="centered", initial_sidebar_state="collapsed")
 auth.init_session()
+# --- CODE OM DIRECTE LINKS TE MAKEN VOOR PADDLE ---
+# Plaats dit direct onder st.set_page_config in app.py
+qp = st.query_params
+if "view" in qp:
+    target = qp["view"]
+    if target == "privacy":
+        st.session_state.page = "privacy"
+    elif target == "terms":
+        st.session_state.page = "terms"
+# --------------------------------------------------
 
 # Style laden
 ui.inject_style_and_hacks(brand_color="#10b981")
