@@ -188,12 +188,15 @@ if has_reward and not is_pro:
                 st.balloons(); time.sleep(1); st.rerun()
     show_reward_popup()
 
-if not st.session_state.user_niche:
-    st.info("Welkom! Wat is je niche?")
-    n = st.text_input("Niche:", placeholder="bv. Kapper")
-    if st.button("Start", type="primary"):
-        if n: st.session_state.user_niche = n; auth.save_progress(niche=n, xp=50); st.rerun()
-    st.rerun()
+# --- AANGEPAST BLOK: NICHE CHECK OVERSLAAN BIJ PUBLIC PAGES ---
+if st.session_state.page not in ["privacy", "terms"]:
+    if not st.session_state.user_niche:
+        st.info("Welkom! Wat is je niche?")
+        n = st.text_input("Niche:", placeholder="bv. Kapper")
+        if st.button("Start", type="primary"):
+            if n: st.session_state.user_niche = n; auth.save_progress(niche=n, xp=50); st.rerun()
+        st.stop() # Stop hier zodat de rest van de app niet laadt zonder niche
+# --------------------------------------------------------------
 
 # ==========================
 # 🏠 HOME DASHBOARD
