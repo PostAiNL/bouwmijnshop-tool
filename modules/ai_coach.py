@@ -130,15 +130,23 @@ def check_viral_potential(idea, niche):
     
     return {"score": 0, "verdict": "Kon AI niet bereiken."}
 
+@st.cache_data(ttl=3600, show_spinner=False) # FIX: show_spinner=False toegevoegd
 def generate_weekly_plan(niche):
     """Maakt een unieke contentkalender voor de niche."""
     ai_sys = f"Je bent een content strateeg voor {niche}. Maak een strategische weekplanning (Maandag t/m Zondag)."
     ai_user = "Geef me een weekplanning. Gebruik bulletpoints/emoji's. Voor elke dag: 1 Thema + 1 Concrete Hook. Zorg voor afwisseling (viral vs sales)."
     
-    llm_out = call_llm(ai_sys, ai_user)
-    if llm_out: return llm_out
-    
-    return "AI Fout: Kon geen uniek schema maken."
+    if not HAS_OPENAI or not client: return "AI Fout: Kon geen uniek schema maken."
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": ai_sys}, {"role": "user", "content": ai_user}],
+            temperature=0.7
+        )
+        return response.choices[0].message.content
+    except:
+        return "AI Fout: Kon geen uniek schema maken."
 
 def generate_digital_product_plan(niche, target):
     """Bedenkt een digitaal product + mini business plan."""
@@ -165,21 +173,54 @@ def generate_series_ideas(topic, niche):
     return f"**Serie {topic}:** AI niet beschikbaar."
 
 def rate_user_hook(user_hook, niche):
-    """Geeft feedback op een hook."""
-    ai_sys = f"Je bent een kritische TikTok hook expert voor {niche}. Beoordeel de hook op schaal 1-10 en geef harde feedback."
-    llm_out = call_llm(ai_sys, f"Beoordeel deze hook: '{user_hook}'")
+    """Geeft feedback én 3 betere alternatieven in JSON."""
+    import json
     
-    if llm_out:
-        return {"score": "AI", "feedback": llm_out}
-        
-    return {"score": "?", "feedback": "AI offline."}
+    ai_sys = f"Je bent een virale TikTok expert voor de niche '{niche}'. Beoordeel de hook."
+    ai_user = f"""
+    Analyseer deze hook: '{user_hook}'.
+    
+    Geef antwoord in JSON formaat met de volgende velden:
+    - score (getal 1-10)
+    - feedback (1 pittige zin waarom het goed/slecht is)
+    - alternatives (een lijst met 3 véél betere, virale variaties op deze hook)
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": ai_sys},
+                {"role": "user", "content": ai_user}
+            ],
+            response_format={ "type": "json_object" }
+        )
+        content = response.choices[0].message.content
+        return json.loads(content)
+    except Exception as e:
+        print(f"Hook Error: {e}")
+        return {
+            "score": 5, 
+            "feedback": "Kon AI niet bereiken, maar let op dat je 'je' gebruikt.",
+            "alternatives": ["Alternatief 1", "Alternatief 2", "Alternatief 3"]
+        }
 
+@st.cache_data(ttl=3600, show_spinner=False) # FIX: show_spinner=False toegevoegd
 def generate_bio_options(bio, niche):
     """Herschrijft de bio."""
     ai_sys = f"Je bent een profile optimizer voor {niche}. Herschrijf deze bio om meer volgers en kliks te krijgen. Geef 3 opties."
-    llm_out = call_llm(ai_sys, f"Huidige bio: {bio}")
-    if llm_out: return llm_out
-    return f"**Bio Optie:** 🏆 {niche} Expert | 🚀 Tips | 👇 Start hier"
+    
+    if not HAS_OPENAI or not client: return f"**Bio Optie:** 🏆 {niche} Expert | 🚀 Tips | 👇 Start hier"
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": ai_sys}, {"role": "user", "content": f"Huidige bio: {bio}"}],
+            temperature=0.7
+        )
+        return response.choices[0].message.content
+    except:
+        return f"**Bio Optie:** 🏆 {niche} Expert | 🚀 Tips | 👇 Start hier"
 
 def steal_format_and_rewrite(other_script, my_topic, niche):
     """Remixed een script."""
@@ -300,7 +341,6 @@ def get_leaderboard(niche, xp):
 def generate_viral_image(topic, style, niche):
     """
     Genereert een realistisch TikTok-shot concept.
-    Vraagt specifiek om 9:16, POV en realisme.
     """
     if not HAS_OPENAI or not client:
         return None
@@ -332,8 +372,6 @@ def generate_viral_image(topic, style, niche):
         print(f"DALL-E Error: {e}")
         return None
 
-# --- VOEG DIT TOE AAN ai_coach.py ---
-
 def analyze_writing_style(sample_text):
     """
     CLONE MY VOICE: Analyseert tekst en maakt een persona beschrijving.
@@ -345,16 +383,24 @@ def analyze_writing_style(sample_text):
     if llm_out: return llm_out
     return "Een authentieke, persoonlijke schrijfstijl."
 
+@st.cache_data(ttl=3600, show_spinner=False) # FIX: show_spinner=False toegevoegd
 def get_personalized_trend(niche):
     """
     SLIMME TRENDS: Bedenkt een trend specifiek voor de niche.
     """
-    import json # Zorg dat dit bovenaan staat of hier
+    import json
     
     ai_sys = f"Je bent een virale trendwatcher voor de niche '{niche}'. Bedenk 1 actueel, concreet video-format dat NU zou werken."
-    # We vragen om JSON format voor makkelijke verwerking
     ai_user = "Geef antwoord in JSON formaat met de keys: 'title', 'desc' (korte uitleg wat je moet doen) en 'sound' (suggestie voor muziek/audio)."
     
+    # Init client checken, want cache heeft eigen scope
+    if not HAS_OPENAI or not client:
+         return {
+            "title": f"De {niche} Fout", 
+            "desc": "Laat zien wat iedereen fout doet en hoe jij het oplost.", 
+            "sound": "Trending Audio"
+        }
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -369,9 +415,38 @@ def get_personalized_trend(niche):
         return json.loads(content)
     except Exception as e:
         print(f"Trend Error: {e}")
-        # Fallback als AI faalt
         return {
             "title": f"De {niche} Fout", 
             "desc": "Laat zien wat iedereen fout doet en hoe jij het oplost.", 
             "sound": "Trending Audio"
         }
+
+def check_feedback_quality(text):
+    """
+    Checkt of feedback nuttig is of spam.
+    Geeft True terug als het goedgekeurd is, anders False.
+    """
+    if len(text) < 10: return False # Te kort is altijd spam
+    
+    import json
+    ai_sys = "Je bent een moderator. Beoordeel of deze gebruikersfeedback nuttig/constructief is of onzin/spam."
+    ai_user = f"""
+    Feedback: "{text}"
+    
+    Antwoord in JSON:
+    - is_valid: (true/false) - Is het een echte zin/mening? (Geen 'asdf', geen gescheld).
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": ai_sys},
+                {"role": "user", "content": ai_user}
+            ],
+            response_format={ "type": "json_object" }
+        )
+        res = json.loads(response.choices[0].message.content)
+        return res.get("is_valid", False)
+    except:
+        return True
