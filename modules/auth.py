@@ -129,6 +129,8 @@ def get_ai_usage_text():
 
 # --- VERVANG DEZE FUNCTIE IN auth.py ---
 
+# --- VERVANG DEZE HELE FUNCTIE IN auth.py ---
+
 def render_landing_page():
     # Een wat hippere header
     st.markdown("""
@@ -160,40 +162,40 @@ def render_landing_page():
             
             tab_signup, tab_login = st.tabs(["Nieuw Account", "Inloggen"])
             
-            # --- CALLBACK FUNCTIE (DE OPLOSSING VOOR DOUBLE CLICK) ---
+            # --- DE OPLOSSING VOOR FREEZE & DUBBELE KLIK ---
             def finish_signup():
-                # We halen de waarden direct uit de session state (via de key)
+                # 1. Haal waarden op uit de widget keys
                 name = st.session_state.get("reg_name", "")
                 email = st.session_state.get("reg_email", "")
                 
                 if name and email and "@" in email:
+                    # 2. Maak account aan
                     key = "DEMO-" + str(uuid.uuid4())[:8]
                     
-                    # 1. Zet direct de keys goed
+                    # 3. Update Session State DIRECT (Dit fixt de dubbele klik)
                     st.session_state.license_key = key
                     st.session_state.local_user_data = {"name": name, "email": email}
-                    st.query_params["license"] = key # Update URL
+                    st.query_params["license"] = key 
                     
-                    # 2. Opslaan (Dit vertraagt iets, maar in callback is dat oké)
+                    # 4. Opslaan in DB (Supabase)
                     save_progress(name=name, email=email, start_date=str(datetime.now().date()))
                     
-                    # 3. Mailen (Kan even duren, maar UI blijft stabiel)
+                    # 5. Mail versturen (In een try-block zodat de app NOOIT vastloopt)
                     try:
                         send_login_email(email, name, key)
-                    except:
-                        pass # Faal stil als mail niet werkt, login gaat voor
+                    except Exception as e:
+                        print(f"Mail error: {e}") # Faal stil, gebruiker is toch al binnen
                 else:
-                    st.session_state.login_error = "Vul alsjeblieft je naam en een geldig emailadres in."
+                    st.session_state.login_error = "Vul alsjeblieft je naam en email in."
 
             with tab_signup:
-                with st.form("lp_signup"):
-                    st.write("Maak binnen 10 seconden een account aan.")
-                    # BELANGRIJK: We gebruiken nu keys hieronder
-                    st.text_input("Voornaam", key="reg_name") 
-                    st.text_input("Emailadres", key="reg_email")
-                    
-                    # BELANGRIJK: on_click triggert de functie VÓÓR de herlaadactie
-                    st.form_submit_button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
+                # We gebruiken geen st.form hier, dat werkt vlotter met callbacks
+                st.write("Maak binnen 10 seconden een account aan.")
+                st.text_input("Voornaam", key="reg_name") 
+                st.text_input("Emailadres", key="reg_email")
+                
+                # De knop roept nu DIRECT de functie aan
+                st.button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
 
                 if "login_error" in st.session_state:
                     st.error(st.session_state.login_error)
@@ -201,11 +203,12 @@ def render_landing_page():
 
             with tab_login:
                 st.write("Welkom terug, creator!")
-                exist_key = st.text_input("Jouw Licentiecode:", type="password")
+                # Login werkt prima zonder callback omdat er geen zware mail wordt verstuurd
+                val_key = st.text_input("Jouw Licentiecode:", type="password")
                 if st.button("Inloggen", type="secondary", use_container_width=True):
-                    if exist_key:
-                        st.session_state.license_key = exist_key
-                        st.query_params["license"] = exist_key
+                    if val_key:
+                        st.session_state.license_key = val_key
+                        st.query_params["license"] = val_key
                         if "local_user_data" in st.session_state:
                             del st.session_state.local_user_data
                         st.rerun()
