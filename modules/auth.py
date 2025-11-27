@@ -1,11 +1,9 @@
-# --- FILE: auth.py ---
 import streamlit as st
 import os
 import json
 import uuid
 import time
 import datetime
-import threading  # <--- NIEUW: Voor achtergrond e-mails
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
@@ -29,7 +27,7 @@ def init_supabase():
         
     # 3. Als we nog steeds niets hebben, geef geen foutmelding maar return None
     if not url or not key:
-        # print("⚠️ Waarschuwing: Supabase gegevens ontbreken.")
+        print("⚠️ Waarschuwing: Supabase gegevens ontbreken.")
         return None
 
     return create_client(url, key)
@@ -38,6 +36,7 @@ def init_supabase():
 
 def load_progress():
     """Haalt data op uit Supabase JSONB kolom."""
+    # Eerst kijken of we het al in de sessie hebben (snelheid)
     if "local_user_data" in st.session_state and st.session_state.local_user_data:
         return st.session_state.local_user_data
 
@@ -46,6 +45,7 @@ def load_progress():
 
     supabase = init_supabase()
     try:
+        # Haal de rij op waar license_key matcht
         response = supabase.table("users").select("user_data").eq("license_key", key).execute()
         
         if response.data and len(response.data) > 0:
@@ -53,6 +53,7 @@ def load_progress():
             st.session_state.local_user_data = data
             return data
         else:
+            # Nieuwe gebruiker? Return leeg dict
             return {}
     except Exception as e:
         print(f"❌ DB Load Error: {e}")
@@ -63,20 +64,24 @@ def save_progress(**kwargs):
     key = st.session_state.get("license_key")
     if not key: return
 
+    # Update lokale sessie eerst
     if "local_user_data" not in st.session_state:
         st.session_state.local_user_data = load_progress()
     
     for k, v in kwargs.items():
         st.session_state.local_user_data[k] = v
+        # Update ook direct de losse session states voor UI reactivity
         st.session_state[k] = v 
 
     supabase = init_supabase()
     try:
+        # We slaan de hele user_data blob op in de 'user_data' kolom
         data_payload = {
             "license_key": key,
             "user_data": st.session_state.local_user_data,
             "updated_at": str(datetime.now())
         }
+        # Upsert: Maakt aan als niet bestaat, anders updaten
         supabase.table("users").upsert(data_payload).execute()
     except Exception as e:
         print(f"❌ DB Save Error: {e}")
@@ -123,6 +128,7 @@ def get_ai_usage_text():
     return f"{current}/{limit}"
 
 def render_landing_page():
+    # Een wat hippere header
     st.markdown("""
         <div style='text-align:center; padding-bottom: 20px;'>
             <h1 style='color:#111827; margin-bottom:0;'>🚀 PostAi</h1>
@@ -130,6 +136,7 @@ def render_landing_page():
         </div>
     """, unsafe_allow_html=True)
 
+    # We maken een layout: Links de "Sales Pitch", Rechts het "Formulier"
     c1, c2 = st.columns([1.2, 1])
     
     with c1:
@@ -144,57 +151,54 @@ def render_landing_page():
         
         👇 **Probeer 14 dagen gratis, daarna €14,95 per maand (PRO)**
         """)
+        
         st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang tot de demo omgeving.")
 
     with c2:
+        # Een mooie kader om het formulier
         with st.container(border=True):
             st.markdown("#### 👋 Start direct (Gratis)")
             
+            # TABS: Zodat Inloggen en Aanmelden gescheiden zijn maar op dezelfde plek
             tab_signup, tab_login = st.tabs(["Nieuw Account", "Inloggen"])
             
-            # --- CALLBACK FUNCTIE MET BACKGROUND EMAIL ---
-            def finish_signup():
-                name = st.session_state.get("reg_name", "")
-                email = st.session_state.get("reg_email", "")
-                
-                if name and email and "@" in email:
-                    key = "DEMO-" + str(uuid.uuid4())[:8]
-                    
-                    # 1. Direct toegang geven (UI update)
-                    st.session_state.license_key = key
-                    st.session_state.local_user_data = {"name": name, "email": email}
-                    st.query_params["license"] = key
-                    
-                    # 2. Opslaan
-                    save_progress(name=name, email=email, start_date=str(datetime.now().date()))
-                    
-                    # 3. Email in ACHTERGROND versturen (Threading)
-                    # Dit voorkomt dat de gebruiker moet wachten op de mailserver
-                    email_thread = threading.Thread(target=send_login_email, args=(email, name, key))
-                    email_thread.start()
-                    
-                else:
-                    st.session_state.login_error = "Vul alsjeblieft je naam en een geldig emailadres in."
-
             with tab_signup:
-                st.write("Maak binnen 10 seconden een account aan.")
-                st.text_input("Voornaam", key="reg_name") 
-                st.text_input("Emailadres", key="reg_email")
-                
-                # Knop activeert callback
-                st.button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
-
-                if "login_error" in st.session_state:
-                    st.error(st.session_state.login_error)
-                    del st.session_state.login_error
+                with st.form("lp_signup"):
+                    st.write("Maak binnen 10 seconden een account aan.")
+                    name = st.text_input("Voornaam")
+                    email = st.text_input("Emailadres")
+                    submitted = st.form_submit_button("🚀 Start Gratis Demo", type="primary", use_container_width=True)
+                    
+                    if submitted:
+                        if name and email and "@" in email:
+                            key = "DEMO-" + str(uuid.uuid4())[:8]
+                            
+                            # 1. Eerst de status opslaan in de sessie (Belangrijkst!)
+                            st.session_state.license_key = key
+                            st.session_state.local_user_data = {"name": name, "email": email} # Direct inladen voor snelheid
+                            
+                            # 2. Opslaan in database (op de achtergrond)
+                            save_progress(name=name, email=email, start_date=str(datetime.now().date()))
+                            
+                            # 3. Email sturen
+                            with st.spinner("Account aanmaken..."):
+                                send_login_email(email, name, key)
+                            
+                            # 4. URL updaten
+                            st.query_params["license"] = key
+                            
+                            # 5. Direct herladen zonder vertraging
+                            st.rerun()
+                        else:
+                            st.error("Vul je naam en een geldig emailadres in.")
 
             with tab_login:
                 st.write("Welkom terug, creator!")
-                val_key = st.text_input("Jouw Licentiecode:", type="password")
+                exist_key = st.text_input("Jouw Licentiecode:", type="password") # Password type verbergt het, wel zo netjes
                 if st.button("Inloggen", type="secondary", use_container_width=True):
-                    if val_key:
-                        st.session_state.license_key = val_key
-                        st.query_params["license"] = val_key
+                    if exist_key:
+                        st.session_state.license_key = exist_key
+                        st.query_params["license"] = exist_key
                         if "local_user_data" in st.session_state:
                             del st.session_state.local_user_data
                         st.rerun()
@@ -268,27 +272,27 @@ def save_script_to_library(topic, content):
 
 # --- STRATO EMAIL FUNCTIE ---
 
+# --- VERVANG DE send_login_email FUNCTIE IN auth.py ---
+
 def send_login_email(to_email, name, license_key):
-    # 1. Haal variabelen op uit environment
+    # 1. Haal variabelen op
     smtp_server = os.getenv("SMTP_SERVER")           
-    smtp_port_str = os.getenv("SMTP_PORT", "587")    
+    smtp_port_str = os.getenv("SMTP_PORT", "465") # Default nu op 465 gezet voor Strato
     smtp_user = os.getenv("SMTP_USER")               
     smtp_password = os.getenv("SMTP_PASSWORD")       
     from_email = os.getenv("FROM_EMAIL") or smtp_user 
     
-    # Haal base_url op
-    base_url = os.getenv("APP_PUBLIC_URL") or os.getenv("BASE_URL") or "http://localhost:8501"
+    base_url = os.getenv("APP_PUBLIC_URL") or "https://www.postaiapp.nl"
 
     if not smtp_server or not smtp_user or not smtp_password:
-        print(f"⚠️ SMTP Config mist")
+        print(f"⚠️ SMTP Config mist in Render Environment")
         return False
 
     try:
         smtp_port = int(smtp_port_str)
     except:
-        smtp_port = 587
+        smtp_port = 465
 
-    # De magische link
     magic_link = f"{base_url}/?license={license_key}"
 
     msg = MIMEMultipart()
@@ -296,52 +300,46 @@ def send_login_email(to_email, name, license_key):
     msg['To'] = to_email
     msg['Subject'] = "🚀 Jouw toegang tot PostAi"
 
-    # HTML body met App Tip
     html_body = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #333;">
         <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
             <h2 style="color: #10b981;">Welkom bij PostAi, {name}! 👋</h2>
             <p>Leuk dat je de demo start! Je account is aangemaakt.</p>
-            
-            <p>Gebruik onderstaande knop om direct in te loggen:</p>
-            
             <div style="text-align: center; margin: 30px 0;">
                 <a href="{magic_link}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Direct Inloggen & Starten</a>
             </div>
-
-            <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 5px; border: 1px solid #ffeeba; font-size: 0.9em; margin-bottom: 20px;">
-                📱 <strong>Tip voor de beste ervaring:</strong><br><br>
-                1. Klik op de knop hierboven.<br>
-                2. Als de app opent in je browser, tik dan op <em>'Delen'</em> (iOS) of de <em>'3 puntjes'</em> (Android).<br>
-                3. Kies <strong>"Zet op beginscherm"</strong> (Add to Home Screen).<br><br>
-                Zo maak je een "App Icoontje" aan waarmee je voortaan <strong>altijd direct ingelogd</strong> bent!
-            </div>
-
             <p>Of gebruik je code handmatig:</p>
             <div style="background: #f3f4f6; padding: 10px; text-align: center; font-family: monospace; font-size: 1.2em; border-radius: 5px;">
                 {license_key}
             </div>
-
-            <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;">
             <p style="font-size: 0.8em; color: #999;">PostAi Team</p>
         </div>
       </body>
     </html>
     """
-
     msg.attach(MIMEText(html_body, 'html'))
 
     try:
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
+        print(f"📧 Poging mail te sturen naar {to_email} via poort {smtp_port}...")
+        
+        # LOGICA VOOR STRATO (SSL vs STARTTLS)
+        if smtp_port == 465:
+            # SSL Verbinding (Beste voor Strato)
+            server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+        else:
+            # TLS Verbinding (Oude manier)
+            server = smtplib.SMTP(smtp_server, smtp_port)
+            server.starttls()
+            
         server.login(smtp_user, smtp_password)
         text = msg.as_string()
         server.sendmail(from_email, to_email, text)
         server.quit()
+        print("✅ Mail succesvol verzonden!")
         return True
     except Exception as e:
-        print(f"❌ Strato Email Error: {e}")
+        print(f"❌ EMAIL ERROR: {e}")
         return False
 
 def save_feedback(text, approved):
