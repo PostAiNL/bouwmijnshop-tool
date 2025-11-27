@@ -21,12 +21,10 @@ def inject_style_and_hacks(brand_color="#10b981"):
         .block-container {{ padding-top: 1rem; padding-bottom: 5rem; max-width: 900px; }} 
         header[data-testid="stHeader"], [data-testid="stToolbar"], footer {{ display: none !important; }}
         
-        /* --- TEKST & LABELS ZICHTBAAR MAKEN (FIX VOOR SCREENSHOT) --- */
-        /* Dit forceert alle labels (Onderwerp, Toon, etc) naar donkergrijs */
+        /* --- TEKST & LABELS --- */
         .stMarkdown, .stMarkdown p, label, .stRadio label, .stSelectbox label, .stTextInput label {{
             color: #374151 !important;
         }}
-        /* Specifiek voor Radio buttons (Energiek, Rustig etc) */
         div[data-baseweb="radio"] label {{
             color: #111827 !important;
         }}
@@ -39,21 +37,40 @@ def inject_style_and_hacks(brand_color="#10b981"):
             border: 1px solid #e5e7eb !important;
         }}
         
-        /* --- TABBLADEN (Login / Studio) --- */
+        /* --- NIEUWE MINIMALISTISCHE TABS --- */
+        
+        /* De container van de tabs: transparant met dun lijntje onder */
+        div[data-baseweb="tab-list"] {{
+            background-color: transparent !important;
+            border-bottom: 1px solid #e5e7eb !important;
+            gap: 20px !important; /* Ruimte tussen de tabs */
+            padding-bottom: 0px !important;
+        }}
+
+        /* De knoppen zelf (algemeen) */
         button[data-baseweb="tab"] {{
             background-color: transparent !important;
+            border: none !important;
+            padding-top: 0px !important;
+            padding-bottom: 10px !important; /* Ruimte voor de onderstreping */
+            margin: 0 !important;
         }}
-        /* Niet geselecteerd = Donkergrijs (Leesbaar!) */
+
+        /* Niet geselecteerd = Zachtgrijs, geen kader */
         button[data-baseweb="tab"][aria-selected="false"] {{
-            color: #6b7280 !important; 
-            background-color: #f9fafb !important;
+            color: #9ca3af !important; 
         }}
-        /* Geselecteerd = Jouw Brand Kleur */
+        
+        /* Hover effect (lichtgroen) */
+        button[data-baseweb="tab"][aria-selected="false"]:hover {{
+            color: {brand_color} !important; 
+        }}
+
+        /* Geselecteerd = Groen + Dikke streep onder */
         button[data-baseweb="tab"][aria-selected="true"] {{
             color: {brand_color} !important;
-            background-color: #ffffff !important;
-            border-top: 2px solid {brand_color} !important;
-            font-weight: bold !important;
+            border-bottom: 3px solid {brand_color} !important;
+            font-weight: 800 !important;
         }}
 
         /* --- EXPANDERS (Uitklapmenu's) --- */
@@ -77,7 +94,7 @@ def inject_style_and_hacks(brand_color="#10b981"):
             border-top: none !important;
             border-bottom-left-radius: 8px !important;
             border-bottom-right-radius: 8px !important;
-            color: #374151 !important; /* Inhoud ook donker */
+            color: #374151 !important; 
         }}
 
         /* --- KNOPPEN STYLING --- */
