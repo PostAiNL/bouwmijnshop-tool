@@ -274,6 +274,8 @@ def save_script_to_library(topic, content):
 
 # --- VERVANG DE send_login_email FUNCTIE IN auth.py ---
 
+# --- VERVANG DE send_login_email FUNCTIE IN auth.py ---
+
 def send_login_email(to_email, name, license_key):
     # 1. Haal variabelen op
     smtp_server = os.getenv("SMTP_SERVER")           
