@@ -87,10 +87,6 @@ else:
     user_data = st.session_state.get("local_user_data", {}) 
     ai_coach.init_ai()
 
-# --- EINDE AANPASSING ---
-# Hieronder gaat je code gewoon verder met: def check_feature_access...
-# --- EINDE AANPASSING ---
-# Hieronder gaat je code gewoon verder met: def check_feature_access...
 # --- 4. HELPER FUNCTIES ---
 def check_feature_access(feature_key):
     if is_pro: return True
@@ -150,14 +146,19 @@ def create_pdf(text):
         return pdf.output(dest='S').encode('latin-1')
     except: return None
 
-# --- 5. HEADER ---
-col_head, col_set = st.columns([0.85, 0.15])
-with col_head:
+# OPTIMALISATIE: Logo Cachen (Nu met show_spinner=False)
+@st.cache_data(show_spinner=False)
+def load_logo():
     if os.path.exists("assets/logo.png"):
         with open("assets/logo.png", "rb") as f:
             img_b64 = base64.b64encode(f.read()).decode()
-            logo_src = f"data:image/png;base64,{img_b64}"
-    else: logo_src = "https://via.placeholder.com/50/10b981/ffffff?text=P"
+            return f"data:image/png;base64,{img_b64}"
+    return "https://via.placeholder.com/50/10b981/ffffff?text=P"
+
+# --- 5. HEADER ---
+col_head, col_set = st.columns([0.85, 0.15])
+with col_head:
+    logo_src = load_logo() # Gebruik de gecachte versie
     badge = "PRO" if is_pro else "DEMO"
     badge_style = "background:#dcfce7; color:#166534; border:1px solid #bbf7d0;" if is_pro else "background:#eff6ff; color:#1e40af; border:1px solid #dbeafe;"
     
@@ -258,6 +259,9 @@ if st.session_state.page == "home":
              st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}). Kom morgen terug of upgrade naar PRO!")
 
     # --- SLIMME TREND LOGICA ---
+    # We gebruiken nu de gecachte versie, maar slaan het resultaat niet direct op in session_state
+    # als we willen dat het elke keer ververst als de cache verloopt.
+    # Maar voor de UI logica houden we het in session_state zodat een rerun (door knopklik) het niet wist.
     if "niche_trend" not in st.session_state:
         if niche:
             with st.spinner(f"🔥 Trends voor {niche} zoeken..."):
@@ -284,7 +288,10 @@ if st.session_state.page == "home":
     with c_trend1:
         if st.button("🔄", help="Nieuwe trend zoeken"):
             if auth.check_ai_limit():
+                # We clearen de session state zodat hij opnieuw fetcht (mogelijk uit cache)
                 if "niche_trend" in st.session_state: del st.session_state.niche_trend
+                # Om de cache geforceerd te legen zou je st.cache_data.clear() kunnen doen, 
+                # maar dat wist alles. Laten we erop vertrouwen dat de TTL van 1 uur prima is.
                 auth.track_ai_usage()
                 st.rerun()
             else:
@@ -771,7 +778,7 @@ if st.session_state.page == "settings":
             st.info("Bedankt voor je hulp! Je hebt je Golden Ticket al ontvangen. Je kunt dit maar 1x doen.")
             st.caption("Heb je meer feedback? Mail gerust naar info@bouwmijnshop.nl")
         else:
-            st.write("Wat mis je in de app? Of wat vind je juist top? Als je serieuze feedback geeft, krijg je direct een **Golden Ticket** (24u toegang tot een PRO tool)!")
+            st.write("Wat mis je, of wat vind je top? Als je een feedback geeft (word door ons gecheckt✅), krijg je een gratis **Golden Ticket** !")
             
             fb_text = st.text_area("Jouw feedback:", placeholder="Ik zou graag willen dat...")
             
