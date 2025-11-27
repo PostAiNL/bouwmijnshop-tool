@@ -6,7 +6,7 @@ import uuid
 import time
 import datetime
 import threading
-import requests  # <--- DIT IS DE OPLOSSING (HTTP ipv SMTP)
+import requests  # <--- ESSENTIEEL VOOR RESEND
 from datetime import datetime, timedelta
 from supabase import create_client, Client
 
@@ -220,7 +220,7 @@ def send_login_email(to_email, name, license_key):
         print(f"❌ API Fout: {e}")
         return False
 
-# --- LANDING PAGE (MET DUBBEL-KLIK FIX & THREADING) ---
+# --- LANDING PAGE (GEOPTIMALISEERD VOOR MOBIEL & DUBBEL-KLIK FIX) ---
 def render_landing_page():
     st.markdown("""
         <div style='text-align:center; padding-bottom: 20px;'>
@@ -229,23 +229,12 @@ def render_landing_page():
         </div>
     """, unsafe_allow_html=True)
 
-    c1, c2 = st.columns([1.2, 1])
+    # --- HIER IS DE AANPASSING VOOR MOBIEL ---
+    # We wisselen de kolommen om. C1 (links/boven) wordt nu het formulier.
+    c1, c2 = st.columns([1, 1.2]) 
     
+    # 1. HET FORMULIER (Nu links, dus op mobiel bovenaan)
     with c1:
-        st.markdown("### 📈 Stop met gokken, start met groeien.")
-        st.markdown("""
-        PostAi is de enige tool die je **hele workflow** automatiseert:
-        
-        *   ✅ **Nooit meer inspiratieloos** (Dagelijkse trends & scripts)
-        *   ✅ **AI Vision Analyse** (Weet precies waarom je video flopt)
-        *   ✅ **Teleprompter & Visuals** (Film sneller en professioneler)
-        *   ✅ **Clone My Voice** (Scripts in JOUW schrijfstijl)
-        
-        👇 **Probeer 14 dagen gratis, daarna €14,95 per maand (PRO)**
-        """)
-        st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang tot de demo omgeving.")
-
-    with c2:
         with st.container(border=True):
             st.markdown("#### 👋 Start direct (Gratis)")
             
@@ -262,7 +251,7 @@ def render_landing_page():
                     st.query_params["license"] = key
                     save_progress(name=name, email=email, start_date=str(datetime.now().date()))
                     
-                    # Mail via API in thread
+                    # Mail in thread starten
                     email_thread = threading.Thread(target=send_login_email, args=(email, name, key))
                     email_thread.start()
                 else:
@@ -272,6 +261,7 @@ def render_landing_page():
                 st.write("Maak binnen 10 seconden een account aan.")
                 st.text_input("Voornaam", key="reg_name") 
                 st.text_input("Emailadres", key="reg_email")
+                # Knop roept de functie direct aan
                 st.button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
 
                 if "login_error" in st.session_state:
@@ -288,6 +278,21 @@ def render_landing_page():
                         if "local_user_data" in st.session_state:
                             del st.session_state.local_user_data
                         st.rerun()
+
+    # 2. DE TEKST & UITLEG (Nu rechts, dus op mobiel onderaan)
+    with c2:
+        st.markdown("### 📈 Stop met gokken.")
+        st.markdown("""
+        PostAi is de enige tool die je **hele workflow** automatiseert:
+        
+        *   ✅ **Nooit meer inspiratieloos** (Dagelijkse trends & scripts)
+        *   ✅ **AI Vision Analyse** (Weet precies waarom je video flopt)
+        *   ✅ **Teleprompter & Visuals** (Film sneller en professioneler)
+        *   ✅ **Clone My Voice** (Scripts in JOUW schrijfstijl)
+        
+        👇 **Probeer 14 dagen gratis, daarna €14,95 per maand (PRO)**
+        """)
+        st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang tot de demo omgeving.")
 
 def activate_pro(key_input):
     if len(key_input) > 5: 
