@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 from modules import analytics, ui, auth, ai_coach, data_loader
 
 # --- 1. CONFIGURATIE ---
-st.set_page_config(page_title="PostAi - Jouw persoonlijke AI TikTok Coach", page_icon="🚀", layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PostAi - Jouw persoonlijke AI TikTok Coach", page_icon="assets/logo.png", layout="centered", initial_sidebar_state="collapsed")
 
 # --- LEMONSQUEEZY AFFILIATE TRACKING ---
 # Dit zorgt dat de klikken van partners geregistreerd worden
