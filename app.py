@@ -167,7 +167,7 @@ with col_head:
         <div class="header-logo"><img src="{logo_src}"></div>
         <div class="header-text">
             <div class="header-title">PostAi <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; vertical-align:middle; margin-left:12px; {badge_style}">{badge}</span></div>
-            <p class="header-subtitle">Dé Tiktokgroeier</p>
+            <p class="header-subtitle">Jouw persoonlijke AI TikTok Coach</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
