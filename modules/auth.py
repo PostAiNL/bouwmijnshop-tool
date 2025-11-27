@@ -221,19 +221,21 @@ def send_login_email(to_email, name, license_key):
         return False
 
 # --- LANDING PAGE (GEOPTIMALISEERD VOOR MOBIEL & DUBBEL-KLIK FIX) ---
+# --- VERVANG DEZE FUNCTIE IN auth.py ---
+
 def render_landing_page():
+    # Header compacter gemaakt (minder padding)
     st.markdown("""
-        <div style='text-align:center; padding-bottom: 20px;'>
-            <h1 style='color:#111827; margin-bottom:0;'>🚀 PostAi</h1>
-            <p style='font-size:1.2rem; color:#6b7280;'>Jouw persoonlijke AI TikTok Coach</p>
+        <div style='text-align:center; padding-bottom: 10px; padding-top: 0px;'>
+            <h1 style='color:#111827; margin-bottom:0; font-size: 2rem;'>🚀 PostAi</h1>
+            <p style='font-size:1rem; color:#6b7280; margin-top: 0px;'>Jouw persoonlijke AI TikTok Coach</p>
         </div>
     """, unsafe_allow_html=True)
 
-    # --- HIER IS DE AANPASSING VOOR MOBIEL ---
-    # We wisselen de kolommen om. C1 (links/boven) wordt nu het formulier.
+    # Kolomverdeling (Links formulier, Rechts tekst)
     c1, c2 = st.columns([1, 1.2]) 
     
-    # 1. HET FORMULIER (Nu links, dus op mobiel bovenaan)
+    # 1. HET FORMULIER (Links/Boven)
     with c1:
         with st.container(border=True):
             st.markdown("#### 👋 Start direct (Gratis)")
@@ -251,17 +253,15 @@ def render_landing_page():
                     st.query_params["license"] = key
                     save_progress(name=name, email=email, start_date=str(datetime.now().date()))
                     
-                    # Mail in thread starten
                     email_thread = threading.Thread(target=send_login_email, args=(email, name, key))
                     email_thread.start()
                 else:
                     st.session_state.login_error = "Vul alsjeblieft je naam en een geldig emailadres in."
 
             with tab_signup:
-                st.write("Maak binnen 10 seconden een account aan.")
+                st.write("Maak binnen 10 sec een account aan.") # Iets kortere tekst
                 st.text_input("Voornaam", key="reg_name") 
                 st.text_input("Emailadres", key="reg_email")
-                # Knop roept de functie direct aan
                 st.button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
 
                 if "login_error" in st.session_state:
@@ -269,7 +269,7 @@ def render_landing_page():
                     del st.session_state.login_error
 
             with tab_login:
-                st.write("Welkom terug, creator!")
+                st.write("Welkom terug!")
                 val_key = st.text_input("Jouw Licentiecode:", type="password")
                 if st.button("Inloggen", type="secondary", use_container_width=True):
                     if val_key:
@@ -279,20 +279,22 @@ def render_landing_page():
                             del st.session_state.local_user_data
                         st.rerun()
 
-    # 2. DE TEKST & UITLEG (Nu rechts, dus op mobiel onderaan)
+    # 2. DE TEKST (Rechts/Onder)
     with c2:
+        # Hier staat de Tip nu, zodat hij niet in de weg zit
+        st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang.")
+        
         st.markdown("### 📈 Stop met gokken.")
         st.markdown("""
-        PostAi is de enige tool die je **hele workflow** automatiseert:
+        PostAi automatiseert je hele workflow:
         
-        *   ✅ **Nooit meer inspiratieloos** (Dagelijkse trends & scripts)
-        *   ✅ **AI Vision Analyse** (Weet precies waarom je video flopt)
-        *   ✅ **Teleprompter & Visuals** (Film sneller en professioneler)
-        *   ✅ **Clone My Voice** (Scripts in JOUW schrijfstijl)
+        *   ✅ **Nooit meer inspiratieloos** (Dagelijkse trends)
+        *   ✅ **AI Vision Analyse** (Waarom flopt je video?)
+        *   ✅ **Teleprompter & Visuals**
+        *   ✅ **Clone My Voice** (Jouw schrijfstijl)
         
-        👇 **Probeer 14 dagen gratis, daarna €14,95 per maand (PRO)**
+        👇 **Probeer 14 dagen gratis, daarna €14,95/mnd**
         """)
-        st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang tot de demo omgeving.")
 
 def activate_pro(key_input):
     if len(key_input) > 5: 
