@@ -1,3 +1,4 @@
+# --- FILE: auth.py ---
 import streamlit as st
 import os
 import json
@@ -5,7 +6,7 @@ import uuid
 import time
 import datetime
 import threading
-import requests  # <--- ESSENTIEEL VOOR RESEND
+import requests  # <--- DIT IS DE OPLOSSING (HTTP ipv SMTP)
 from datetime import datetime, timedelta
 from supabase import create_client, Client
 
@@ -261,7 +262,7 @@ def render_landing_page():
                     st.query_params["license"] = key
                     save_progress(name=name, email=email, start_date=str(datetime.now().date()))
                     
-                    # Mail in thread starten
+                    # Mail via API in thread
                     email_thread = threading.Thread(target=send_login_email, args=(email, name, key))
                     email_thread.start()
                 else:
