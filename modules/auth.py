@@ -8,90 +8,73 @@ from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import gspread
-from google.oauth2.service_account import Credentials
+from supabase import create_client, Client
 
 # CONFIG
-PRO_KEY_FIXED = "123-456-789" 
+PRO_KEY_FIXED = "123-456-789"
 
-# --- GOOGLE SHEETS VERBINDING (MET CACHE & ZONDER TEKST) ---
-# show_spinner=False zorgt dat de gebruiker niet ziet: "Running get_db..."
-@st.cache_resource(ttl=600, show_spinner=False)
-def get_db_connection():
-    """Maakt verbinding met Google Sheets. Cached voor 10 min."""
-    if "gcp_service_account" not in st.secrets:
-        return None
+# --- SUPABASE VERBINDING ---
+@st.cache_resource
+def init_supabase():
+    url = st.secrets["supabase"]["url"]
+    key = st.secrets["supabase"]["key"]
+    return create_client(url, key)
 
-    try:
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        if "private_key" in creds_dict:
-            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-        client = gspread.authorize(creds)
-        sheet = client.open("PostAi Database").worksheet("Users") 
-        return sheet
-    except Exception as e:
-        print(f"❌ DB Error: {e}")
-        return None
-
-# --- DATA MANAGEMENT (OPTIMIZED) ---
+# --- DATA MANAGEMENT (SUPABASE) ---
 
 def load_progress():
-    """
-    SNELHEIDS-OPTIMALISATIE:
-    Kijkt eerst in st.session_state. Alleen als daar niks is,
-    haalt hij het op van Google Sheets.
-    """
+    """Haalt data op uit Supabase JSONB kolom."""
+    # Eerst kijken of we het al in de sessie hebben (snelheid)
     if "local_user_data" in st.session_state and st.session_state.local_user_data:
         return st.session_state.local_user_data
 
     key = st.session_state.get("license_key")
     if not key: return {}
 
-    sheet = get_db_connection()
-    if not sheet: return {}
-
+    supabase = init_supabase()
     try:
-        cell = sheet.find(key)
-        if cell:
-            data_str = sheet.cell(cell.row, 2).value
-            data = json.loads(data_str) if data_str else {}
+        # Haal de rij op waar license_key matcht
+        response = supabase.table("users").select("user_data").eq("license_key", key).execute()
+        
+        if response.data and len(response.data) > 0:
+            data = response.data[0]["user_data"]
             st.session_state.local_user_data = data
             return data
         else:
+            # Nieuwe gebruiker? Return leeg dict
             return {}
     except Exception as e:
+        print(f"❌ DB Load Error: {e}")
         return {}
 
 def save_progress(**kwargs):
+    """Slaat data op (Upsert) in Supabase."""
     key = st.session_state.get("license_key")
     if not key: return
 
+    # Update lokale sessie eerst
     if "local_user_data" not in st.session_state:
         st.session_state.local_user_data = load_progress()
     
     for k, v in kwargs.items():
         st.session_state.local_user_data[k] = v
+        # Update ook direct de losse session states voor UI reactivity
         st.session_state[k] = v 
 
-    sheet = get_db_connection()
-    if sheet:
-        try:
-            json_data = json.dumps(st.session_state.local_user_data)
-            try:
-                cell = sheet.find(key)
-                sheet.update_cell(cell.row, 2, json_data)
-            except Exception: 
-                sheet.append_row([key, json_data])
-        except Exception as e:
-            print(f"❌ Save Error: {e}")
+    supabase = init_supabase()
+    try:
+        # We slaan de hele user_data blob op in de 'user_data' kolom
+        data_payload = {
+            "license_key": key,
+            "user_data": st.session_state.local_user_data,
+            "updated_at": str(datetime.now())
+        }
+        # Upsert: Maakt aan als niet bestaat, anders updaten
+        supabase.table("users").upsert(data_payload).execute()
+    except Exception as e:
+        print(f"❌ DB Save Error: {e}")
 
-# --- AUTHENTICATIE ---
+# --- AUTH & PRO LOGICA ---
 
 def init_session():
     if "license_key" not in st.session_state:
@@ -109,6 +92,28 @@ def is_pro():
     if key == PRO_KEY_FIXED: return True
     data = load_progress()
     return data.get("is_pro", False)
+
+def check_ai_limit():
+    user_data = load_progress()
+    last_date = user_data.get("ai_last_date", "")
+    today = str(datetime.now().date())
+    current_count = user_data.get("ai_daily_count", 0)
+    if last_date != today:
+        current_count = 0
+        save_progress(ai_last_date=today, ai_daily_count=0)
+    limit = 80 if is_pro() else 10
+    return current_count < limit
+
+def track_ai_usage():
+    user_data = load_progress()
+    current = user_data.get("ai_daily_count", 0)
+    save_progress(ai_daily_count=current + 1)
+    
+def get_ai_usage_text():
+    user_data = load_progress()
+    limit = 80 if is_pro() else 10
+    current = user_data.get("ai_daily_count", 0)
+    return f"{current}/{limit}"
 
 def render_landing_page():
     # Een wat hippere header
@@ -135,9 +140,6 @@ def render_landing_page():
         👇 **Probeer 14 dagen gratis, daarna €14,95 per maand (PRO)**
         """)
         
-        # Als je een screenshot hebt, uncomment de volgende regels:
-        # st.image("assets/dashboard_preview.png", caption="Het PostAi Dashboard", use_column_width=True)
-        
         st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang tot de demo omgeving.")
 
     with c2:
@@ -158,18 +160,25 @@ def render_landing_page():
                     if submitted:
                         if name and email and "@" in email:
                             key = "DEMO-" + str(uuid.uuid4())[:8]
+                            
+                            # 1. Eerst de status opslaan in de sessie (Belangrijkst!)
                             st.session_state.license_key = key
+                            st.session_state.local_user_data = {"name": name, "email": email} # Direct inladen voor snelheid
+                            
+                            # 2. Opslaan in database (op de achtergrond)
                             save_progress(name=name, email=email, start_date=str(datetime.now().date()))
                             
-                            with st.spinner("📧 Account aanmaken..."):
+                            # 3. Email sturen
+                            with st.spinner("Account aanmaken..."):
                                 send_login_email(email, name, key)
                             
-                            st.toast("✅ Welkom! Je bent ingelogd.")
-                            time.sleep(1.5)
+                            # 4. URL updaten
                             st.query_params["license"] = key
+                            
+                            # 5. Direct herladen zonder vertraging
                             st.rerun()
                         else:
-                            st.error("Vul je naam en email in.")
+                            st.error("Vul je naam en een geldig emailadres in.")
 
             with tab_login:
                 st.write("Welkom terug, creator!")
@@ -249,28 +258,6 @@ def save_script_to_library(topic, content):
     library.insert(0, {"id": str(uuid.uuid4()), "date": str(datetime.now().date()), "topic": topic, "content": content})
     save_progress(library=library)
 
-def check_ai_limit():
-    user_data = load_progress()
-    last_date = user_data.get("ai_last_date", "")
-    today = str(datetime.now().date())
-    current_count = user_data.get("ai_daily_count", 0)
-    if last_date != today:
-        current_count = 0
-        save_progress(ai_last_date=today, ai_daily_count=0)
-    limit = 80 if is_pro() else 10
-    return current_count < limit
-
-def track_ai_usage():
-    user_data = load_progress()
-    current = user_data.get("ai_daily_count", 0)
-    save_progress(ai_daily_count=current + 1)
-
-def get_ai_usage_text():
-    user_data = load_progress()
-    limit = 50 if is_pro() else 5
-    current = user_data.get("ai_daily_count", 0)
-    return f"{current}/{limit}"
-
 # --- STRATO EMAIL FUNCTIE ---
 
 def send_login_email(to_email, name, license_key):
@@ -347,4 +334,39 @@ def send_login_email(to_email, name, license_key):
         return True
     except Exception as e:
         print(f"❌ Strato Email Error: {e}")
+        return False
+
+def save_feedback(text, approved):
+    """Slaat feedback op in Supabase en voorkomt dubbel gebruik."""
+    supabase = init_supabase()
+    try:
+        key = st.session_state.get("license_key", "unknown")
+        status = "approved" if approved else "rejected"
+        
+        # 1. Feedback opslaan in de tabel
+        supabase.table("feedback").insert({
+            "license_key": key,
+            "message": text,
+            "rating": status
+        }).execute()
+        
+        # 2. Beloning geven (ALLEEN als goedgekeurd)
+        if approved:
+            user_data = load_progress()
+            
+            # CHECK: Heeft deze gebruiker al feedback gegeven?
+            if user_data.get("has_given_feedback", False):
+                return False # Stop, ze proberen te cheaten of dubbel te klikken
+            
+            current_tickets = user_data.get("golden_tickets", 0)
+            
+            # Sla op: +1 Ticket EN zet het vinkje dat ze het gedaan hebben
+            save_progress(
+                golden_tickets=current_tickets + 1,
+                has_given_feedback=True 
+            )
+            return True # Succes
+            
+    except Exception as e:
+        print(f"Feedback save error: {e}")
         return False
