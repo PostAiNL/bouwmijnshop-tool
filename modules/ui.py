@@ -14,20 +14,73 @@ def inject_style_and_hacks(brand_color="#10b981"):
     # 1. CSS STYLING
     css = f"""
     <style>
-        /* ALGEMENE STIJL */
+        /* --- MOBIELE FIXES & ALGEMENE RESET --- */
+        * {{ -webkit-tap-highlight-color: transparent !important; }}
+        
         .stApp {{ background-color: #f3f4f6 !important; color: #111827; }}
         .block-container {{ padding-top: 1rem; padding-bottom: 5rem; max-width: 900px; }} 
         header[data-testid="stHeader"], [data-testid="stToolbar"], footer {{ display: none !important; }}
         
-        /* INPUTS */
+        /* --- TEKST & LABELS ZICHTBAAR MAKEN (FIX VOOR SCREENSHOT) --- */
+        /* Dit forceert alle labels (Onderwerp, Toon, etc) naar donkergrijs */
+        .stMarkdown, .stMarkdown p, label, .stRadio label, .stSelectbox label, .stTextInput label {{
+            color: #374151 !important;
+        }}
+        /* Specifiek voor Radio buttons (Energiek, Rustig etc) */
+        div[data-baseweb="radio"] label {{
+            color: #111827 !important;
+        }}
+
+        /* --- INPUTS & FORMULIEREN --- */
         div[data-baseweb="input"] > div, div[data-baseweb="base-input"] > input, 
         div[data-baseweb="textarea"] > textarea, div[data-baseweb="select"] > div {{
-            background-color: #ffffff !important; color: #000000 !important; border: 1px solid #e5e7eb !important;
+            background-color: #ffffff !important; 
+            color: #000000 !important; 
+            border: 1px solid #e5e7eb !important;
         }}
         
-        /* --- KNOPPEN STYLING (SPLITSING) --- */
-        
-        /* 1. PRIMARY BUTTONS (Acties) -> GROEN */
+        /* --- TABBLADEN (Login / Studio) --- */
+        button[data-baseweb="tab"] {{
+            background-color: transparent !important;
+        }}
+        /* Niet geselecteerd = Donkergrijs (Leesbaar!) */
+        button[data-baseweb="tab"][aria-selected="false"] {{
+            color: #6b7280 !important; 
+            background-color: #f9fafb !important;
+        }}
+        /* Geselecteerd = Jouw Brand Kleur */
+        button[data-baseweb="tab"][aria-selected="true"] {{
+            color: {brand_color} !important;
+            background-color: #ffffff !important;
+            border-top: 2px solid {brand_color} !important;
+            font-weight: bold !important;
+        }}
+
+        /* --- EXPANDERS (Uitklapmenu's) --- */
+        div[data-testid="stExpander"] details > summary {{
+            background-color: #ffffff !important;
+            color: #111827 !important;
+            border-radius: 8px !important;
+            border: 1px solid #e5e7eb !important;
+        }}
+        div[data-testid="stExpander"] details > summary:hover {{
+            color: {brand_color} !important;
+        }}
+        div[data-testid="stExpander"] details[open] > summary {{
+            color: {brand_color} !important;
+            border-bottom-left-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+        }}
+        div[data-testid="stExpander"] details > div {{
+            background-color: #ffffff !important;
+            border: 1px solid #e5e7eb !important;
+            border-top: none !important;
+            border-bottom-left-radius: 8px !important;
+            border-bottom-right-radius: 8px !important;
+            color: #374151 !important; /* Inhoud ook donker */
+        }}
+
+        /* --- KNOPPEN STYLING --- */
         button[kind="primary"] {{
             background: linear-gradient(135deg, {brand_color} 0%, #059669 100%) !important;
             color: white !important; 
@@ -42,8 +95,12 @@ def inject_style_and_hacks(brand_color="#10b981"):
             transform: translateY(-2px);
             box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3) !important;
         }}
+        button[kind="primary"]:focus, button[kind="primary"]:active {{
+            background: linear-gradient(135deg, {brand_color} 0%, #059669 100%) !important;
+            color: white !important;
+            border-color: transparent !important;
+        }}
 
-        /* 2. SECONDARY BUTTONS (Navigatie/Settings) -> WIT/GRIJS */
         button[kind="secondary"] {{
             background-color: #ffffff !important;
             color: #4b5563 !important;
@@ -58,9 +115,8 @@ def inject_style_and_hacks(brand_color="#10b981"):
             border-color: #d1d5db !important;
         }}
         
-        /* 3. ALGEMENE BUTTON FIXES */
         div.stButton > button {{
-            width: 100%; /* Zorgt dat full-width buttons goed werken */
+            width: 100%; 
         }}
 
         /* --- HEADER --- */
@@ -69,8 +125,8 @@ def inject_style_and_hacks(brand_color="#10b981"):
         }}
         .header-logo img {{ height: 50px; width: auto; border-radius: 12px; }}
         .header-text {{ flex-grow: 1; line-height: 1.2; }}
-        .header-title {{ font-size: 1.4rem; font-weight: 800; color: #111827; margin: 0; display: flex; align-items: center; }}
-        .header-subtitle {{ font-size: 0.85rem; color: #6b7280; margin: 0; margin-top: 4px; }}
+        .header-title {{ font-size: 1.4rem; font-weight: 800; color: #111827 !important; margin: 0; display: flex; align-items: center; }}
+        .header-subtitle {{ font-size: 0.85rem; color: #6b7280 !important; margin: 0; margin-top: 4px; }}
         
         /* --- METRICS --- */
         .metrics-strip {{ display: flex; flex-direction: row; justify-content: space-between; gap: 10px; width: 100%; margin-bottom: 25px; margin-top: 15px; }}
@@ -80,7 +136,7 @@ def inject_style_and_hacks(brand_color="#10b981"):
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); min-width: 0; cursor: help; transition: transform 0.2s;
         }}
         .metric-card:hover {{ transform: translateY(-2px); border-color: {brand_color}; }}
-        .metric-val {{ font-size: 1.6rem; font-weight: 900; line-height: 1.1; margin-bottom: 4px; white-space: nowrap; }}
+        .metric-val {{ font-size: 1.6rem; font-weight: 900; line-height: 1.1; margin-bottom: 4px; white-space: nowrap; color: #111827; }}
         .metric-lbl {{ font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #6b7280 !important; white-space: nowrap; width: 100%; overflow: hidden; text-overflow: ellipsis; }}
 
         /* --- LOCK OVERLAY --- */
@@ -133,27 +189,18 @@ def inject_style_and_hacks(brand_color="#10b981"):
         function styleButtons() {
             const buttons = window.parent.document.querySelectorAll('button');
             buttons.forEach(btn => {
-                
-                // --- 1. PANIC BUTTON (ROOD) ---
                 if (btn.innerText.includes("PANIC BUTTON")) {
                     btn.style.setProperty('background', 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)', 'important');
                     btn.style.setProperty('color', 'white', 'important');
                     btn.style.setProperty('border', '2px solid #fee2e2', 'important');
                     btn.style.setProperty('box-shadow', '0 4px 15px rgba(239, 68, 68, 0.4)', 'important');
-                    
-                    // Hover overrides
                     btn.onmouseenter = function() { this.style.setProperty('transform', 'scale(1.02)', 'important'); };
                     btn.onmouseleave = function() { this.style.setProperty('transform', 'scale(1)', 'important'); };
                 }
-
-                // --- 2. DAILY DROP KNOP (PAARS) ---
-                // Zo matcht hij mooi bij het paarse blok erboven
                 if (btn.innerText.includes("Gebruik deze Daily")) {
                     btn.style.setProperty('background', 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', 'important');
                     btn.style.setProperty('color', 'white', 'important');
                     btn.style.setProperty('border', 'none', 'important');
-                    
-                    // Hover overrides
                     btn.onmouseenter = function() { this.style.setProperty('opacity', '0.9', 'important'); this.style.setProperty('transform', 'translateY(-2px)', 'important'); };
                     btn.onmouseleave = function() { this.style.setProperty('opacity', '1', 'important'); this.style.setProperty('transform', 'translateY(0)', 'important'); };
                 }
