@@ -13,11 +13,23 @@ from supabase import create_client, Client
 # CONFIG
 PRO_KEY_FIXED = "123-456-789"
 
-# --- SUPABASE VERBINDING ---
+# NIEUWE VERSIE (Werkt op Render én Lokaal)
 @st.cache_resource
 def init_supabase():
-    url = st.secrets["supabase"]["url"]
-    key = st.secrets["supabase"]["key"]
+    # 1. Probeer eerst de Environment Variables (voor Render)
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+    
+    # 2. Als die niet bestaan, kijk dan in st.secrets (voor lokaal testen)
+    if not url and "supabase" in st.secrets:
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+        
+    # 3. Als we nog steeds niets hebben, geef geen foutmelding maar return None
+    if not url or not key:
+        print("⚠️ Waarschuwing: Supabase gegevens ontbreken.")
+        return None
+
     return create_client(url, key)
 
 # --- DATA MANAGEMENT (SUPABASE) ---
