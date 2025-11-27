@@ -114,7 +114,13 @@ def get_ai_usage_text():
     current = user_data.get("ai_daily_count", 0)
     return f"{current}/{limit}"
 
-# --- DEZE FUNCTIES WAREN WE VERGETEN! (STREAK, TICKETS, LIBRARY) ---
+# --- HELPER FUNCTIES (STREAK, TICKETS, LIBRARY, SECRETS) ---
+
+def get_secret(key, default=None):
+    val = os.getenv(key)
+    if val: return val
+    try: return st.secrets.get(key, default)
+    except: return default
 
 def check_daily_streak():
     user_data = load_progress()
