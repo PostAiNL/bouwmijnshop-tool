@@ -270,30 +270,22 @@ def save_script_to_library(topic, content):
     library.insert(0, {"id": str(uuid.uuid4()), "date": str(datetime.now().date()), "topic": topic, "content": content})
     save_progress(library=library)
 
-# --- STRATO EMAIL FUNCTIE ---
-
-# --- VERVANG DE send_login_email FUNCTIE IN auth.py ---
-
-# --- VERVANG DE send_login_email FUNCTIE IN auth.py ---
+# --- IN auth.py (Vervang send_login_email) ---
 
 def send_login_email(to_email, name, license_key):
-    # 1. Haal variabelen op
-    smtp_server = os.getenv("SMTP_SERVER")           
-    smtp_port_str = os.getenv("SMTP_PORT", "465") # Default nu op 465 gezet voor Strato
+    # Ophalen gegevens
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.strato.com")
+    # Forceer 587 omdat 465 vaak dicht zit op cloud servers
+    smtp_port = 587 
     smtp_user = os.getenv("SMTP_USER")               
     smtp_password = os.getenv("SMTP_PASSWORD")       
     from_email = os.getenv("FROM_EMAIL") or smtp_user 
     
     base_url = os.getenv("APP_PUBLIC_URL") or "https://www.postaiapp.nl"
 
-    if not smtp_server or not smtp_user or not smtp_password:
-        print(f"⚠️ SMTP Config mist in Render Environment")
+    if not smtp_user or not smtp_password:
+        print("⚠️ SMTP Config mist")
         return False
-
-    try:
-        smtp_port = int(smtp_port_str)
-    except:
-        smtp_port = 465
 
     magic_link = f"{base_url}/?license={license_key}"
 
@@ -323,25 +315,26 @@ def send_login_email(to_email, name, license_key):
     msg.attach(MIMEText(html_body, 'html'))
 
     try:
-        print(f"📧 Poging mail te sturen naar {to_email} via poort {smtp_port}...")
+        print(f"📧 Verbinden met {smtp_server}:{smtp_port}...")
         
-        # LOGICA VOOR STRATO (SSL vs STARTTLS)
-        if smtp_port == 465:
-            # SSL Verbinding (Beste voor Strato)
-            server = smtplib.SMTP_SSL(smtp_server, smtp_port)
-        else:
-            # TLS Verbinding (Oude manier)
-            server = smtplib.SMTP(smtp_server, smtp_port)
-            server.starttls()
-            
+        # De exacte Strato Handshake
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10) # 10 sec timeout
+        server.set_debuglevel(1) # Dit toont details in je logs
+        
+        server.ehlo()        # Hallo zeggen
+        server.starttls()    # Beveiliging starten
+        server.ehlo()        # Nogmaals hallo (nu beveiligd)
+        
         server.login(smtp_user, smtp_password)
         text = msg.as_string()
         server.sendmail(from_email, to_email, text)
         server.quit()
-        print("✅ Mail succesvol verzonden!")
+        
+        print(f"✅ Mail succesvol verzonden naar {to_email}")
         return True
+        
     except Exception as e:
-        print(f"❌ EMAIL ERROR: {e}")
+        print(f"❌ Strato Error: {e}")
         return False
 
 def save_feedback(text, approved):
