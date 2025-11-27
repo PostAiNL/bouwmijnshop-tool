@@ -4,6 +4,7 @@ import json
 import uuid
 import time
 import datetime
+import threading  # Nodig voor achtergrond e-mails
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
@@ -16,27 +17,19 @@ PRO_KEY_FIXED = "123-456-789"
 # NIEUWE VERSIE (Werkt op Render én Lokaal)
 @st.cache_resource
 def init_supabase():
-    # 1. Probeer eerst de Environment Variables (voor Render)
     url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_KEY")
-    
-    # 2. Als die niet bestaan, kijk dan in st.secrets (voor lokaal testen)
+    # Fallback voor lokaal testen
     if not url and "supabase" in st.secrets:
         url = st.secrets["supabase"]["url"]
         key = st.secrets["supabase"]["key"]
-        
-    # 3. Als we nog steeds niets hebben, geef geen foutmelding maar return None
     if not url or not key:
-        print("⚠️ Waarschuwing: Supabase gegevens ontbreken.")
         return None
-
     return create_client(url, key)
 
 # --- DATA MANAGEMENT (SUPABASE) ---
 
 def load_progress():
-    """Haalt data op uit Supabase JSONB kolom."""
-    # Eerst kijken of we het al in de sessie hebben (snelheid)
     if "local_user_data" in st.session_state and st.session_state.local_user_data:
         return st.session_state.local_user_data
 
@@ -45,43 +38,35 @@ def load_progress():
 
     supabase = init_supabase()
     try:
-        # Haal de rij op waar license_key matcht
         response = supabase.table("users").select("user_data").eq("license_key", key).execute()
-        
         if response.data and len(response.data) > 0:
             data = response.data[0]["user_data"]
             st.session_state.local_user_data = data
             return data
         else:
-            # Nieuwe gebruiker? Return leeg dict
             return {}
     except Exception as e:
         print(f"❌ DB Load Error: {e}")
         return {}
 
 def save_progress(**kwargs):
-    """Slaat data op (Upsert) in Supabase."""
     key = st.session_state.get("license_key")
     if not key: return
 
-    # Update lokale sessie eerst
     if "local_user_data" not in st.session_state:
         st.session_state.local_user_data = load_progress()
     
     for k, v in kwargs.items():
         st.session_state.local_user_data[k] = v
-        # Update ook direct de losse session states voor UI reactivity
         st.session_state[k] = v 
 
     supabase = init_supabase()
     try:
-        # We slaan de hele user_data blob op in de 'user_data' kolom
         data_payload = {
             "license_key": key,
             "user_data": st.session_state.local_user_data,
             "updated_at": str(datetime.now())
         }
-        # Upsert: Maakt aan als niet bestaat, anders updaten
         supabase.table("users").upsert(data_payload).execute()
     except Exception as e:
         print(f"❌ DB Save Error: {e}")
@@ -105,6 +90,8 @@ def is_pro():
     data = load_progress()
     return data.get("is_pro", False)
 
+# --- AI LIMITS ---
+
 def check_ai_limit():
     user_data = load_progress()
     last_date = user_data.get("ai_last_date", "")
@@ -127,96 +114,7 @@ def get_ai_usage_text():
     current = user_data.get("ai_daily_count", 0)
     return f"{current}/{limit}"
 
-def render_landing_page():
-    # Een wat hippere header
-    st.markdown("""
-        <div style='text-align:center; padding-bottom: 20px;'>
-            <h1 style='color:#111827; margin-bottom:0;'>🚀 PostAi</h1>
-            <p style='font-size:1.2rem; color:#6b7280;'>Jouw persoonlijke AI TikTok Coach</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # We maken een layout: Links de "Sales Pitch", Rechts het "Formulier"
-    c1, c2 = st.columns([1.2, 1])
-    
-    with c1:
-        st.markdown("### 📈 Stop met gokken, start met groeien.")
-        st.markdown("""
-        PostAi is de enige tool die je **hele workflow** automatiseert:
-        
-        *   ✅ **Nooit meer inspiratieloos** (Dagelijkse trends & scripts)
-        *   ✅ **AI Vision Analyse** (Weet precies waarom je video flopt)
-        *   ✅ **Teleprompter & Visuals** (Film sneller en professioneler)
-        *   ✅ **Clone My Voice** (Scripts in JOUW schrijfstijl)
-        
-        👇 **Probeer 14 dagen gratis, daarna €14,95 per maand (PRO)**
-        """)
-        
-        st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang tot de demo omgeving.")
-
-    with c2:
-        # Een mooie kader om het formulier
-        with st.container(border=True):
-            st.markdown("#### 👋 Start direct (Gratis)")
-            
-            # TABS: Zodat Inloggen en Aanmelden gescheiden zijn maar op dezelfde plek
-            tab_signup, tab_login = st.tabs(["Nieuw Account", "Inloggen"])
-            
-            with tab_signup:
-                with st.form("lp_signup"):
-                    st.write("Maak binnen 10 seconden een account aan.")
-                    name = st.text_input("Voornaam")
-                    email = st.text_input("Emailadres")
-                    submitted = st.form_submit_button("🚀 Start Gratis Demo", type="primary", use_container_width=True)
-                    
-                    if submitted:
-                        if name and email and "@" in email:
-                            key = "DEMO-" + str(uuid.uuid4())[:8]
-                            
-                            # 1. Eerst de status opslaan in de sessie (Belangrijkst!)
-                            st.session_state.license_key = key
-                            st.session_state.local_user_data = {"name": name, "email": email} # Direct inladen voor snelheid
-                            
-                            # 2. Opslaan in database (op de achtergrond)
-                            save_progress(name=name, email=email, start_date=str(datetime.now().date()))
-                            
-                            # 3. Email sturen
-                            with st.spinner("Account aanmaken..."):
-                                send_login_email(email, name, key)
-                            
-                            # 4. URL updaten
-                            st.query_params["license"] = key
-                            
-                            # 5. Direct herladen zonder vertraging
-                            st.rerun()
-                        else:
-                            st.error("Vul je naam en een geldig emailadres in.")
-
-            with tab_login:
-                st.write("Welkom terug, creator!")
-                exist_key = st.text_input("Jouw Licentiecode:", type="password") # Password type verbergt het, wel zo netjes
-                if st.button("Inloggen", type="secondary", use_container_width=True):
-                    if exist_key:
-                        st.session_state.license_key = exist_key
-                        st.query_params["license"] = exist_key
-                        if "local_user_data" in st.session_state:
-                            del st.session_state.local_user_data
-                        st.rerun()
-
-def activate_pro(key_input):
-    if len(key_input) > 5: 
-        save_progress(is_pro=True)
-        st.balloons()
-        st.success("PRO Geactiveerd!")
-        time.sleep(2); st.rerun()
-    else: st.error("Ongeldige code")
-
-# --- HELPERS ---
-def get_secret(key, default=None):
-    val = os.getenv(key)
-    if val: return val
-    try: return st.secrets.get(key, default)
-    except: return default
+# --- DEZE FUNCTIES WAREN WE VERGETEN! (STREAK, TICKETS, LIBRARY) ---
 
 def check_daily_streak():
     user_data = load_progress()
@@ -270,13 +168,13 @@ def save_script_to_library(topic, content):
     library.insert(0, {"id": str(uuid.uuid4()), "date": str(datetime.now().date()), "topic": topic, "content": content})
     save_progress(library=library)
 
-# --- IN auth.py (Vervang send_login_email) ---
+# --- STRATO EMAIL FUNCTIE (587 STARTTLS) ---
 
 def send_login_email(to_email, name, license_key):
-    # Ophalen gegevens
+    # 1. Haal variabelen op (Met defaults voor Strato)
     smtp_server = os.getenv("SMTP_SERVER", "smtp.strato.com")
-    # Forceer 587 omdat 465 vaak dicht zit op cloud servers
-    smtp_port = 587 
+    smtp_port = 587 # We forceren 587 in de code om zeker te zijn
+    
     smtp_user = os.getenv("SMTP_USER")               
     smtp_password = os.getenv("SMTP_PASSWORD")       
     from_email = os.getenv("FROM_EMAIL") or smtp_user 
@@ -284,7 +182,7 @@ def send_login_email(to_email, name, license_key):
     base_url = os.getenv("APP_PUBLIC_URL") or "https://www.postaiapp.nl"
 
     if not smtp_user or not smtp_password:
-        print("⚠️ SMTP Config mist")
+        print(f"⚠️ SMTP Config mist")
         return False
 
     magic_link = f"{base_url}/?license={license_key}"
@@ -317,9 +215,9 @@ def send_login_email(to_email, name, license_key):
     try:
         print(f"📧 Verbinden met {smtp_server}:{smtp_port}...")
         
-        # De exacte Strato Handshake
-        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10) # 10 sec timeout
-        server.set_debuglevel(1) # Dit toont details in je logs
+        # STRATO HANDSHAKE
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+        # server.set_debuglevel(1) # Zet aan als je nog steeds errors krijgt om logs te zien
         
         server.ehlo()        # Hallo zeggen
         server.starttls()    # Beveiliging starten
@@ -334,39 +232,118 @@ def send_login_email(to_email, name, license_key):
         return True
         
     except Exception as e:
-        print(f"❌ Strato Error: {e}")
+        print(f"❌ Strato Email Error: {e}")
         return False
 
+# --- LANDING PAGE (MET DUBBEL-KLIK FIX & THREADING) ---
+def render_landing_page():
+    st.markdown("""
+        <div style='text-align:center; padding-bottom: 20px;'>
+            <h1 style='color:#111827; margin-bottom:0;'>🚀 PostAi</h1>
+            <p style='font-size:1.2rem; color:#6b7280;'>Jouw persoonlijke AI TikTok Coach</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    c1, c2 = st.columns([1.2, 1])
+    
+    with c1:
+        st.markdown("### 📈 Stop met gokken, start met groeien.")
+        st.markdown("""
+        PostAi is de enige tool die je **hele workflow** automatiseert:
+        
+        *   ✅ **Nooit meer inspiratieloos** (Dagelijkse trends & scripts)
+        *   ✅ **AI Vision Analyse** (Weet precies waarom je video flopt)
+        *   ✅ **Teleprompter & Visuals** (Film sneller en professioneler)
+        *   ✅ **Clone My Voice** (Scripts in JOUW schrijfstijl)
+        
+        👇 **Probeer 14 dagen gratis, daarna €14,95 per maand (PRO)**
+        """)
+        st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang tot de demo omgeving.")
+
+    with c2:
+        with st.container(border=True):
+            st.markdown("#### 👋 Start direct (Gratis)")
+            
+            tab_signup, tab_login = st.tabs(["Nieuw Account", "Inloggen"])
+            
+            # De Callback functie: Fixt dubbelklikken & bevriezen
+            def finish_signup():
+                name = st.session_state.get("reg_name", "")
+                email = st.session_state.get("reg_email", "")
+                
+                if name and email and "@" in email:
+                    key = "DEMO-" + str(uuid.uuid4())[:8]
+                    
+                    # 1. Direct de sessie updaten (Snelheid!)
+                    st.session_state.license_key = key
+                    st.session_state.local_user_data = {"name": name, "email": email}
+                    st.query_params["license"] = key
+                    
+                    # 2. Database opslaan
+                    save_progress(name=name, email=email, start_date=str(datetime.now().date()))
+                    
+                    # 3. Mail versturen op de ACHTERGROND (Threading)
+                    # Dit voorkomt dat het scherm bevriest tijdens het mailen
+                    email_thread = threading.Thread(target=send_login_email, args=(email, name, key))
+                    email_thread.start()
+                    
+                else:
+                    st.session_state.login_error = "Vul alsjeblieft je naam en een geldig emailadres in."
+
+            with tab_signup:
+                st.write("Maak binnen 10 seconden een account aan.")
+                st.text_input("Voornaam", key="reg_name") 
+                st.text_input("Emailadres", key="reg_email")
+                
+                # on_click zorgt ervoor dat het direct werkt zonder reload
+                st.button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
+
+                if "login_error" in st.session_state:
+                    st.error(st.session_state.login_error)
+                    del st.session_state.login_error
+
+            with tab_login:
+                st.write("Welkom terug, creator!")
+                val_key = st.text_input("Jouw Licentiecode:", type="password")
+                if st.button("Inloggen", type="secondary", use_container_width=True):
+                    if val_key:
+                        st.session_state.license_key = val_key
+                        st.query_params["license"] = val_key
+                        if "local_user_data" in st.session_state:
+                            del st.session_state.local_user_data
+                        st.rerun()
+
+def activate_pro(key_input):
+    if len(key_input) > 5: 
+        save_progress(is_pro=True)
+        st.balloons()
+        st.success("PRO Geactiveerd!")
+        time.sleep(2); st.rerun()
+    else: st.error("Ongeldige code")
+
 def save_feedback(text, approved):
-    """Slaat feedback op in Supabase en voorkomt dubbel gebruik."""
     supabase = init_supabase()
     try:
         key = st.session_state.get("license_key", "unknown")
         status = "approved" if approved else "rejected"
         
-        # 1. Feedback opslaan in de tabel
         supabase.table("feedback").insert({
             "license_key": key,
             "message": text,
             "rating": status
         }).execute()
         
-        # 2. Beloning geven (ALLEEN als goedgekeurd)
         if approved:
             user_data = load_progress()
-            
-            # CHECK: Heeft deze gebruiker al feedback gegeven?
             if user_data.get("has_given_feedback", False):
-                return False # Stop, ze proberen te cheaten of dubbel te klikken
+                return False 
             
             current_tickets = user_data.get("golden_tickets", 0)
-            
-            # Sla op: +1 Ticket EN zet het vinkje dat ze het gedaan hebben
             save_progress(
                 golden_tickets=current_tickets + 1,
                 has_given_feedback=True 
             )
-            return True # Succes
+            return True 
             
     except Exception as e:
         print(f"Feedback save error: {e}")
