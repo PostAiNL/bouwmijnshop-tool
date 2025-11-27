@@ -1,4 +1,3 @@
-# --- FILE: auth.py ---
 import streamlit as st
 import os
 import json
@@ -6,11 +5,8 @@ import uuid
 import time
 import datetime
 import threading
+import requests  # <--- ESSENTIEEL VOOR RESEND
 from datetime import datetime, timedelta
-import smtplib
-import ssl # Nodig voor de SSL fallback
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from supabase import create_client, Client
 
 # CONFIG
@@ -85,7 +81,7 @@ def is_pro():
     data = load_progress()
     return data.get("is_pro", False)
 
-# --- HELPER FUNCTIES (DIE WE EERDER MISTEN) ---
+# --- HELPER FUNCTIES ---
 
 def get_secret(key, default=None):
     val = os.getenv(key)
@@ -167,27 +163,21 @@ def save_script_to_library(topic, content):
     library.insert(0, {"id": str(uuid.uuid4()), "date": str(datetime.now().date()), "topic": topic, "content": content})
     save_progress(library=library)
 
-# --- ROBUUSTE EMAIL FUNCTIE (Probeert 587 EN 465) ---
+# --- RESEND EMAIL FUNCTIE (API) ---
 
 def send_login_email(to_email, name, license_key):
-    # Gegevens ophalen
-    smtp_server = "smtp.strato.com"
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    from_email = os.getenv("FROM_EMAIL") or smtp_user
+    # 1. Haal de API key op uit Render
+    resend_key = os.getenv("RESEND_API_KEY")
+    if not resend_key:
+        # Fallback voor lokaal testen als je het in secrets.toml hebt
+        if "RESEND_API_KEY" in st.secrets:
+            resend_key = st.secrets["RESEND_API_KEY"]
+        else:
+            print("⚠️ Geen RESEND_API_KEY gevonden!")
+            return False
+
     base_url = os.getenv("APP_PUBLIC_URL") or "https://www.postaiapp.nl"
-
-    if not smtp_user or not smtp_password:
-        print("⚠️ SMTP Config mist")
-        return False
-
     magic_link = f"{base_url}/?license={license_key}"
-
-    # Email opbouwen
-    msg = MIMEMultipart()
-    msg['From'] = f"PostAi <{from_email}>"
-    msg['To'] = to_email
-    msg['Subject'] = "🚀 Jouw toegang tot PostAi"
 
     html_body = f"""
     <html><body style="font-family: Arial, sans-serif; color: #333;">
@@ -203,35 +193,31 @@ def send_login_email(to_email, name, license_key):
         </div>
     </body></html>
     """
-    msg.attach(MIMEText(html_body, 'html'))
 
-    # POGING 1: POORT 587 (STARTTLS)
     try:
-        print("📧 Poging 1: Via poort 587 (STARTTLS)...")
-        server = smtplib.SMTP(smtp_server, 587, timeout=10)
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
-        server.login(smtp_user, smtp_password)
-        server.sendmail(from_email, to_email, msg.as_string())
-        server.quit()
-        print("✅ Mail verzonden via 587!")
-        return True
-    except Exception as e1:
-        print(f"❌ Poging 1 mislukt: {e1}")
-        
-        # POGING 2: POORT 465 (SSL)
-        try:
-            print("📧 Poging 2: Via poort 465 (SSL)...")
-            context = ssl.create_default_context()
-            with smtplib.SMTP_SSL(smtp_server, 465, context=context, timeout=10) as server:
-                server.login(smtp_user, smtp_password)
-                server.sendmail(from_email, to_email, msg.as_string())
-            print("✅ Mail verzonden via 465!")
+        # Dit gaat via de API (poort 443), dus geen blokkades meer!
+        response = requests.post(
+            "https://api.resend.com/emails",
+            json={
+                "from": "PostAi Support <support@postaiapp.nl>",
+                "to": [to_email],
+                "subject": "🚀 Jouw toegang tot PostAi",
+                "html": html_body
+            },
+            headers={
+                "Authorization": f"Bearer {resend_key}",
+                "Content-Type": "application/json"
+            }
+        )
+        if response.status_code in [200, 201]:
+            print(f"✅ Resend Mail verzonden naar {to_email}")
             return True
-        except Exception as e2:
-            print(f"❌ POGING 2 OOK MISLUKT: {e2}")
+        else:
+            print(f"❌ Resend Fout: {response.text}")
             return False
+    except Exception as e:
+        print(f"❌ API Fout: {e}")
+        return False
 
 # --- LANDING PAGE (MET DUBBEL-KLIK FIX & THREADING) ---
 def render_landing_page():
