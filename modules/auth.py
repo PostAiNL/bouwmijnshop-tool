@@ -1,9 +1,11 @@
+# --- FILE: auth.py ---
 import streamlit as st
 import os
 import json
 import uuid
 import time
 import datetime
+import threading  # <--- NIEUW: Voor achtergrond e-mails
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
@@ -27,7 +29,7 @@ def init_supabase():
         
     # 3. Als we nog steeds niets hebben, geef geen foutmelding maar return None
     if not url or not key:
-        print("⚠️ Waarschuwing: Supabase gegevens ontbreken.")
+        # print("⚠️ Waarschuwing: Supabase gegevens ontbreken.")
         return None
 
     return create_client(url, key)
@@ -36,7 +38,6 @@ def init_supabase():
 
 def load_progress():
     """Haalt data op uit Supabase JSONB kolom."""
-    # Eerst kijken of we het al in de sessie hebben (snelheid)
     if "local_user_data" in st.session_state and st.session_state.local_user_data:
         return st.session_state.local_user_data
 
@@ -45,7 +46,6 @@ def load_progress():
 
     supabase = init_supabase()
     try:
-        # Haal de rij op waar license_key matcht
         response = supabase.table("users").select("user_data").eq("license_key", key).execute()
         
         if response.data and len(response.data) > 0:
@@ -53,7 +53,6 @@ def load_progress():
             st.session_state.local_user_data = data
             return data
         else:
-            # Nieuwe gebruiker? Return leeg dict
             return {}
     except Exception as e:
         print(f"❌ DB Load Error: {e}")
@@ -64,24 +63,20 @@ def save_progress(**kwargs):
     key = st.session_state.get("license_key")
     if not key: return
 
-    # Update lokale sessie eerst
     if "local_user_data" not in st.session_state:
         st.session_state.local_user_data = load_progress()
     
     for k, v in kwargs.items():
         st.session_state.local_user_data[k] = v
-        # Update ook direct de losse session states voor UI reactivity
         st.session_state[k] = v 
 
     supabase = init_supabase()
     try:
-        # We slaan de hele user_data blob op in de 'user_data' kolom
         data_payload = {
             "license_key": key,
             "user_data": st.session_state.local_user_data,
             "updated_at": str(datetime.now())
         }
-        # Upsert: Maakt aan als niet bestaat, anders updaten
         supabase.table("users").upsert(data_payload).execute()
     except Exception as e:
         print(f"❌ DB Save Error: {e}")
@@ -127,12 +122,7 @@ def get_ai_usage_text():
     current = user_data.get("ai_daily_count", 0)
     return f"{current}/{limit}"
 
-# --- VERVANG DEZE FUNCTIE IN auth.py ---
-
-# --- VERVANG DEZE HELE FUNCTIE IN auth.py ---
-
 def render_landing_page():
-    # Een wat hippere header
     st.markdown("""
         <div style='text-align:center; padding-bottom: 20px;'>
             <h1 style='color:#111827; margin-bottom:0;'>🚀 PostAi</h1>
@@ -162,39 +152,36 @@ def render_landing_page():
             
             tab_signup, tab_login = st.tabs(["Nieuw Account", "Inloggen"])
             
-            # --- DE OPLOSSING VOOR FREEZE & DUBBELE KLIK ---
+            # --- CALLBACK FUNCTIE MET BACKGROUND EMAIL ---
             def finish_signup():
-                # 1. Haal waarden op uit de widget keys
                 name = st.session_state.get("reg_name", "")
                 email = st.session_state.get("reg_email", "")
                 
                 if name and email and "@" in email:
-                    # 2. Maak account aan
                     key = "DEMO-" + str(uuid.uuid4())[:8]
                     
-                    # 3. Update Session State DIRECT (Dit fixt de dubbele klik)
+                    # 1. Direct toegang geven (UI update)
                     st.session_state.license_key = key
                     st.session_state.local_user_data = {"name": name, "email": email}
-                    st.query_params["license"] = key 
+                    st.query_params["license"] = key
                     
-                    # 4. Opslaan in DB (Supabase)
+                    # 2. Opslaan
                     save_progress(name=name, email=email, start_date=str(datetime.now().date()))
                     
-                    # 5. Mail versturen (In een try-block zodat de app NOOIT vastloopt)
-                    try:
-                        send_login_email(email, name, key)
-                    except Exception as e:
-                        print(f"Mail error: {e}") # Faal stil, gebruiker is toch al binnen
+                    # 3. Email in ACHTERGROND versturen (Threading)
+                    # Dit voorkomt dat de gebruiker moet wachten op de mailserver
+                    email_thread = threading.Thread(target=send_login_email, args=(email, name, key))
+                    email_thread.start()
+                    
                 else:
-                    st.session_state.login_error = "Vul alsjeblieft je naam en email in."
+                    st.session_state.login_error = "Vul alsjeblieft je naam en een geldig emailadres in."
 
             with tab_signup:
-                # We gebruiken geen st.form hier, dat werkt vlotter met callbacks
                 st.write("Maak binnen 10 seconden een account aan.")
                 st.text_input("Voornaam", key="reg_name") 
                 st.text_input("Emailadres", key="reg_email")
                 
-                # De knop roept nu DIRECT de functie aan
+                # Knop activeert callback
                 st.button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
 
                 if "login_error" in st.session_state:
@@ -203,7 +190,6 @@ def render_landing_page():
 
             with tab_login:
                 st.write("Welkom terug, creator!")
-                # Login werkt prima zonder callback omdat er geen zware mail wordt verstuurd
                 val_key = st.text_input("Jouw Licentiecode:", type="password")
                 if st.button("Inloggen", type="secondary", use_container_width=True):
                     if val_key:
