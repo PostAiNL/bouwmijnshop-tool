@@ -12,6 +12,15 @@ from modules import analytics, ui, auth, ai_coach, data_loader
 # --- 1. CONFIGURATIE ---
 st.set_page_config(page_title="PostAi", page_icon="🚀", layout="centered", initial_sidebar_state="collapsed")
 
+# --- LEMONSQUEEZY AFFILIATE TRACKING ---
+# Dit zorgt dat de klikken van partners geregistreerd worden
+components.html("""
+<script>
+    window.lemonSqueezyAffiliateConfig = { store: "postaiapp" };
+</script>
+<script src="https://lmsqueezy.com/affiliate.js" defer></script>
+""", height=0, width=0)
+
 # Style laden
 ui.inject_style_and_hacks(brand_color="#10b981")
 
@@ -386,19 +395,19 @@ if st.session_state.page == "studio":
     if st.button("⬅️ Terug", type="secondary"): go_home(); st.rerun()
     st.markdown("## 🎬 Studio")
     
-    # Check of er al een script is gegenereerd
+    # --- SCENARIO 1: ER IS AL EEN SCRIPT (Toon resultaat & Teleprompter) ---
     if "last_script" in st.session_state:
-        # --- FIXED: PLAATJE OP TELEFOONFORMAAT ---
+        # Plaatje tonen indien beschikbaar
         if "generated_img_url" in st.session_state and st.session_state.generated_img_url:
-            # We gebruiken 3 gelijke kolommen en zetten de width vast op 280px (mobiel formaat)
             c1, c2, c3 = st.columns([1, 1, 1])
             with c2:
                 st.image(st.session_state.generated_img_url, caption="📸 Visueel Concept", width=280)
         elif st.session_state.get("generated_img"): 
              st.info(f"🎥 **Visueel Shot Idee:** {st.session_state.generated_img}")
-        # -------------------------------------------------
 
         t1, t2 = st.tabs(["Script", "Teleprompter"])
+        
+        # TAB 1: SCRIPT LEZEN
         with t1:
             st.markdown(st.session_state.last_script)
             if st.button("💾 Opslaan", type="primary"): 
@@ -406,56 +415,41 @@ if st.session_state.page == "studio":
                 else: st.toast("🔒 Alleen PRO")
             if st.button("❌ Nieuw", type="secondary"): del st.session_state.last_script; st.rerun()
         
-        # --- AUTO-SCROLL TELEPROMPTER ---
+        # TAB 2: PRO TELEPROMPTER (Jouw nieuwe code)
         with t2:
-            st.markdown("### 📜 Auto-Scroll Prompter")
-            c_speed, c_play = st.columns([3, 1])
-            with c_speed:
-                speed = st.slider("Scroll Snelheid", 0, 50, 10)
-            with c_play:
-                st.write("") # Spacer voor uitlijning
-                is_playing = st.toggle("▶️ Play", value=False)
-
-            # HTML/JS Injectie voor scrollen
+            st.markdown("### 🎬 Pro Teleprompter")
+            
+            c_set1, c_set2, c_set3 = st.columns([2, 2, 1])
+            with c_set1: speed = st.slider("🐢 Snelheid 🐇", 0, 50, 10)
+            with c_set2: font_size = st.slider("🔍 Tekstgrootte", 18, 60, 32)
+            with c_set3: mirror_mode = st.toggle("🪞 Spiegel", help="Handig voor hardware")
+                
+            is_playing = st.toggle("▶️ START SCROLLEN", value=False)
+            mirror_css = "transform: scaleX(-1);" if mirror_mode else ""
             safe_script = st.session_state.last_script.replace('\n', '<br>')
             
             prompt_html = f"""
-            <div id="teleprompter" style="
-                font-size: 28px; 
-                font-weight: bold;
-                line-height: 1.6; 
-                height: 450px; 
-                overflow-y: scroll; 
-                background: #000000; 
-                color: #ffffff; 
-                padding: 40px 20px; 
-                border-radius: 15px;
-                font-family: sans-serif;
-                text-align: center;">
-                {safe_script}
-                <br><br><br><br><br><br> <!-- Extra witruimte onderaan -->
+            <div id="prompter-container" style="height: 450px; overflow-y: hidden; background: #000000; border-radius: 15px; position: relative; border: 4px solid #333;">
+                <div id="teleprompter" style="font-size: {font_size}px; font-weight: bold; line-height: 1.5; color: #ffffff; padding: 50% 20px; font-family: Arial, sans-serif; text-align: center; {mirror_css}">
+                    {safe_script}<br><br><br><br><br>
+                </div>
+                <div style="position: absolute; top: 45%; left: 0; right: 0; height: 10%; border-top: 2px dashed rgba(255,255,255,0.3); border-bottom: 2px dashed rgba(255,255,255,0.3); pointer-events: none; background: rgba(255,255,255,0.05);"></div>
             </div>
-            
             <script>
-                var prompt = document.getElementById("teleprompter");
+                var container = document.getElementById("prompter-container");
                 var speed = {speed};
                 var playing = {str(is_playing).lower()};
-                
-                function scroll() {{
-                    if (playing && speed > 0) {{
-                        prompt.scrollTop += (speed / 10);
-                    }}
-                }}
-                
-                // Voorkom dubbele intervals
+                var currentScroll = 0;
+                function scroll() {{ if (playing && speed > 0) {{ currentScroll += (speed / 5); container.scrollTop = currentScroll; }} }}
                 if (window.prompterInterval) clearInterval(window.prompterInterval);
                 window.prompterInterval = setInterval(scroll, 50);
             </script>
             """
             components.html(prompt_html, height=500)
     
+    # --- SCENARIO 2: GEEN SCRIPT (Toon Generators) ---
     else:
-        # Als er nog GEEN script is, toon de tabs
+        # <--- HIER GING HET FOUT: Deze regel ontbrak of de inspringing klopte niet
         tab_viral, tab_conv, tab_hook = st.tabs(["👀 Viral Maker", "📈 Conversie", "🪝 Hook Rater"])
         
         # --- TAB 1: VIRAL MAKER ---
@@ -472,32 +466,17 @@ if st.session_state.page == "studio":
                 if submitted:
                     if auth.check_ai_limit():
                         status_box = st.empty()
-                        
                         with status_box.status("🚀 De AI Coach is bezig...", expanded=True) as status:
-                            # STAP 1: Script schrijven
                             status.write("✍️ Script schrijven...")
-                            st.session_state.last_script = ai_coach.generate_script(
-                                topic if topic else "Iets in mijn niche", 
-                                fmt, 
-                                tone, 
-                                "verrassend", 
-                                "Volg voor meer", 
-                                niche, 
-                                st.session_state.brand_voice
-                            )
-                            
-                            # STAP 2: Plaatje genereren
+                            st.session_state.last_script = ai_coach.generate_script(topic if topic else "Iets in mijn niche", fmt, tone, "verrassend", "Volg voor meer", niche, st.session_state.brand_voice)
                             status.write("🎨 Visueel concept tekenen (DALL-E 3)...")
                             st.session_state.generated_img_url = ai_coach.generate_viral_image(topic, tone, niche)
-                            
                             status.update(label="✅ Klaar!", state="complete", expanded=False)
-                            
                         auth.track_ai_usage()
                         add_xp(10)
                         st.session_state.current_topic = topic
                         st.rerun()
-                    else:
-                        st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
+                    else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
 
         # --- TAB 2: CONVERSIE / SALES ---
         with tab_conv:
@@ -513,28 +492,30 @@ if st.session_state.page == "studio":
                             st.session_state.last_script = ai_coach.generate_sales_script(prod, pain, "Story", niche)
                             auth.track_ai_usage()
                             add_xp(10); st.session_state.current_topic = f"Sales: {prod}"; st.rerun()
-                    else:
-                        st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
+                    else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
                 else:
-                    if st.session_state.golden_tickets > 0:
-                         st.error("Gebruik eerst een ticket in het Tools menu of upgrade!")
-                    else:
-                        st.error("Upgrade naar PRO voor Sales Mode.")
+                    if st.session_state.golden_tickets > 0: st.error("Gebruik eerst een ticket in het Tools menu of upgrade!")
+                    else: st.error("Upgrade naar PRO voor Sales Mode.")
 
-        # --- TAB 3: HOOK RATER ---
+        # --- TAB 3: HOOK RATER 2.0 (Jouw nieuwe code) ---
         with tab_hook:
-            st.markdown("Twijfel je over je openingszin? Test hem hier.")
-            user_hook = st.text_input("Jouw Hook:")
-            if st.button("Test Hook", type="primary"):
+            st.markdown("### 🪝 Viral Hook Tester")
+            st.caption("Een goede hook is 80% van je succes.")
+            user_hook = st.text_input("Jouw openingszin:", placeholder="bv. Stop met scrollen als je...")
+            
+            if st.button("🚀 Test & Verbeter", type="primary"):
                 if user_hook:
                     if auth.check_ai_limit():
-                        with st.spinner("🪝 Hook analyseren op viraliteit..."):
+                        with st.spinner("⚖️ De jury overlegt..."):
                             res = ai_coach.rate_user_hook(user_hook, niche)
                             auth.track_ai_usage()
-                            st.markdown(f"### Score: {res['score']}/10")
-                            st.info(res['feedback'])
-                    else:
-                        st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
+                            score = res.get('score', 0)
+                            color = "red" if score < 6 else "orange" if score < 8 else "green"
+                            st.markdown(f"""<div style="text-align:center; padding:10px; border-radius:10px; border:2px solid {color}; background:rgba(255,255,255,0.5); margin-bottom:15px;"><div style="font-size:2.5rem; font-weight:bold; color:{color};">{score}/10</div><div style="font-style:italic;">"{res.get('feedback')}"</div></div>""", unsafe_allow_html=True)
+                            if 'alternatives' in res:
+                                st.markdown("#### ✨ Probeer deze eens:")
+                                for alt in res['alternatives']: st.info(f"🔥 {alt}")
+                    else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
                 else: st.error("Vul iets in!")
 
 # ==========================
@@ -774,6 +755,48 @@ if st.session_state.page == "settings":
         st.code(st.session_state.license_key, language=None)
         st.info("Tip: Sla deze pagina op in je favorieten ⭐")
 
+# --- IN app.py (Settings sectie) ---
+    
+    st.markdown("---")
+    st.markdown("### 🎁 Help ons & Krijg een Cadeau")
+    
+    # We kijken in de data of ze het al gedaan hebben
+    already_done = user_data.get("has_given_feedback", False)
+    
+    # Pas de titel aan op basis van status
+    expander_title = "✅ Feedback Gegeven (Ticket Geclaimd)" if already_done else "📢 Geef je mening (+1 Golden Ticket)"
+    
+    with st.expander(expander_title, expanded=False):
+        if already_done:
+            st.info("Bedankt voor je hulp! Je hebt je Golden Ticket al ontvangen. Je kunt dit maar 1x doen.")
+            st.caption("Heb je meer feedback? Mail gerust naar info@bouwmijnshop.nl")
+        else:
+            st.write("Wat mis je in de app? Of wat vind je juist top? Als je serieuze feedback geeft, krijg je direct een **Golden Ticket** (24u toegang tot een PRO tool)!")
+            
+            fb_text = st.text_area("Jouw feedback:", placeholder="Ik zou graag willen dat...")
+            
+            if st.button("Verstuur & Claim Ticket", type="primary"):
+                if fb_text and len(fb_text) > 5:
+                    with st.spinner("🤖 AI beoordeelt je feedback..."):
+                        # 1. Check kwaliteit
+                        is_good = ai_coach.check_feedback_quality(fb_text)
+                        
+                        # 2. Opslaan & Belonen (Met de nieuwe check)
+                        # save_feedback geeft nu True of False terug
+                        success = auth.save_feedback(fb_text, is_good)
+                        
+                        if is_good and success:
+                            st.balloons()
+                            st.success("✅ Goedgekeurd! +1 Golden Ticket toegevoegd aan je account.")
+                            time.sleep(2)
+                            st.rerun()
+                        elif not is_good:
+                            st.error("❌ De AI vond je feedback te kort of niet specifiek genoeg. Probeer het opnieuw.")
+                        else:
+                            # Dit gebeurt als ze via een omweg toch proberen te dubbelen
+                            st.error("⚠️ Je hebt deze beloning al geclaimd.")
+                else:
+                    st.warning("Vul minimaal 1 korte zin in.")
 
 # ==========================
 # 📄 PRIVACY & VOORWAARDEN
