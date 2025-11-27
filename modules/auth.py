@@ -127,6 +127,8 @@ def get_ai_usage_text():
     current = user_data.get("ai_daily_count", 0)
     return f"{current}/{limit}"
 
+# --- VERVANG DEZE FUNCTIE IN auth.py ---
+
 def render_landing_page():
     # Een wat hippere header
     st.markdown("""
@@ -136,7 +138,6 @@ def render_landing_page():
         </div>
     """, unsafe_allow_html=True)
 
-    # We maken een layout: Links de "Sales Pitch", Rechts het "Formulier"
     c1, c2 = st.columns([1.2, 1])
     
     with c1:
@@ -151,50 +152,56 @@ def render_landing_page():
         
         👇 **Probeer 14 dagen gratis, daarna €14,95 per maand (PRO)**
         """)
-        
         st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang tot de demo omgeving.")
 
     with c2:
-        # Een mooie kader om het formulier
         with st.container(border=True):
             st.markdown("#### 👋 Start direct (Gratis)")
             
-            # TABS: Zodat Inloggen en Aanmelden gescheiden zijn maar op dezelfde plek
             tab_signup, tab_login = st.tabs(["Nieuw Account", "Inloggen"])
             
+            # --- CALLBACK FUNCTIE (DE OPLOSSING VOOR DOUBLE CLICK) ---
+            def finish_signup():
+                # We halen de waarden direct uit de session state (via de key)
+                name = st.session_state.get("reg_name", "")
+                email = st.session_state.get("reg_email", "")
+                
+                if name and email and "@" in email:
+                    key = "DEMO-" + str(uuid.uuid4())[:8]
+                    
+                    # 1. Zet direct de keys goed
+                    st.session_state.license_key = key
+                    st.session_state.local_user_data = {"name": name, "email": email}
+                    st.query_params["license"] = key # Update URL
+                    
+                    # 2. Opslaan (Dit vertraagt iets, maar in callback is dat oké)
+                    save_progress(name=name, email=email, start_date=str(datetime.now().date()))
+                    
+                    # 3. Mailen (Kan even duren, maar UI blijft stabiel)
+                    try:
+                        send_login_email(email, name, key)
+                    except:
+                        pass # Faal stil als mail niet werkt, login gaat voor
+                else:
+                    st.session_state.login_error = "Vul alsjeblieft je naam en een geldig emailadres in."
+
             with tab_signup:
                 with st.form("lp_signup"):
                     st.write("Maak binnen 10 seconden een account aan.")
-                    name = st.text_input("Voornaam")
-                    email = st.text_input("Emailadres")
-                    submitted = st.form_submit_button("🚀 Start Gratis Demo", type="primary", use_container_width=True)
+                    # BELANGRIJK: We gebruiken nu keys hieronder
+                    st.text_input("Voornaam", key="reg_name") 
+                    st.text_input("Emailadres", key="reg_email")
                     
-                    if submitted:
-                        if name and email and "@" in email:
-                            key = "DEMO-" + str(uuid.uuid4())[:8]
-                            
-                            # 1. Eerst de status opslaan in de sessie (Belangrijkst!)
-                            st.session_state.license_key = key
-                            st.session_state.local_user_data = {"name": name, "email": email} # Direct inladen voor snelheid
-                            
-                            # 2. Opslaan in database (op de achtergrond)
-                            save_progress(name=name, email=email, start_date=str(datetime.now().date()))
-                            
-                            # 3. Email sturen
-                            with st.spinner("Account aanmaken..."):
-                                send_login_email(email, name, key)
-                            
-                            # 4. URL updaten
-                            st.query_params["license"] = key
-                            
-                            # 5. Direct herladen zonder vertraging
-                            st.rerun()
-                        else:
-                            st.error("Vul je naam en een geldig emailadres in.")
+                    # BELANGRIJK: on_click triggert de functie VÓÓR de herlaadactie
+                    st.form_submit_button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
+
+                if "login_error" in st.session_state:
+                    st.error(st.session_state.login_error)
+                    del st.session_state.login_error
 
             with tab_login:
                 st.write("Welkom terug, creator!")
-                exist_key = st.text_input("Jouw Licentiecode:", type="password") # Password type verbergt het, wel zo netjes
+                exist_key = st.text_input("Jouw Licentiecode:", type="password")
                 if st.button("Inloggen", type="secondary", use_container_width=True):
                     if exist_key:
                         st.session_state.license_key = exist_key
