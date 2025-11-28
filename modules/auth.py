@@ -175,7 +175,7 @@ def save_script_to_library(topic, content):
     library.insert(0, {"id": str(uuid.uuid4()), "date": str(datetime.now().date()), "topic": topic, "content": content})
     save_progress(library=library)
 
-# --- MAIL FUNCTIE (HYBRIDE: RENDER + LOKAAL) ---
+# --- MAIL FUNCTIE (HYBRIDE: RENDER + LOKAAL - SSL VERSIE) ---
 
 def send_login_email(to_email, name, license_key):
     # Helper om config op te halen (eerst Env, dan Secrets)
@@ -186,7 +186,8 @@ def send_login_email(to_email, name, license_key):
         except: return default
 
     smtp_server = get_conf("SMTP_SERVER", "smtp.strato.com")
-    smtp_port = int(get_conf("SMTP_PORT", 587))
+    # GEWIJZIGD: Standaard poort 465 voor SSL
+    smtp_port = int(get_conf("SMTP_PORT", 465))
     smtp_user = get_conf("SMTP_EMAIL")
     smtp_password = get_conf("SMTP_PASSWORD")
 
@@ -220,18 +221,17 @@ def send_login_email(to_email, name, license_key):
     
     msg.attach(MIMEText(html_body, "html"))
 
-    # 3. Versturen via Strato (STARTTLS)
-try:
-        # GEWIJZIGD: Gebruik SMTP_SSL direct
-        server = smtplib.SMTP_SSL(smtp_server, smtp_port) 
-        # server.set_debuglevel(1) 
+    # 3. Versturen via Strato (SSL) - STABIELE METHODE VOOR RENDER
+    try:
+        # GEWIJZIGD: Directe SSL verbinding (beter voor Render)
+        server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+        # server.set_debuglevel(1) # Zet aan voor debuggen in logs
         
-        # Geen starttls() meer nodig bij SSL
         server.login(smtp_user, smtp_password)
         server.sendmail(smtp_user, to_email, msg.as_string())
         server.quit()
             
-        print(f"✅ Mail verzonden via Strato naar {to_email}")
+        print(f"✅ Mail verzonden via Strato (SSL) naar {to_email}")
         return True
     except Exception as e:
         print(f"❌ SMTP Fout: {e}")
