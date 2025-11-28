@@ -253,6 +253,11 @@ def render_landing_page():
     with c1:
         with st.container(border=True):
             st.markdown("#### 👋 Start direct (gratis)")
+            
+            # CHECK VOOR SUCCES MELDING
+            if "signup_msg" in st.session_state and st.session_state.signup_msg:
+                 st.success(st.session_state.signup_msg)
+
             tab_signup, tab_login = st.tabs(["Nieuw account", "Inloggen"])
             
             def finish_signup():
@@ -268,6 +273,9 @@ def render_landing_page():
                     
                     email_thread = threading.Thread(target=send_login_email, args=(email, name, key))
                     email_thread.start()
+                    
+                    # SET SUCCES MESSAGE VOOR UI
+                    st.session_state.signup_msg = f"✅ De email is verzonden naar {email}! Check je inbox (en spam)."
                 else:
                     st.session_state.login_error = "Vul alsjeblieft je naam en een geldig emailadres in."
 
