@@ -249,11 +249,22 @@ if st.session_state.page == "home":
     
     st.markdown(metrics_html, unsafe_allow_html=True)
 
+# ... (na de metrics html) ...
+
     if st.button("🚨 Panic button: ik heb nu een idee nodig!", use_container_width=True, type="primary"):
         if auth.check_ai_limit():
             with st.spinner("🚀 AI scant viral kansen in jouw niche..."):
                 script = ai_coach.generate_instant_script(niche)
                 auth.track_ai_usage()
+                
+                # --- FIX: Oude afbeeldingen verwijderen ---
+                # Dit voorkomt dat je een plaatje van de 'Viral Maker' ziet bij je Panic script
+                if "generated_img_url" in st.session_state:
+                    del st.session_state.generated_img_url
+                if "generated_img" in st.session_state:
+                    del st.session_state.generated_img
+                # ------------------------------------------
+                    
                 st.session_state.last_script = script
                 go_studio(); st.rerun()
         else:
@@ -485,7 +496,7 @@ if st.session_state.page == "studio":
                         st.rerun()
                     else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
 
-        # --- TAB 2: CONVERSIE / SALES ---
+# --- TAB 2: CONVERSIE / SALES ---
         with tab_conv:
             with st.form("sales_form"):
                 prod = st.text_input("Product/dienst:")
@@ -495,10 +506,19 @@ if st.session_state.page == "studio":
             if sales_submitted:
                 if check_feature_access("Sales Mode"):
                     if auth.check_ai_limit():
-                        with st.spinner("💰 Psychologische triggers verwerken in script..."):
+                        with st.spinner("💰 Psychologische triggers verwerken & visual maken..."):
+                            # 1. Script genereren
                             st.session_state.last_script = ai_coach.generate_sales_script(prod, pain, "Story", niche)
+                            
+                            # --- FIX: Nieuwe afbeelding genereren ---
+                            # Dit overschrijft de oude foto van de Viral Maker
+                            st.session_state.generated_img_url = ai_coach.generate_viral_image(f"Product shot: {prod}", "Clean & Aesthetic", niche)
+                            # ----------------------------------------
+                            
                             auth.track_ai_usage()
-                            add_xp(10); st.session_state.current_topic = f"Sales: {prod}"; st.rerun()
+                            add_xp(10)
+                            st.session_state.current_topic = f"Sales: {prod}"
+                            st.rerun()
                     else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
                 else:
                     if st.session_state.golden_tickets > 0: st.error("Gebruik eerst een ticket in het Tools menu of upgrade!")
@@ -576,8 +596,8 @@ if st.session_state.page == "tools":
     with st.expander("📦 Passief inkomen bedenker (PRO)"):
         st.info("💡 **Doel:** Bedenk een digitaal product om geld te verdienen.")
         if check_feature_access("Product bedenker"):
-             tgt = st.text_input("Voor wie is het? (Doelgroep)")
-             if st.button("Genereer Businessplan", type="primary"):
+             tgt = st.text_input("Wie is de doelgroep?:")
+             if st.button("Genereer businessplan:", type="primary"):
                  if auth.check_ai_limit():
                      with st.spinner("Brainstormen..."):
                         plan = ai_coach.generate_digital_product_plan(niche, tgt); st.markdown(plan)
@@ -592,7 +612,7 @@ if st.session_state.page == "tools":
         st.info("💡 **Doel:** Maak in één keer een hele serie scripts om kijkers vast te houden.")
         if check_feature_access("Serie generator"):
             stpc = st.text_input("Onderwerp van de serie:")
-            if st.button("Bouw Serie", type="primary"): 
+            if st.button("Bouw serie", type="primary"): 
                 if auth.check_ai_limit():
                     with st.spinner("Schrijven..."):
                         st.markdown(ai_coach.generate_series_ideas(stpc, niche))
