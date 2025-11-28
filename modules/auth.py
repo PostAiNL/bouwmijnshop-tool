@@ -221,11 +221,12 @@ def send_login_email(to_email, name, license_key):
     msg.attach(MIMEText(html_body, "html"))
 
     # 3. Versturen via Strato (STARTTLS)
-    try:
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.set_debuglevel(1) # Zet aan voor debuggen
+try:
+        # GEWIJZIGD: Gebruik SMTP_SSL direct
+        server = smtplib.SMTP_SSL(smtp_server, smtp_port) 
+        # server.set_debuglevel(1) 
         
-        server.starttls()
+        # Geen starttls() meer nodig bij SSL
         server.login(smtp_user, smtp_password)
         server.sendmail(smtp_user, to_email, msg.as_string())
         server.quit()
