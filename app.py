@@ -5,6 +5,7 @@ import datetime
 import json
 import time
 import os
+import uuid
 import base64
 import streamlit.components.v1 as components 
 from modules import analytics, ui, auth, ai_coach, data_loader
@@ -204,7 +205,7 @@ if has_reward and not is_pro:
 if st.session_state.page not in ["privacy", "terms", "contact"]:
     if not st.session_state.user_niche:
         st.info("Welkom! Wat is je niche?")
-        n = st.text_input("Niche:", placeholder="bv. Kapper")
+        n = st.text_input("Niche:", placeholder="Bijvoorbeeld: Kapper")
         if st.button("Start", type="primary"):
             if n: st.session_state.user_niche = n; auth.save_progress(niche=n, xp=50); st.rerun()
         st.stop() # Stop hier zodat de rest van de app niet laadt zonder niche
@@ -283,7 +284,7 @@ if st.session_state.page == "home":
             
     trend = st.session_state.niche_trend
 
-    # Strakkere Trend Box
+# Strakkere Trend Box
     st.markdown(f"""
     <div class="trend-box" style="margin-top: 15px;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -295,20 +296,25 @@ if st.session_state.page == "home":
     </div>
     """, unsafe_allow_html=True)
     
-    # Knoppen
-    c_trend1, c_trend2 = st.columns([1, 4])
+    # Knoppen Layout
+    # [1, 5] zorgt dat de refresh knop klein blijft (vierkant) en de actieknop breed
+    c_trend1, c_trend2 = st.columns([1, 5], gap="small")
+    
     with c_trend1:
-        if st.button("🔄", help="Nieuwe trend zoeken"):
+        # De refresh knop
+        if st.button("🔄", key="btn_refresh_trend", help="Nieuwe trend zoeken", use_container_width=True):
             if auth.check_ai_limit():
-                # FIX: Cache breken door versie te verhogen
+                # Cache breken
                 st.session_state.trend_version += 1
                 if "niche_trend" in st.session_state: del st.session_state.niche_trend
                 auth.track_ai_usage()
                 st.rerun()
             else:
-                 st.error("🛑 Daglimiet bereikt (10/10). Kom morgen terug of upgrade naar PRO!")
+                 st.error("Limit!")
+
     with c_trend2:
-        if st.button("✍️ Gebruik deze trend", use_container_width=True, type="primary"):
+        # De actie knop
+        if st.button("✍️ Gebruik deze trend", key="btn_use_trend", use_container_width=True, type="primary"):
             st.session_state.last_script = f"**Video Concept: {trend.get('title')}**\n\n**Geluid:** {trend.get('sound')}\n\n**Visueel:** {trend.get('desc')}\n\n**Script:**\n(Jouw tekst hier...)"
             st.session_state.generated_img = f"Een shot passend bij de trend: {trend.get('title')}"
             st.session_state.generated_img_url = ai_coach.generate_viral_image(trend.get('title'), "Trendy", niche)
@@ -539,20 +545,20 @@ if st.session_state.page == "studio":
     else:
         with tab_gen:
             # Tabbladen
-            sub_viral, sub_conv, sub_vis, sub_hook = st.tabs(["👀 Viral Script", "📈 Sales Script (PRO)", "🎨 Visuals (PRO)", "🪝 Hook Tester"])
+            sub_viral, sub_conv, sub_vis, sub_hook = st.tabs(["👀 Viral script", "📈 Script (PRO)", "🎨 Visuals (PRO)", "🪝 Hook tester"])
             
             # --- A. VIRAL SCRIPT (GRATIS) ---
             with sub_viral:
                 with st.form("viral_form"):
-                    st.markdown("### 🎬 Script Generator")
+                    st.markdown("### 🎬 Script generator")
                     topic = st.text_input("Onderwerp:", placeholder="Waar gaat de video over?")
                     tone = st.radio("Toon", ["Energiek ⚡", "Rustig 😌", "Grappig 😂"], horizontal=True)
                     
                     # AANGEPAST: Formats met uitleg
                     format_options = [
-                        "Talking Head 🗣️ (Jij praat direct in de camera)",
+                        "Talking head 🗣️ (Jij praat direct in de camera)",
                         "Vlog 🤳 (Dag uit het leven / op pad)",
-                        "Green Screen 🖼️ (Jij voor een nieuwsbericht/plaatje)"
+                        "Green screen 🖼️ (Jij voor een nieuwsbericht/plaatje)"
                     ]
                     fmt_selection = st.selectbox("Format:", format_options)
                     
@@ -578,13 +584,13 @@ if st.session_state.page == "studio":
                 # Check of gebruiker PRO is of een trial heeft
                 if check_feature_access("Sales Mode"):
                     with st.form("sales_form"):
-                        st.markdown("### 📈 Sales Script")
+                        st.markdown("### 📈 Sales script")
                         st.caption("Gebruik psychologische triggers om te verkopen.")
                         
-                        prod = st.text_input("Product of Dienst:", placeholder="bv. Mijn E-book over afvallen")
-                        pain = st.text_input("Pijnpunt van klant:", placeholder="bv. Geen tijd om te sporten")
+                        prod = st.text_input("Product of Dienst:", placeholder="Bijvoorbeeld: Mijn E-book over afvallen")
+                        pain = st.text_input("Pijnpunt van klant:", placeholder="Bijvoorbeeld: Geen tijd om te sporten")
                         
-                        sales_submitted = st.form_submit_button("✍️ Schrijf Sales Script (+10 XP)", type="primary")
+                        sales_submitted = st.form_submit_button("✍️ Schrijf sales script (+10 XP)", type="primary")
 
                     if sales_submitted:
                         if auth.check_ai_limit():
@@ -597,52 +603,42 @@ if st.session_state.page == "studio":
                     # PRO LOCK WEERGAVE
                     # Laat de gebruiker eventueel een ticket inzetten als ze die hebben
                     if st.session_state.golden_tickets > 0:
-                        st.info(f"Je hebt {st.session_state.golden_tickets} Golden Tickets. Wil je er eentje inzetten?")
+                        st.info(f"Je hebt {st.session_state.golden_tickets} Golden tickets. Wil je er eentje inzetten?")
                         if st.button("🎫 Zet Golden Ticket in (24u toegang)", key="ticket_sales"):
-                            use_golden_ticket("Sales Mode")
+                            use_golden_ticket("Sales mode")
                     
                     # Toon het slotje
-                    ui.render_locked_section("Sales Mode", "Verander kijkers in kopers met psychologische scripts.")
+                    ui.render_locked_section("Sales mode", "Verander kijkers in kopers met psychologische scripts.")
 
-# --- C. VISUALS (PRO LOCKED + TICKET OPTIE) ---
+            # --- C. VISUALS (PRO LOCKED) ---
             with sub_vis:
-                # 1. Check toegang (Pro OF tijdelijk via Ticket)
-                if check_feature_access("Creative Visuals"):
-                    st.markdown("### 🎨 Creative Generator")
+                # Alleen voor ECHTE PRO gebruikers (Visuals zijn duur, dus misschien geen tickets hiervoor?)
+                # Of als je tickets wilt toestaan, gebruik dan check_feature_access("Visuals") zoals hierboven.
+                # Hieronder staat hij ingesteld op STRICT PRO (geen tickets).
+                if is_pro:
+                    st.markdown("### 🎨 Creative generator")
                     st.caption("Maak thumbnails, achtergronden of moodboards zonder script.")
                     
-                    vis_prompt = st.text_input("Wat wil je zien?", placeholder="Bv. Een luxe kantoor met neon verlichting...")
-                    vis_style = st.selectbox("Stijl", ["Fotorealistisch 📸", "Cinematic 🎬", "3D Render 🧊", "Anime 🌸", "Minimalistisch ⚪"])
+                    vis_prompt = st.text_input("Wat wil je zien?", placeholder="Bijvoorbeeld: Een luxe kantoor met neon verlichting...")
+                    vis_style = st.selectbox("Stijl", ["Fotorealistisch 📸", "Cinematic 🎬", "3D render 🧊", "Anime 🌸", "Minimalistisch ⚪"])
                     
-                    if st.button("✨ Genereer Visual (+5 XP)", type="primary"):
+                    if st.button("✨ Genereer visual (+5 XP)", type="primary"):
                         if auth.check_ai_limit():
                             with st.spinner("🎨 Aan het schilderen..."):
                                 img_url = ai_coach.generate_viral_image(vis_prompt, vis_style, niche)
-                                auth.track_ai_usage()
-                                add_xp(5)
-                                st.session_state.current_visual = img_url
-                                st.rerun()
-                        else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
-                
-                # 2. Geen toegang? Toon Ticket knop + Slotje
+                                auth.track_ai_usage(); add_xp(5); st.session_state.current_visual = img_url; st.rerun()
+                        else: st.error("Daglimiet bereikt.")
                 else:
-                    # Als ze tickets hebben, toon de knop om te unlocken
-                    if st.session_state.golden_tickets > 0:
-                        st.info(f"Je hebt {st.session_state.golden_tickets} Golden Tickets. Wil je er eentje inzetten?")
-                        if st.button("🎫 Zet Golden Ticket in (24u toegang)", key="ticket_visuals"):
-                            use_golden_ticket("Creative Visuals")
-                    
-                    # Het slotje (verwijst naar upgrade pagina)
-                    ui.render_locked_section("Creative Visuals", "Genereer onbeperkt unieke AI afbeeldingen voor je video's.")
+                    ui.render_locked_section("Creative visuals", "Genereer onbeperkt unieke AI afbeeldingen voor je video's.")
 
             # --- D. HOOK TESTER (GRATIS) ---
             with sub_hook:
-                st.markdown("### 🪝 Viral Hook Tester")
+                st.markdown("### 🪝 Viral hook tester")
                 st.caption("Een goede hook is 80% van je succes.")
                 
                 user_hook = st.text_input("Jouw openingszin:", placeholder="Bijvoorbeeld: Stop met scrollen als je...")
                 
-                if st.button("🚀 Test & Verbeter", type="primary"):
+                if st.button("🚀 Test & verbeter", type="primary"):
                     if user_hook:
                         if auth.check_ai_limit():
                             with st.spinner("⚖️ De jury overlegt..."):
@@ -660,7 +656,6 @@ if st.session_state.page == "studio":
                                     for alt in res['alternatives']: st.info(f"🔥 {alt}")
                         else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
                     else: st.warning("Vul eerst een zin in!")
-
     # ==========================================
     # 4. BIBLIOTHEEK (SLIM GEMAAKT)
     # ==========================================
@@ -698,6 +693,7 @@ if st.session_state.page == "studio":
                     if st.button("🗑️ Verwijderen", key=f"del_{item['id']}", type="secondary"):
                         auth.delete_script_from_library(item['id'])
                         st.rerun()
+
 
 # ==========================
 # 🛠️ TOOLS
@@ -837,65 +833,92 @@ if st.session_state.page == "stats":
 # ==========================
 if st.session_state.page == "settings":
     if st.button("⬅️ Terug", type="secondary"): go_home(); st.rerun()
-    st.markdown("## ⚙️ Instellingen")
+    st.markdown("## ⚙️ Jouw Profiel")
+    
+    st.info("💡 **Waarom dit invullen?**\nHoe beter de AI weet wie jij bent, hoe minder jij de scripts hoeft aan te passen. Vul dit één keer goed in.")
     
     with st.container(border=True):
-        new_niche = st.text_input("Niche:", value=niche)
+        st.markdown("### 1. Jouw Expertise")
+        new_niche = st.text_input(
+            "Waar gaan je video's over? (Je niche)", 
+            value=niche, 
+            placeholder="Bijv. Kapper, Boekhouder, Fitness voor moeders...",
+            help="Dit gebruikt de AI om relevante onderwerpen te bedenken."
+        )
         
-        st.markdown("### 🗣️ Jouw stijl (brand voice)")
+        st.markdown("---")
         
-        # Oude dropdown optie, maar nu slim met custom voice support
+        st.markdown("### 2. Jouw Schrijfstijl")
+        st.caption("Hoe moet de AI klinken als hij voor jou schrijft?")
+        
+        # UITGEBREIDE LIJST MET STIJLEN
+        voice_options = [
+            "De Expert 🧠 (Betrouwbaar, feitelijk & professioneel)",
+            "De Beste Vriend(in) 💖 (Enthousiast, warm & toegankelijk)",
+            "De Grappenmaker 😂 (Humoristisch, luchtig & zelfspot)",
+            "De Motivator 💪 (Energiek, krachtig & actiegericht)",
+            "De Verhalenverteller 📚 (Rustig, meeslepend & beeldend)",
+            "De Trendwatcher 🚀 (Vlot, snel & 'Gen-Z' taalgebruik)",
+            "De Harde Waarheid 🔥 (Direct, confronterend & no-nonsense)",
+            "Custom (Mijn eigen stijl) 🤖"
+        ]
+        
+        # Mapping om de huidige stem te vinden
         current_voice = st.session_state.brand_voice
-        voice_options = ["De expert 🧠", "De beste vriendin 💖", "De harde waarheid 🔥", "De grappenmaker 😂", "Custom (gekloond) 🤖"]
-        
-        # Zorg dat de huidige stem in de lijst staat, anders default
         idx = 0
-        if current_voice in voice_options:
-            idx = voice_options.index(current_voice)
-        elif current_voice not in voice_options:
-            # Als we een custom voice hebben die niet in de lijst staat
-            if "Custom (gekloond) 🤖" not in voice_options: voice_options.append("Custom (gekloond) 🤖")
-            idx = voice_options.index("Custom (gekloond) 🤖")
-            
-        voice = st.selectbox("Kies je stem:", voice_options, index=idx)
+        for i, option in enumerate(voice_options):
+            parts = option.split(" ")
+            if len(parts) > 1:
+                first_word = parts[1] 
+                if first_word in current_voice:
+                    idx = i
+                    break
+        
+        voice_selection = st.selectbox("Kies een standaard stijl:", voice_options, index=idx)
+        clean_voice = voice_selection.split(" (")[0].strip()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
         
         # --- NIEUWE CLONE MY VOICE FUNCTIE ---
-        with st.expander("🤖 Kloon mijn stem (beta)"):
-            st.info("Plak hieronder 3 van je beste captions of scripts. De AI analyseert jouw unieke stijl.")
-            sample_text = st.text_area("Plak je teksten hier:", height=150)
+        with st.expander("🤖 Of... Laat AI jouw eigen stijl leren (Beta)"):
+            st.write("**Wil je dat de scripts klinken alsof jij ze zelf hebt geschreven?**")
+            st.write("Plak hieronder 3 teksten van je oude posts. De AI analyseert jouw woordgebruik.")
             
-            if st.button("🧬 Analyseer & kloon Stijl"):
+            sample_text = st.text_area("Plak jouw teksten hier:", height=150, placeholder="Hoi allemaal! Vandaag wil ik het hebben over...")
+            
+            if st.button("🧬 Analyseer mijn schrijfstijl"):
                 if sample_text and len(sample_text) > 50:
                     if auth.check_ai_limit():
-                        with st.spinner("Jouw DNA analyseren..."):
+                        with st.spinner("🔍 Jouw taalgebruik analyseren..."):
                             custom_style = ai_coach.analyze_writing_style(sample_text)
                             auth.track_ai_usage()
                             
                             # Opslaan
                             st.session_state.brand_voice = custom_style
                             auth.save_progress(brand_voice=custom_style)
-                            st.success(f"Gelukt! Jouw nieuwe stijl: '{custom_style}'")
-                            time.sleep(2)
+                            st.balloons()
+                            st.success(f"✅ Gelukt! De AI heeft jouw stijl geleerd: '{custom_style}'")
+                            time.sleep(3)
                             st.rerun()
                     else:
                         st.error("Daglimiet bereikt.")
                 else:
-                    st.warning("Plak iets meer tekst voor een goede analyse.")
-        # -------------------------------------
+                    st.warning("Plak iets meer tekst (minimaal 1 zin) voor een goede analyse.")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        if st.button("Opslaan", type="primary"): 
-            # Alleen opslaan als we niet net de clone knop hebben gebruikt (die slaat al op)
-            if voice != "Custom (gekloond) 🤖":
-                st.session_state.brand_voice = voice
+        if st.button("💾 Profiel Opslaan", type="primary", use_container_width=True): 
+            if "Custom" not in clean_voice:
+                st.session_state.brand_voice = clean_voice
             
             auth.save_progress(niche=new_niche, brand_voice=st.session_state.brand_voice)
-            st.success("Instellingen opgeslagen!")
+            st.toast("✅ Opgeslagen! De AI is nu getraind op jou.")
             time.sleep(1)
             st.rerun()
 
+    # --- HIER GING HET FOUT BIJ DE VORIGE KEER (nu staat het goed uitgelijnd) ---
     if is_pro:
-        st.success("✅ Je bent een PRO lid. Geniet van alle functies!")
-        st.info(f"Level: {st.session_state.level} | XP: {st.session_state.xp}/100")
+        st.success(f"🏆 Je bent een **PRO Creator** (Level {st.session_state.level})")
     else:
         st.markdown("###")
         
@@ -916,20 +939,17 @@ if st.session_state.page == "settings":
         </div>
         """, unsafe_allow_html=True)
         
-        # Buy Button (PayPro Link Updated)
         st.link_button("👉 Claim 25% korting & start direct", "https://www.paypro.nl/product/PostAi_PRO_-_Maandelijks/125181", type="primary", use_container_width=True)
         st.caption("Je ontvangt direct je licentiecode per mail.")
         
-        st.markdown("---")
-        
         with st.expander("Heb je al een licentiecode?"):
             c = st.text_input("Vul je licentiecode in:")
-            if st.button("Activeer Licentiecode", type="primary"): auth.activate_pro(c)
+            if st.button("Activeer", type="primary"): auth.activate_pro(c)
             
-    # --- NIEUW: HIER IS HET ACCOUNT BLOK NU ---
+    # --- ACCOUNT GEGEVENS ---
     st.markdown("<br>", unsafe_allow_html=True)
-    with st.expander("🔑 Account & licentiecode (gegevens)", expanded=False):
-        st.caption("Dit is jouw unieke sleutel. Bewaar deze om later weer in te loggen.")
+    with st.expander("🔑 Mijn Accountgegevens", expanded=False):
+        st.caption("Bewaar deze code goed. Hiermee kun je op andere apparaten inloggen.")
         st.code(st.session_state.license_key, language=None)
         st.info("Tip: Sla deze pagina op in je favorieten ⭐")
 
