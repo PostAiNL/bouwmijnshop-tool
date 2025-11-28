@@ -223,7 +223,7 @@ def send_login_email(to_email, name, license_key):
     # 3. Versturen via Strato (STARTTLS)
     try:
         server = smtplib.SMTP(smtp_server, smtp_port)
-        # server.set_debuglevel(1) # Zet aan voor debuggen
+        server.set_debuglevel(1) # Zet aan voor debuggen
         
         server.starttls()
         server.login(smtp_user, smtp_password)
