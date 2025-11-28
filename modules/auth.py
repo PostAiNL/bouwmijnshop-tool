@@ -6,9 +6,12 @@ import uuid
 import time
 import datetime
 import threading
-import requests  # <--- ESSENTIEEL VOOR RESEND
 from datetime import datetime, timedelta
 from supabase import create_client, Client
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
 
 # CONFIG
 PRO_KEY_FIXED = "123-456-789"
@@ -164,21 +167,25 @@ def save_script_to_library(topic, content):
     library.insert(0, {"id": str(uuid.uuid4()), "date": str(datetime.now().date()), "topic": topic, "content": content})
     save_progress(library=library)
 
-# --- RESEND EMAIL FUNCTIE (API) ---
-
 def send_login_email(to_email, name, license_key):
-    # 1. Haal de API key op uit Render
-    resend_key = os.getenv("RESEND_API_KEY")
-    if not resend_key:
-        # Fallback voor lokaal testen als je het in secrets.toml hebt
-        if "RESEND_API_KEY" in st.secrets:
-            resend_key = st.secrets["RESEND_API_KEY"]
-        else:
-            print("⚠️ Geen RESEND_API_KEY gevonden!")
-            return False
+    # 1. Gegevens ophalen uit Render Environment Variables
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.strato.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587")) # Nu standaard op 587
+    smtp_user = os.getenv("SMTP_EMAIL")     # Hier komt dus support@postaiapp.nl
+    smtp_password = os.getenv("SMTP_PASSWORD")
 
-    base_url = os.getenv("APP_PUBLIC_URL") or "https://www.postaiapp.nl"
+    if not smtp_user or not smtp_password:
+        print("⚠️ SMTP gegevens ontbreken in Render settings!")
+        return False
+
+    base_url = os.getenv("APP_PUBLIC_URL") or "https://postaiapp.onrender.com"
     magic_link = f"{base_url}/?license={license_key}"
+
+    # 2. Email samenstellen
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"🚀 Jouw toegang tot PostAi"
+    msg["From"] = f"PostAi Support <{smtp_user}>" # Dit wordt: PostAi Support <support@postaiapp.nl>
+    msg["To"] = to_email
 
     html_body = f"""
     <html><body style="font-family: Arial, sans-serif; color: #333;">
@@ -194,37 +201,34 @@ def send_login_email(to_email, name, license_key):
         </div>
     </body></html>
     """
+    
+    msg.attach(MIMEText(html_body, "html"))
 
+    # 3. Versturen via Poort 587 (STARTTLS)
     try:
-        # Dit gaat via de API (poort 443), dus geen blokkades meer!
-        response = requests.post(
-            "https://api.resend.com/emails",
-            json={
-                "from": "PostAi Support <support@postaiapp.nl>",
-                "to": [to_email],
-                "subject": "🚀 Jouw toegang tot PostAi",
-                "html": html_body
-            },
-            headers={
-                "Authorization": f"Bearer {resend_key}",
-                "Content-Type": "application/json"
-            }
-        )
-        if response.status_code in [200, 201]:
-            print(f"✅ Resend Mail verzonden naar {to_email}")
-            return True
-        else:
-            print(f"❌ Resend Fout: {response.text}")
-            return False
+        # Let op: Hier gebruiken we .SMTP() in plaats van .SMTP_SSL()
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.set_debuglevel(0) # Zet op 1 als je foutmeldingen wilt zien in de logs
+        
+        # De beveiligde verbinding starten
+        server.starttls() 
+        
+        # Inloggen
+        server.login(smtp_user, smtp_password)
+        
+        # Versturen
+        server.sendmail(smtp_user, to_email, msg.as_string())
+        server.quit()
+            
+        print(f"✅ Mail verzonden via Strato (587) naar {to_email}")
+        return True
     except Exception as e:
-        print(f"❌ API Fout: {e}")
+        print(f"❌ SMTP Fout: {e}")
         return False
 
-# --- LANDING PAGE (GEOPTIMALISEERD VOOR MOBIEL & DUBBEL-KLIK FIX) ---
-# --- VERVANG DEZE FUNCTIE IN auth.py ---
-
+# --- LANDING PAGE (VOLGORDE: FORMULIER EERST) ---
 def render_landing_page():
-    # Header compacter gemaakt (minder padding)
+    # Compactere header
     st.markdown("""
         <div style='text-align:center; padding-bottom: 10px; padding-top: 0px;'>
             <h1 style='color:#111827; margin-bottom:0; font-size: 2rem;'>🚀 PostAi</h1>
@@ -232,10 +236,10 @@ def render_landing_page():
         </div>
     """, unsafe_allow_html=True)
 
-    # Kolomverdeling (Links formulier, Rechts tekst)
+    # LET OP: We zetten c1 (Formulier) EERST in de lijst
     c1, c2 = st.columns([1, 1.2]) 
     
-    # 1. HET FORMULIER (Links/Boven)
+    # 1. HET FORMULIER (In kolom c1, dus links/boven)
     with c1:
         with st.container(border=True):
             st.markdown("#### 👋 Start direct (Gratis)")
@@ -259,9 +263,10 @@ def render_landing_page():
                     st.session_state.login_error = "Vul alsjeblieft je naam en een geldig emailadres in."
 
             with tab_signup:
-                st.write("Maak binnen 10 sec een account aan.") # Iets kortere tekst
+                st.write("Maak binnen 10 sec een account aan.")
                 st.text_input("Voornaam", key="reg_name") 
                 st.text_input("Emailadres", key="reg_email")
+                # Directe callback op de knop
                 st.button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
 
                 if "login_error" in st.session_state:
@@ -279,9 +284,9 @@ def render_landing_page():
                             del st.session_state.local_user_data
                         st.rerun()
 
-    # 2. DE TEKST (Rechts/Onder)
+    # 2. DE TEKST (In kolom c2, dus rechts/onder)
     with c2:
-        # Hier staat de Tip nu, zodat hij niet in de weg zit
+        # Tip onderaan de tekst kolom
         st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang.")
         
         st.markdown("### 📈 Stop met gokken.")
