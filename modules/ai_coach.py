@@ -263,9 +263,8 @@ def get_challenge_tasks():
 def analyze_analytics_screenshot(uploaded_file):
     """
     ECHTE ANALYSE: Stuurt het plaatje naar GPT-4o voor feedback.
-    Versie 2.0: Met extra foutopsporing en null-checks.
+    Versie 3.0: Met extra foutopsporing en fallback.
     """
-    # Zorg dat de imports lokaal beschikbaar zijn voor deze functie
     import base64
     import json
 
@@ -274,8 +273,7 @@ def analyze_analytics_screenshot(uploaded_file):
 
     try:
         # 1. Zet plaatje om naar base64
-        # We gebruiken .getvalue() voor Streamlit uploaded files
-        uploaded_file.seek(0) # Reset pointer voor de zekerheid
+        uploaded_file.seek(0) 
         bytes_data = uploaded_file.getvalue()
         base64_image = base64.b64encode(bytes_data).decode('utf-8')
 
@@ -286,38 +284,37 @@ def analyze_analytics_screenshot(uploaded_file):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Je bent een TikTok expert. Analyseer deze screenshot. Geef JSON antwoord met keys: 'totaal_views' (getal of schatting), 'beste_video' (korte tekst), advies (2 zinnen concreet advies waarom de views stoppen). Als je het niet kan lezen, zet null."},
+                        {"type": "text", "text": "Je bent een TikTok expert. Analyseer deze screenshot. Geef JSON antwoord met keys: 'totaal_views' (getal of schatting), 'beste_video' (korte tekst), 'advies' (2 zinnen concreet advies waarom de views stoppen). Als je het niet kan lezen, zet null."},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                     ],
                 }
             ],
             max_tokens=400,
-            response_format={ "type": "json_object" } # Dwingt JSON af
+            response_format={ "type": "json_object" } 
         )
         
         # 3. Verwerk antwoord
         result_text = response.choices[0].message.content
         
-        # CHECK: Is het antwoord leeg?
-        if result_text is None:
+        if result_text:
+            clean_text = result_text.replace("```json", "").replace("```", "").strip()
+            data = json.loads(clean_text)
+            
+            # Veiligheid: Als een key ontbreekt, vul een standaardwaarde in
             return {
-                "totaal_views": 0, 
-                "beste_video": "Geen tekst", 
-                "advies": "AI gaf geen tekst terug. Probeer een duidelijkere screenshot."
+                "totaal_views": data.get("totaal_views", "Niet gevonden"),
+                "beste_video": data.get("beste_video", "Onbekend"),
+                "advies": data.get("advies", "De AI kon geen specifiek advies genereren uit deze screenshot.")
             }
 
-        # Schoonmaken (soms zet AI er ```json omheen)
-        clean_text = result_text.replace("```json", "").replace("```", "").strip()
-        
-        return json.loads(clean_text)
+        return {"advies": "Geen tekst teruggekregen van AI.", "beste_video": "-", "totaal_views": 0}
 
     except Exception as e:
-        # Print de error ook in je terminal/console voor debugging
         print(f"❌ Vision Error: {e}")
         return {
             "totaal_views": 0,
             "beste_video": "Fout",
-            "advies": f"Fout bij analyse: {str(e)}"
+            "advies": f"Er ging iets mis bij de analyse: {str(e)}"
         }
 
 def create_ics_file(niche):
