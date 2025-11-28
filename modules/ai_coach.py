@@ -383,17 +383,14 @@ def analyze_writing_style(sample_text):
     if llm_out: return llm_out
     return "Een authentieke, persoonlijke schrijfstijl."
 
-@st.cache_data(ttl=3600, show_spinner=False) # FIX: show_spinner=False toegevoegd
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_personalized_trend(niche, seed=0):
     """
     SLIMME TRENDS: Bedenkt een trend specifiek voor de niche.
+    De 'seed' zorgt voor variatie.
     """
     import json
     
-    ai_sys = f"Je bent een virale trendwatcher voor de niche '{niche}'. Bedenk 1 actueel, concreet video-format dat NU zou werken."
-    ai_user = "Geef antwoord in JSON formaat met de keys: 'title', 'desc' (korte uitleg wat je moet doen) en 'sound' (suggestie voor muziek/audio)."
-    
-    # Init client checken, want cache heeft eigen scope
     if not HAS_OPENAI or not client:
          return {
             "title": f"De {niche} Fout", 
@@ -401,14 +398,29 @@ def get_personalized_trend(niche, seed=0):
             "sound": "Trending Audio"
         }
 
+    sys_prompt = f"Je bent een virale trendwatcher voor de niche '{niche}'."
+    
+    # We voegen het variatienummer toe aan de vraag om cache te breken/nieuwe output te forceren
+    user_prompt = f"""
+    Bedenk Trend Variatie #{seed}.
+    Geef 1 actueel, concreet video-format dat NU zou werken. Het moet anders zijn dan je vorige antwoorden.
+    
+    Geef antwoord in JSON:
+    {{
+        "title": "Korte pakkende titel",
+        "desc": "Korte uitleg wat je moet doen (1 zin)",
+        "sound": "Suggestie voor muziek/audio"
+    }}
+    """
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": ai_sys},
-                {"role": "user", "content": ai_user}
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7,
+            temperature=0.9, # Hogere creativiteit
             response_format={ "type": "json_object" }
         )
         content = response.choices[0].message.content
@@ -416,9 +428,9 @@ def get_personalized_trend(niche, seed=0):
     except Exception as e:
         print(f"Trend Error: {e}")
         return {
-            "title": f"De {niche} Fout", 
-            "desc": "Laat zien wat iedereen fout doet en hoe jij het oplost.", 
-            "sound": "Trending Audio"
+            "title": f"De {niche} Analyse", 
+            "desc": "Film je scherm terwijl je een veelgemaakte fout analyseert.", 
+            "sound": "Suspense Music"
         }
 
 def check_feedback_quality(text):
