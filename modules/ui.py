@@ -21,22 +21,47 @@ def inject_style_and_hacks(brand_color="#10b981"):
         .block-container {{ padding-top: 1rem; padding-bottom: 5rem; max-width: 900px; }} 
         header[data-testid="stHeader"], [data-testid="stToolbar"], footer {{ display: none !important; }}
         
-        /* --- TEKST & LABELS --- */
-        .stMarkdown, .stMarkdown p, label, .stRadio label, .stSelectbox label, .stTextInput label {{
+        /* --- TEKST & LABELS (Labels boven de invoervelden) --- */
+        .stMarkdown, .stMarkdown p, label, .stSelectbox label, .stTextInput label, .stTextArea label {{
             color: #374151 !important;
         }}
-        div[data-baseweb="radio"] label {{
-            color: #111827 !important;
+        
+        /* --- SPECIFIEKE FIX VOOR RADIO BUTTONS --- */
+        div[data-testid="stRadio"] label p {{
+            color: #111827 !important; /* Diepzwart */
+            font-weight: 500 !important;
+        }}
+        div[data-testid="stRadio"] div[role="radiogroup"] {{
+            gap: 10px !important;
         }}
 
-        /* --- INPUTS & FORMULIEREN --- */
-        div[data-baseweb="input"] > div, div[data-baseweb="base-input"] > input, 
-        div[data-baseweb="textarea"] > textarea, div[data-baseweb="select"] > div {{
-            background-color: #ffffff !important; 
-            color: #000000 !important; 
-            border: 1px solid #e5e7eb !important;
-        }}
+        /* --- INPUTS & FORMULIEREN (HARDCORE FIX VOOR MOBIEL) --- */
         
+        /* 1. De container (het witte blokje) */
+        div[data-baseweb="input"] > div, 
+        div[data-baseweb="base-input"], 
+        div[data-baseweb="textarea"], 
+        div[data-baseweb="select"] > div {{
+            background-color: #ffffff !important; 
+            border: 1px solid #e5e7eb !important;
+            color: #000000 !important;
+        }}
+
+        /* 2. De tekst IN het veld (Het typen zelf) */
+        input[type="text"], input[type="number"], input[type="password"], textarea, .stTextArea textarea {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important; /* CRUCIAAL VOOR IPHONE */
+            caret-color: #000000 !important; /* De knipperende cursor */
+        }}
+
+        /* 3. Placeholder tekst (grijs ipv zwart, anders lijkt het al ingevuld) */
+        ::placeholder {{
+            color: #9ca3af !important;
+            -webkit-text-fill-color: #9ca3af !important;
+            opacity: 1 !important;
+        }}
+
         /* --- NIEUWE MINIMALISTISCHE TABS --- */
         div[data-baseweb="tab-list"] {{
             background-color: transparent !important;
@@ -191,28 +216,21 @@ def inject_style_and_hacks(brand_color="#10b981"):
     st.markdown(css, unsafe_allow_html=True)
 
     # 2. JS HACK (AGRESSIEVE STYLING)
-    # Hier zorgen we dat de Panic button ROOD wordt en de Trend button PAARS
     components.html("""
     <script>
         function styleButtons() {
             const buttons = window.parent.document.querySelectorAll('button');
             buttons.forEach(btn => {
-                // RODE PANIC BUTTON
                 if (btn.innerText.includes("Panic button")) {
                     btn.style.setProperty('background', 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)', 'important');
                     btn.style.setProperty('color', 'white', 'important');
                     btn.style.setProperty('border', '2px solid #fee2e2', 'important');
                     btn.style.setProperty('box-shadow', '0 4px 15px rgba(239, 68, 68, 0.4)', 'important');
-                    btn.onmouseenter = function() { this.style.setProperty('transform', 'scale(1.02)', 'important'); };
-                    btn.onmouseleave = function() { this.style.setProperty('transform', 'scale(1)', 'important'); };
                 }
-                // PAARSE TREND BUTTON
                 if (btn.innerText.includes("Gebruik deze trend")) {
                     btn.style.setProperty('background', 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', 'important');
                     btn.style.setProperty('color', 'white', 'important');
                     btn.style.setProperty('border', 'none', 'important');
-                    btn.onmouseenter = function() { this.style.setProperty('opacity', '0.9', 'important'); this.style.setProperty('transform', 'translateY(-2px)', 'important'); };
-                    btn.onmouseleave = function() { this.style.setProperty('opacity', '1', 'important'); this.style.setProperty('transform', 'translateY(0)', 'important'); };
                 }
             });
         }

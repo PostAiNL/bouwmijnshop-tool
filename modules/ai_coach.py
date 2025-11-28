@@ -54,12 +54,33 @@ def call_llm(system_prompt, user_prompt):
 # ==========================================
 
 def generate_script(topic, format_type, tone, hook, cta, niche, brand_voice="Expert"):
-    # 1. AI Modus
+    # 1. VERTAAL DE STIJL NAAR EEN INSTRUCTIE
+    # Hier bepalen we HOE de AI zich gedraagt per stijl
+    voice_instructions = {
+        "De Expert": "Je bent een autoriteit. Gebruik vakjargon waar nodig, wees feitelijk, rustig en betrouwbaar. Geen overdreven emoji's.",
+        "De Beste Vriend(in)": "Je bent super relatable en enthousiast. Gebruik 'jij en ik' taal, veel emoji's en klink alsof je tegen je beste vriend praat op WhatsApp.",
+        "De Grappenmaker": "Neem jezelf niet te serieus. Gebruik droge humor, zelfspot en misschien een sarcastische ondertoon. Maak het entertainend.",
+        "De Motivator": "Gebruik korte, krachtige zinnen. Gebruik HOOFDLETTERS voor nadruk. Je bent een coach die de kijker in actie wil krijgen. High energy!",
+        "De Verhalenverteller": "Begin rustig. Bouw spanning op. Gebruik beeldende woorden ('stel je voor...'). Focus op emotie en de reis van de held.",
+        "De Trendwatcher": "Gebruik snelle taal, Engelse termen (slang) die nu populair zijn op TikTok. Klink jong, vlot en 'in the know'.",
+        "De Harde Waarheid": "Wind er geen doekjes om. Wees direct, een beetje pijnlijk eerlijk en confronterend. Dit werkt goed voor controversiële topics."
+    }
+    
+    # Als de gebruiker een Custom stijl heeft (via de kloon functie), gebruiken we die tekst.
+    # Anders zoeken we de instructie op in de lijst hierboven.
+    persona_instruction = voice_instructions.get(brand_voice, brand_voice)
+
+    # 2. DE PROMPT
     ai_system = f"""
     Je bent een wereldklasse TikTok scriptwriter voor de niche '{niche}'. 
-    Jouw tone-of-voice is '{tone}' en je persona is '{brand_voice}'.
-    Je schrijft scripts die viraal gaan door hoge retentie.
+    
+    JOUW PERSONA & SCHRIJFSTIJL:
+    {persona_instruction}
+    
+    Extra toonaard instructie: {tone}.
+    Doel: Maximale retentie (kijkers vasthouden).
     """
+    
     ai_user = f"""
     Schrijf een TikTok script over: '{topic}'.
     Format: {format_type}.
@@ -67,17 +88,17 @@ def generate_script(topic, format_type, tone, hook, cta, niche, brand_voice="Exp
     Eindig met deze CTA: {cta}.
     
     Output formaat:
-    - **TITEL**
-    - **VISUELE HOOK (0-3s)**: Wat zien we?
-    - **AUDIO HOOK**: De eerste zin.
-    - **BODY**: De kernboodschap (kort en krachtig).
+    - **TITEL** (Clickbait waardig)
+    - **VISUELE HOOK (0-3s)**: Wat zien we? (Wees specifiek)
+    - **AUDIO HOOK**: De eerste zin (MOET de aandacht grijpen).
+    - **BODY**: De kernboodschap.
     - **CTA**: De afsluiter.
     """
     
     llm_out = call_llm(ai_system, ai_user)
     if llm_out: return llm_out
     
-    # 2. Fallback
+    # Fallback
     time.sleep(1)
     return f"**⚠️ AI Offline:** Kan script over {topic} niet genereren. Check je internet of API key."
 

@@ -107,6 +107,8 @@ def get_secret(key, default=None):
     except: pass
     return default
 
+# --- IN auth.py ---
+
 def check_ai_limit():
     user_data = load_progress()
     last_date = user_data.get("ai_last_date", "")
@@ -118,14 +120,20 @@ def check_ai_limit():
         current_count = 0
         save_progress(ai_last_date=today, ai_daily_count=0)
     
-    # HIER ZIJN JOUW LIMIETEN:
+    # Limieten: 50 voor PRO, 10 voor DEMO
     limit = 50 if is_pro() else 10
     
     return current_count < limit
 
+# 👇 DEZE FUNCTIE VEROORZAAKTE DE FOUT (Hij moet hier staan!)
+def track_ai_usage():
+    user_data = load_progress()
+    current = user_data.get("ai_daily_count", 0)
+    save_progress(ai_daily_count=current + 1)
+
 def get_ai_usage_text():
     user_data = load_progress()
-    limit = 50 if is_pro() else 10 # Ook hier aanpassen voor de weergave
+    limit = 50 if is_pro() else 10
     current = user_data.get("ai_daily_count", 0)
     return f"{current}/{limit}"
 
