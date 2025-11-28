@@ -383,14 +383,15 @@ def analyze_writing_style(sample_text):
     if llm_out: return llm_out
     return "Een authentieke, persoonlijke schrijfstijl."
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_personalized_trend(niche, seed=0):
+@st.cache_data(ttl=3600, show_spinner="🧠 Trend aan het analyseren...") 
+def get_personalized_trend(niche, seed):
     """
     SLIMME TRENDS: Bedenkt een trend specifiek voor de niche.
     De 'seed' zorgt voor variatie.
     """
     import json
     
+    # Check of AI beschikbaar is
     if not HAS_OPENAI or not client:
          return {
             "title": f"De {niche} Fout", 
@@ -400,10 +401,12 @@ def get_personalized_trend(niche, seed=0):
 
     sys_prompt = f"Je bent een virale trendwatcher voor de niche '{niche}'."
     
-    # We voegen het variatienummer toe aan de vraag om cache te breken/nieuwe output te forceren
+    # We gebruiken de seed in de prompt om de AI te dwingen iets nieuws te verzinnen
+    # Bijv: "Verzin optie 1", "Verzin optie 2", etc.
     user_prompt = f"""
-    Bedenk Trend Variatie #{seed}.
-    Geef 1 actueel, concreet video-format dat NU zou werken. Het moet anders zijn dan je vorige antwoorden.
+    Geef mij Viral Trend Optie #{seed} voor deze niche.
+    Het MOET een ander format zijn dan de vorige keer.
+    Geef 1 actueel, concreet video-format dat NU zou werken.
     
     Geef antwoord in JSON:
     {{
@@ -420,7 +423,7 @@ def get_personalized_trend(niche, seed=0):
                 {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.9, # Hogere creativiteit
+            temperature=1.0, # Zet temperatuur op MAXimaal voor meeste variatie
             response_format={ "type": "json_object" }
         )
         content = response.choices[0].message.content
