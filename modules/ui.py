@@ -38,42 +38,32 @@ def inject_style_and_hacks(brand_color="#10b981"):
         }}
         
         /* --- NIEUWE MINIMALISTISCHE TABS --- */
-        
-        /* De container van de tabs: transparant met dun lijntje onder */
         div[data-baseweb="tab-list"] {{
             background-color: transparent !important;
             border-bottom: 1px solid #e5e7eb !important;
-            gap: 20px !important; /* Ruimte tussen de tabs */
+            gap: 20px !important;
             padding-bottom: 0px !important;
         }}
-
-        /* De knoppen zelf (algemeen) */
         button[data-baseweb="tab"] {{
             background-color: transparent !important;
             border: none !important;
             padding-top: 0px !important;
-            padding-bottom: 10px !important; /* Ruimte voor de onderstreping */
+            padding-bottom: 10px !important;
             margin: 0 !important;
         }}
-
-        /* Niet geselecteerd = Zachtgrijs, geen kader */
         button[data-baseweb="tab"][aria-selected="false"] {{
             color: #9ca3af !important; 
         }}
-        
-        /* Hover effect (lichtgroen) */
         button[data-baseweb="tab"][aria-selected="false"]:hover {{
             color: {brand_color} !important; 
         }}
-
-        /* Geselecteerd = Groen + Dikke streep onder */
         button[data-baseweb="tab"][aria-selected="true"] {{
             color: {brand_color} !important;
             border-bottom: 3px solid {brand_color} !important;
             font-weight: 800 !important;
         }}
 
-        /* --- EXPANDERS (Uitklapmenu's) --- */
+        /* --- EXPANDERS --- */
         div[data-testid="stExpander"] details > summary {{
             background-color: #ffffff !important;
             color: #111827 !important;
@@ -201,12 +191,14 @@ def inject_style_and_hacks(brand_color="#10b981"):
     st.markdown(css, unsafe_allow_html=True)
 
     # 2. JS HACK (AGRESSIEVE STYLING)
+    # Hier zorgen we dat de Panic button ROOD wordt en de Trend button PAARS
     components.html("""
     <script>
         function styleButtons() {
             const buttons = window.parent.document.querySelectorAll('button');
             buttons.forEach(btn => {
-                if (btn.innerText.includes("PANIC BUTTON")) {
+                // RODE PANIC BUTTON
+                if (btn.innerText.includes("Panic button")) {
                     btn.style.setProperty('background', 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)', 'important');
                     btn.style.setProperty('color', 'white', 'important');
                     btn.style.setProperty('border', '2px solid #fee2e2', 'important');
@@ -214,7 +206,8 @@ def inject_style_and_hacks(brand_color="#10b981"):
                     btn.onmouseenter = function() { this.style.setProperty('transform', 'scale(1.02)', 'important'); };
                     btn.onmouseleave = function() { this.style.setProperty('transform', 'scale(1)', 'important'); };
                 }
-                if (btn.innerText.includes("Gebruik deze Daily")) {
+                // PAARSE TREND BUTTON
+                if (btn.innerText.includes("Gebruik deze trend")) {
                     btn.style.setProperty('background', 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', 'important');
                     btn.style.setProperty('color', 'white', 'important');
                     btn.style.setProperty('border', 'none', 'important');
@@ -229,7 +222,7 @@ def inject_style_and_hacks(brand_color="#10b981"):
     """, height=0, width=0)
 
 def render_locked_section(feature_name, tease_text):
-    buy_link = "https://postaiapp.lemonsqueezy.com/buy/baa2f4c9-6295-4b3d-bead-50e348fc80a2"
+    buy_link = "https://www.paypro.nl/product/PostAi_PRO_-_Maandelijks/125181"
     st.markdown(f"""
     <div class="lock-wrapper">
         <div class="lock-overlay">
