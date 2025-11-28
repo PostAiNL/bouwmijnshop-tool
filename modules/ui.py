@@ -222,7 +222,13 @@ def inject_style_and_hacks(brand_color="#10b981"):
     """, height=0, width=0)
 
 def render_locked_section(feature_name, tease_text):
-    buy_link = "https://www.paypro.nl/product/PostAi_PRO_-_Maandelijks/125181"
+    # Haal de huidige licentiecode op van de gebruiker
+    current_key = st.session_state.get("license_key", "unknown")
+    
+    # We plakken de key achter de link als ?custom=...
+    base_link = "https://www.paypro.nl/product/PostAi_PRO_-_Maandelijks/125181"
+    buy_link = f"{base_link}?custom={current_key}"
+    
     st.markdown(f"""
     <div class="lock-wrapper">
         <div class="lock-overlay">

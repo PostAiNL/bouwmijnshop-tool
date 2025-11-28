@@ -316,7 +316,7 @@ def activate_pro(key_input):
     if len(key_input) > 5: 
         save_progress(is_pro=True)
         st.balloons()
-        st.success("PRO Geactiveerd!")
+        st.success("PRO geactiveerd!")
         time.sleep(2); st.rerun()
     else: st.error("Ongeldige code")
 
