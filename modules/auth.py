@@ -112,20 +112,20 @@ def check_ai_limit():
     last_date = user_data.get("ai_last_date", "")
     today = str(datetime.now().date())
     current_count = user_data.get("ai_daily_count", 0)
+    
+    # Reset teller als het een nieuwe dag is
     if last_date != today:
         current_count = 0
         save_progress(ai_last_date=today, ai_daily_count=0)
-    limit = 80 if is_pro() else 10
+    
+    # HIER ZIJN JOUW LIMIETEN:
+    limit = 50 if is_pro() else 10
+    
     return current_count < limit
 
-def track_ai_usage():
-    user_data = load_progress()
-    current = user_data.get("ai_daily_count", 0)
-    save_progress(ai_daily_count=current + 1)
-    
 def get_ai_usage_text():
     user_data = load_progress()
-    limit = 80 if is_pro() else 10
+    limit = 50 if is_pro() else 10 # Ook hier aanpassen voor de weergave
     current = user_data.get("ai_daily_count", 0)
     return f"{current}/{limit}"
 
@@ -341,3 +341,12 @@ def save_feedback(text, approved):
     except Exception as e:
         print(f"Feedback save error: {e}")
         return False
+
+# --- IN auth.py (helemaal onderaan toevoegen) ---
+
+def delete_script_from_library(script_id):
+    user_data = load_progress()
+    library = user_data.get("library", [])
+    # Filter de lijst: behoud alles BEHALVE degene met dit ID
+    new_library = [item for item in library if item.get("id") != script_id]
+    save_progress(library=new_library)
