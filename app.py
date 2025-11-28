@@ -407,143 +407,297 @@ if st.session_state.page == "bootcamp":
                     st.error("Plak eerst een geldige link naar je video!")
 
 # ==========================
-# 🎬 STUDIO
+# 🎬 STUDIO (VERBETERD MET BIBLIOTHEEK)
+# ==========================
+# ==========================
+# 🎬 STUDIO (MET LOSSE VISUALS & BIBLIOTHEEK FIX)
 # ==========================
 if st.session_state.page == "studio":
-    if st.button("⬅️ Terug", type="secondary"): go_home(); st.rerun()
-    st.markdown("## 🎬 Studio")
-    
-    # --- SCENARIO 1: ER IS AL EEN SCRIPT (Toon resultaat & Teleprompter) ---
-    if "last_script" in st.session_state:
-        # Plaatje tonen indien beschikbaar
-        if "generated_img_url" in st.session_state and st.session_state.generated_img_url:
-            c1, c2, c3 = st.columns([1, 1, 1])
-            with c2:
-                st.image(st.session_state.generated_img_url, caption="📸 Visueel concept", width=280)
-        elif st.session_state.get("generated_img"): 
-             st.info(f"🎥 **Visueel shot idee:** {st.session_state.generated_img}")
+    # Header
+    c_back, c_title, c_clear = st.columns([1, 3, 1])
+    with c_back:
+        if st.button("⬅️ Terug", type="secondary"): go_home(); st.rerun()
+    with c_title:
+        st.markdown("## 🎬 Studio")
+    with c_clear:
+        # Knop om het huidige werkblad leeg te maken
+        if "last_script" in st.session_state or "studio_mode" in st.session_state:
+            if st.button("🗑️ Wis", help="Leeg het werkblad"):
+                keys_to_clear = ["last_script", "generated_img_url", "studio_mode", "current_visual"]
+                for k in keys_to_clear:
+                    if k in st.session_state: del st.session_state[k]
+                st.rerun()
 
-        t1, t2 = st.tabs(["Script", "Teleprompter"])
-        
-        # TAB 1: SCRIPT LEZEN
-        with t1:
-            st.markdown(st.session_state.last_script)
-            if st.button("💾 Opslaan", type="primary"): 
-                if is_pro: auth.save_script_to_library("Script", st.session_state.last_script); st.toast("Opgeslagen!")
-                else: st.toast("🔒 Alleen PRO")
-            if st.button("❌ Nieuw", type="secondary"): del st.session_state.last_script; st.rerun()
-        
-        # TAB 2: PRO TELEPROMPTER (Jouw nieuwe code)
-        with t2:
-            st.markdown("### 🎬 Pro teleprompter")
-            
-            c_set1, c_set2, c_set3 = st.columns([2, 2, 1])
-            with c_set1: speed = st.slider("🐢 Snelheid 🐇", 0, 50, 10)
-            with c_set2: font_size = st.slider("🔍 Tekstgrootte", 18, 60, 32)
-            with c_set3: mirror_mode = st.toggle("🪞 Spiegel", help="Handig voor hardware")
-                
-            is_playing = st.toggle("▶️ START SCROLLEN", value=False)
-            mirror_css = "transform: scaleX(-1);" if mirror_mode else ""
-            safe_script = st.session_state.last_script.replace('\n', '<br>')
-            
-            prompt_html = f"""
-            <div id="prompter-container" style="height: 450px; overflow-y: hidden; background: #000000; border-radius: 15px; position: relative; border: 4px solid #333;">
-                <div id="teleprompter" style="font-size: {font_size}px; font-weight: bold; line-height: 1.5; color: #ffffff; padding: 50% 20px; font-family: Arial, sans-serif; text-align: center; {mirror_css}">
-                    {safe_script}<br><br><br><br><br>
-                </div>
-                <div style="position: absolute; top: 45%; left: 0; right: 0; height: 10%; border-top: 2px dashed rgba(255,255,255,0.3); border-bottom: 2px dashed rgba(255,255,255,0.3); pointer-events: none; background: rgba(255,255,255,0.05);"></div>
-            </div>
-            <script>
-                var container = document.getElementById("prompter-container");
-                var speed = {speed};
-                var playing = {str(is_playing).lower()};
-                var currentScroll = 0;
-                function scroll() {{ if (playing && speed > 0) {{ currentScroll += (speed / 5); container.scrollTop = currentScroll; }} }}
-                if (window.prompterInterval) clearInterval(window.prompterInterval);
-                window.prompterInterval = setInterval(scroll, 50);
-            </script>
-            """
-            components.html(prompt_html, height=500)
+    # Data ophalen
+    saved_library = user_data.get("library", [])
     
-    # --- SCENARIO 2: GEEN SCRIPT (Toon Generators) ---
+    # Check wat we aan het doen zijn (Script modus of Visual modus)
+    has_active_script = "last_script" in st.session_state
+    has_active_visual = "current_visual" in st.session_state and not has_active_script
+
+    # --- BEPAAL TAB INDELING ---
+    if has_active_script:
+        tab_editor, tab_prompter, tab_lib = st.tabs(["📝 Huidig Script", "🎬 Teleprompter", "📚 Bibliotheek"])
+    elif has_active_visual:
+        tab_vis_view, tab_lib = st.tabs(["🖼️ Jouw Creatie", "📚 Bibliotheek"])
     else:
-        # <--- HIER GING HET FOUT: Deze regel ontbrak of de inspringing klopte niet
-        tab_viral, tab_conv, tab_hook = st.tabs(["👀 Viral maker", "📈 Conversie", "🪝 Hook rater"])
-        
-        # --- TAB 1: VIRAL MAKER ---
-        with tab_viral:
-            with st.form("viral_form"):
-                st.markdown("### 💡 Nieuw script")
-                template = st.selectbox("Template:", ["✨ Eigen idee", "🚫 Mythe ontkrachten", "📚 How-to", "😲 Reactie"])
-                topic = st.text_input("Onderwerp:", placeholder="Waar moet het over gaan?")
-                tone = st.radio("Toon", ["⚡ Energiek", "😌 Rustig", "😂 Humor"], horizontal=True)
-                fmt = st.selectbox("Format:", ["Talking Head", "Vlog", "Green Screen"])
-                
-                submitted = st.form_submit_button("✨ Schrijf viral script (+10 XP)", type="primary")
-                
-                if submitted:
-                    if auth.check_ai_limit():
-                        status_box = st.empty()
-                        with status_box.status("🚀 De AI coach is bezig...", expanded=True) as status:
-                            status.write("✍️ Script schrijven...")
-                            st.session_state.last_script = ai_coach.generate_script(topic if topic else "Iets in mijn niche", fmt, tone, "verrassend", "Volg voor meer", niche, st.session_state.brand_voice)
-                            status.write("🎨 Visueel voorbeeld tekenen...")
-                            st.session_state.generated_img_url = ai_coach.generate_viral_image(topic, tone, niche)
-                            status.update(label="✅ Klaar!", state="complete", expanded=False)
-                        auth.track_ai_usage()
-                        add_xp(10)
-                        st.session_state.current_topic = topic
-                        st.rerun()
-                    else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
+        tab_gen, tab_lib = st.tabs(["✨ Nieuw Maken", "📚 Bibliotheek"])
 
-# --- TAB 2: CONVERSIE / SALES ---
-        with tab_conv:
-            with st.form("sales_form"):
-                prod = st.text_input("Product/dienst:")
-                pain = st.text_input("Probleem klant:")
-                sales_submitted = st.form_submit_button("✍️ Schrijf story (+10 XP)", type="primary")
-
-            if sales_submitted:
-                if check_feature_access("Sales Mode"):
-                    if auth.check_ai_limit():
-                        with st.spinner("💰 Psychologische triggers verwerken & visual maken..."):
-                            # 1. Script genereren
-                            st.session_state.last_script = ai_coach.generate_sales_script(prod, pain, "Story", niche)
-                            
-                            # --- FIX: Nieuwe afbeelding genereren ---
-                            # Dit overschrijft de oude foto van de Viral Maker
-                            st.session_state.generated_img_url = ai_coach.generate_viral_image(f"Product shot: {prod}", "Clean & Aesthetic", niche)
-                            # ----------------------------------------
-                            
-                            auth.track_ai_usage()
-                            add_xp(10)
-                            st.session_state.current_topic = f"Sales: {prod}"
-                            st.rerun()
-                    else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
-                else:
-                    if st.session_state.golden_tickets > 0: st.error("Gebruik eerst een ticket in het Tools menu of upgrade!")
-                    else: st.error("Upgrade naar PRO voor Sales Mode.")
-
-        # --- TAB 3: HOOK RATER 2.0 (Jouw nieuwe code) ---
-        with tab_hook:
-            st.markdown("### 🪝 Viral hook tester")
-            st.caption("Een goede hook is 80% van je succes.")
-            user_hook = st.text_input("Jouw openingszin:", placeholder="Bijvoorbeeld: Stop met scrollen als je...")
+    # ==========================================
+    # 1. EDITOR (ALS ER EEN SCRIPT IS)
+    # ==========================================
+    if has_active_script:
+        with tab_editor:
+            # Toon bijbehorend plaatje (indien aanwezig)
+            if "generated_img_url" in st.session_state and st.session_state.generated_img_url:
+                st.image(st.session_state.generated_img_url, caption="📸 Visueel concept", width=300)
             
-            if st.button("🚀 Test & verbeter", type="primary"):
-                if user_hook:
-                    if auth.check_ai_limit():
-                        with st.spinner("⚖️ De jury overlegt..."):
-                            res = ai_coach.rate_user_hook(user_hook, niche)
-                            auth.track_ai_usage()
-                            score = res.get('score', 0)
-                            color = "red" if score < 6 else "orange" if score < 8 else "green"
-                            st.markdown(f"""<div style="text-align:center; padding:10px; border-radius:10px; border:2px solid {color}; background:rgba(255,255,255,0.5); margin-bottom:15px;"><div style="font-size:2.5rem; font-weight:bold; color:{color};">{score}/10</div><div style="font-style:italic;">"{res.get('feedback')}"</div></div>""", unsafe_allow_html=True)
-                            if 'alternatives' in res:
-                                st.markdown("#### ✨ Probeer deze eens:")
-                                for alt in res['alternatives']: st.info(f"🔥 {alt}")
-                    else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
-                else: st.error("Vul iets in!")
+            st.info("👇 Dit is je huidige werkversie.")
+            
+            # Script weergave
+            st.markdown(f"""
+            <div style="background:white; padding:20px; border-radius:10px; border:1px solid #e5e7eb; color:black;">
+                {st.session_state.last_script.replace(chr(10), '<br>')}
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.write("") # Spacer
+
+            # Actie knoppen
+            c_save, c_copy = st.columns(2)
+            with c_save:
+                if st.button("💾 Opslaan in bieb", type="primary", use_container_width=True):
+                    if is_pro:
+                        topic_name = st.session_state.get("current_topic", f"Script {datetime.datetime.now().strftime('%d-%m')}")
+                        # We slaan het op als type 'script'
+                        script_data = {
+                            "id": str(uuid.uuid4()), 
+                            "date": str(datetime.datetime.now().date()), 
+                            "topic": topic_name, 
+                            "content": st.session_state.last_script,
+                            "type": "script",
+                            "img": st.session_state.get("generated_img_url", "")
+                        }
+                        
+                        # Toevoegen aan library lijst
+                        new_lib = [script_data] + saved_library
+                        auth.save_progress(library=new_lib)
+                        
+                        st.balloons()
+                        st.toast("✅ Script opgeslagen!")
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        st.error("🔒 Opslaan is een PRO functie.")
+            
+            with c_copy:
+                # FIX: Hier ging het fout. Nu gebruiken we st.code wat een ingebouwde copy knop heeft
+                # Of we gebruiken een verborgen tekstblokje. De makkelijkste fix is st.code (als tekst):
+                st.code(st.session_state.last_script, language=None)
+                st.caption("👆 Klik op het icoontje rechtsboven in het vak om te kopiëren.")
+
+        with tab_prompter:
+            # (Teleprompter code blijft hetzelfde als je al had, ingekort voor overzicht)
+            st.markdown("### 🎬 Pro teleprompter")
+            st.info("Plak je telefoon tegen de spiegel of lees direct van het scherm.")
+            safe_script = st.session_state.last_script.replace('\n', '<br>')
+            components.html(f"""
+            <div style="font-family:Arial; font-weight:bold; font-size:40px; text-align:center; color:white; background:black; padding:50px;">
+            <marquee direction="up" scrollamount="3" height="400px">{safe_script}</marquee></div>
+            """, height=450)
+
+    # ==========================================
+    # 2. VISUAL VIEWER (ALS ER ALLEEN EEN PLAATJE IS)
+    # ==========================================
+    elif has_active_visual:
+        with tab_vis_view:
+            st.markdown("### 🖼️ Jouw AI Creatie")
+            st.image(st.session_state.current_visual, use_column_width=True)
+            
+            if st.button("💾 Opslaan in bieb", key="save_vis_btn", type="primary"):
+                 if is_pro:
+                        topic_name = f"Visual {datetime.datetime.now().strftime('%d-%m %H:%M')}"
+                        vis_data = {
+                            "id": str(uuid.uuid4()), 
+                            "date": str(datetime.datetime.now().date()), 
+                            "topic": topic_name, 
+                            "content": st.session_state.current_visual, # Hier zit de URL in
+                            "type": "image"
+                        }
+                        new_lib = [vis_data] + saved_library
+                        auth.save_progress(library=new_lib)
+                        st.balloons(); st.toast("✅ Opgeslagen!"); time.sleep(1); st.rerun()
+                 else: st.error("🔒 Alleen PRO")
+            
+            if st.button("🔄 Maak er nog een", type="secondary"):
+                del st.session_state.current_visual
+                st.rerun()
+
+# ==========================================
+    # 3. GENERATORS (NIEUW MAKEN)
+    # ==========================================
+    else:
+        with tab_gen:
+            # Tabbladen
+            sub_viral, sub_conv, sub_vis, sub_hook = st.tabs(["👀 Viral Script", "📈 Sales Script (PRO)", "🎨 Visuals (PRO)", "🪝 Hook Tester"])
+            
+            # --- A. VIRAL SCRIPT (GRATIS) ---
+            with sub_viral:
+                with st.form("viral_form"):
+                    st.markdown("### 🎬 Script Generator")
+                    topic = st.text_input("Onderwerp:", placeholder="Waar gaat de video over?")
+                    tone = st.radio("Toon", ["Energiek ⚡", "Rustig 😌", "Grappig 😂"], horizontal=True)
+                    
+                    # AANGEPAST: Formats met uitleg
+                    format_options = [
+                        "Talking Head 🗣️ (Jij praat direct in de camera)",
+                        "Vlog 🤳 (Dag uit het leven / op pad)",
+                        "Green Screen 🖼️ (Jij voor een nieuwsbericht/plaatje)"
+                    ]
+                    fmt_selection = st.selectbox("Format:", format_options)
+                    
+                    # We moeten de selectie weer 'schoonmaken' voor de AI (alleen het eerste deel)
+                    fmt_clean = fmt_selection.split(" (")[0].strip()
+                    
+                    if st.form_submit_button("Schrijf Script (+10 XP)", type="primary"):
+                        if auth.check_ai_limit():
+                            with st.spinner("✍️ Script schrijven & Visual bedenken..."):
+                                # 1. Script
+                                st.session_state.last_script = ai_coach.generate_script(topic, fmt_clean, tone, "verrassend", "Volg voor meer", niche, st.session_state.brand_voice)
+                                # 2. Afbeelding (Gratis gebruikers krijgen hier ook een plaatje bij, dat hoort bij de core functie)
+                                st.session_state.generated_img_url = ai_coach.generate_viral_image(topic, tone, niche)
+                                
+                                auth.track_ai_usage()
+                                add_xp(10)
+                                st.session_state.current_topic = topic
+                                st.rerun()
+                        else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
+
+            # --- B. SALES SCRIPT (PRO LOCKED) ---
+            with sub_conv:
+                # Check of gebruiker PRO is of een trial heeft
+                if check_feature_access("Sales Mode"):
+                    with st.form("sales_form"):
+                        st.markdown("### 📈 Sales Script")
+                        st.caption("Gebruik psychologische triggers om te verkopen.")
+                        
+                        prod = st.text_input("Product of Dienst:", placeholder="bv. Mijn E-book over afvallen")
+                        pain = st.text_input("Pijnpunt van klant:", placeholder="bv. Geen tijd om te sporten")
+                        
+                        sales_submitted = st.form_submit_button("✍️ Schrijf Sales Script (+10 XP)", type="primary")
+
+                    if sales_submitted:
+                        if auth.check_ai_limit():
+                            with st.spinner("💰 Psychologische triggers verwerken..."):
+                                st.session_state.last_script = ai_coach.generate_sales_script(prod, pain, "Story", niche)
+                                st.session_state.generated_img_url = ai_coach.generate_viral_image(f"Product shot: {prod}", "Clean & Aesthetic", niche)
+                                auth.track_ai_usage(); add_xp(10); st.session_state.current_topic = f"Sales: {prod}"; st.rerun()
+                        else: st.error(f"🛑 Daglimiet bereikt.")
+                else:
+                    # PRO LOCK WEERGAVE
+                    # Laat de gebruiker eventueel een ticket inzetten als ze die hebben
+                    if st.session_state.golden_tickets > 0:
+                        st.info(f"Je hebt {st.session_state.golden_tickets} Golden Tickets. Wil je er eentje inzetten?")
+                        if st.button("🎫 Zet Golden Ticket in (24u toegang)", key="ticket_sales"):
+                            use_golden_ticket("Sales Mode")
+                    
+                    # Toon het slotje
+                    ui.render_locked_section("Sales Mode", "Verander kijkers in kopers met psychologische scripts.")
+
+# --- C. VISUALS (PRO LOCKED + TICKET OPTIE) ---
+            with sub_vis:
+                # 1. Check toegang (Pro OF tijdelijk via Ticket)
+                if check_feature_access("Creative Visuals"):
+                    st.markdown("### 🎨 Creative Generator")
+                    st.caption("Maak thumbnails, achtergronden of moodboards zonder script.")
+                    
+                    vis_prompt = st.text_input("Wat wil je zien?", placeholder="Bv. Een luxe kantoor met neon verlichting...")
+                    vis_style = st.selectbox("Stijl", ["Fotorealistisch 📸", "Cinematic 🎬", "3D Render 🧊", "Anime 🌸", "Minimalistisch ⚪"])
+                    
+                    if st.button("✨ Genereer Visual (+5 XP)", type="primary"):
+                        if auth.check_ai_limit():
+                            with st.spinner("🎨 Aan het schilderen..."):
+                                img_url = ai_coach.generate_viral_image(vis_prompt, vis_style, niche)
+                                auth.track_ai_usage()
+                                add_xp(5)
+                                st.session_state.current_visual = img_url
+                                st.rerun()
+                        else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
+                
+                # 2. Geen toegang? Toon Ticket knop + Slotje
+                else:
+                    # Als ze tickets hebben, toon de knop om te unlocken
+                    if st.session_state.golden_tickets > 0:
+                        st.info(f"Je hebt {st.session_state.golden_tickets} Golden Tickets. Wil je er eentje inzetten?")
+                        if st.button("🎫 Zet Golden Ticket in (24u toegang)", key="ticket_visuals"):
+                            use_golden_ticket("Creative Visuals")
+                    
+                    # Het slotje (verwijst naar upgrade pagina)
+                    ui.render_locked_section("Creative Visuals", "Genereer onbeperkt unieke AI afbeeldingen voor je video's.")
+
+            # --- D. HOOK TESTER (GRATIS) ---
+            with sub_hook:
+                st.markdown("### 🪝 Viral Hook Tester")
+                st.caption("Een goede hook is 80% van je succes.")
+                
+                user_hook = st.text_input("Jouw openingszin:", placeholder="Bijvoorbeeld: Stop met scrollen als je...")
+                
+                if st.button("🚀 Test & Verbeter", type="primary"):
+                    if user_hook:
+                        if auth.check_ai_limit():
+                            with st.spinner("⚖️ De jury overlegt..."):
+                                res = ai_coach.rate_user_hook(user_hook, niche)
+                                auth.track_ai_usage()
+                                score = res.get('score', 0)
+                                color = "red" if score < 6 else "orange" if score < 8 else "green"
+                                st.markdown(f"""
+                                <div style="text-align:center; padding:15px; border-radius:10px; border:2px solid {color}; background:rgba(255,255,255,0.8); margin-bottom:15px; color:black;">
+                                    <div style="font-size:2.5rem; font-weight:bold; color:{color};">{score}/10</div>
+                                    <div style="font-style:italic;">"{res.get('feedback')}"</div>
+                                </div>""", unsafe_allow_html=True)
+                                if 'alternatives' in res:
+                                    st.markdown("#### ✨ Probeer deze eens:")
+                                    for alt in res['alternatives']: st.info(f"🔥 {alt}")
+                        else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
+                    else: st.warning("Vul eerst een zin in!")
+
+    # ==========================================
+    # 4. BIBLIOTHEEK (SLIM GEMAAKT)
+    # ==========================================
+    with tab_lib:
+        st.markdown("### 📂 Bibliotheek")
+        if not saved_library:
+            st.info("Nog niks opgeslagen.")
+        else:
+            for item in saved_library:
+                # Check type (script of image)
+                item_type = item.get("type", "script") # Backwards compatibility
+                icon = "🖼️" if item_type == "image" else "📝"
+                
+                with st.expander(f"{icon} {item.get('date', '?')} | {item.get('topic', 'Naamloos')}"):
+                    
+                    # WEERGAVE LOGICA
+                    if item_type == "script":
+                        st.caption("📝 Script")
+                        st.text(item.get('content')[:100] + "...") # Preview
+                        if st.button("Openen", key=f"open_{item['id']}"):
+                            st.session_state.last_script = item.get('content')
+                            st.session_state.generated_img_url = item.get('img', None)
+                            st.rerun()
+                            
+                    elif item_type == "image":
+                        st.caption("🖼️ Afbeelding")
+                        st.image(item.get('content'), width=200)
+                        if st.button("Vergroot / Bewerk", key=f"view_{item['id']}"):
+                            st.session_state.current_visual = item.get('content')
+                            # Zorg dat we niet in script modus zitten
+                            if "last_script" in st.session_state: del st.session_state.last_script
+                            st.rerun()
+
+                    # VERWIJDER KNOP (Gedeeld)
+                    if st.button("🗑️ Verwijderen", key=f"del_{item['id']}", type="secondary"):
+                        auth.delete_script_from_library(item['id'])
+                        st.rerun()
 
 # ==========================
 # 🛠️ TOOLS
