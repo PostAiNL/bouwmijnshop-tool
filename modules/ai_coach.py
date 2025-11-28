@@ -130,7 +130,7 @@ def check_viral_potential(idea, niche):
     
     return {"score": 0, "verdict": "Kon AI niet bereiken."}
 
-@st.cache_data(ttl=3600, show_spinner=False) # FIX: show_spinner=False toegevoegd
+@st.cache_data(ttl=3600, show_spinner=False) # FIX: Spinner uitgeschakeld om dubbele tekst te voorkomen
 def generate_weekly_plan(niche):
     """Maakt een unieke contentkalender voor de niche."""
     ai_sys = f"Je bent een content strateeg voor {niche}. Maak een strategische weekplanning (Maandag t/m Zondag)."
@@ -205,7 +205,7 @@ def rate_user_hook(user_hook, niche):
             "alternatives": ["Alternatief 1", "Alternatief 2", "Alternatief 3"]
         }
 
-@st.cache_data(ttl=3600, show_spinner=False) # FIX: show_spinner=False toegevoegd
+@st.cache_data(ttl=3600, show_spinner=False) # FIX: Spinner uitgeschakeld om dubbele tekst te voorkomen
 def generate_bio_options(bio, niche):
     """Herschrijft de bio."""
     ai_sys = f"Je bent een profile optimizer voor {niche}. Herschrijf deze bio om meer volgers en kliks te krijgen. Geef 3 opties."
@@ -383,7 +383,8 @@ def analyze_writing_style(sample_text):
     if llm_out: return llm_out
     return "Een authentieke, persoonlijke schrijfstijl."
 
-@st.cache_data(ttl=3600, show_spinner="🧠 Trend aan het analyseren...") 
+# --- HIER IS DE AANPASSING GEMAAKT: show_spinner=False ---
+@st.cache_data(ttl=3600, show_spinner=False) 
 def get_personalized_trend(niche, seed):
     """
     SLIMME TRENDS: Bedenkt een trend specifiek voor de niche.
