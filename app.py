@@ -547,37 +547,42 @@ if st.session_state.page == "studio":
             # Tabbladen
             sub_viral, sub_conv, sub_vis, sub_hook = st.tabs(["👀 Viral script", "📈 Script (PRO)", "🎨 Visuals (PRO)", "🪝 Hook tester"])
             
-            # --- A. VIRAL SCRIPT (GRATIS) ---
+# A. VIRAL
             with sub_viral:
                 with st.form("viral_form"):
-                    st.markdown("### 🎬 Script generator")
+                    st.markdown("### 🎬 Script Generator")
                     topic = st.text_input("Onderwerp:", placeholder="Waar gaat de video over?")
                     tone = st.radio("Toon", ["Energiek ⚡", "Rustig 😌", "Grappig 😂"], horizontal=True)
                     
-                    # AANGEPAST: Formats met uitleg
-                    format_options = [
-                        "Talking head 🗣️ (Jij praat direct in de camera)",
-                        "Vlog 🤳 (Dag uit het leven / op pad)",
-                        "Green screen 🖼️ (Jij voor een nieuwsbericht/plaatje)"
-                    ]
-                    fmt_selection = st.selectbox("Format:", format_options)
+                    # 1. Definieer formats en uitleg (voor het vraagteken)
+                    format_data = {
+                        "Talking Head 🗣️": "Jij praat direct in de camera. Goed voor tips, meningen en verhalen.",
+                        "Vlog 🤳": "Je neemt de kijker mee in je dag of proces. Dynamisch en persoonlijk.",
+                        "Green Screen 🖼️": "Je staat voor een screenshot (nieuwsbericht/tweet) en geeft commentaar."
+                    }
                     
-                    # We moeten de selectie weer 'schoonmaken' voor de AI (alleen het eerste deel)
-                    fmt_clean = fmt_selection.split(" (")[0].strip()
+                    # 2. Maak de help-tekst
+                    help_fmt = "**Welk format moet ik kiezen?**\n\n"
+                    for f, d in format_data.items():
+                        help_fmt += f"- **{f}**: {d}\n"
+
+                    # 3. Dropdown met korte namen + help tekst
+                    fmt_selection = st.selectbox(
+                        "Format:", 
+                        options=list(format_data.keys()),
+                        help=help_fmt # <--- Hier zit de uitleg!
+                    )
+                    
+                    # 4. Schoonmaken voor de AI (Emoji's weg)
+                    fmt_clean = fmt_selection.replace("🗣️", "").replace("🤳", "").replace("🖼️", "").strip()
                     
                     if st.form_submit_button("Schrijf Script (+10 XP)", type="primary"):
                         if auth.check_ai_limit():
-                            with st.spinner("✍️ Script schrijven & Visual bedenken..."):
-                                # 1. Script
-                                st.session_state.last_script = ai_coach.generate_script(topic, fmt_clean, tone, "verrassend", "Volg voor meer", niche, st.session_state.brand_voice)
-                                # 2. Afbeelding (Gratis gebruikers krijgen hier ook een plaatje bij, dat hoort bij de core functie)
+                            with st.spinner("✍️ Script schrijven..."):
+                                st.session_state.last_script = ai_coach.generate_script(topic, fmt_clean, tone, "Hook", "CTA", niche, st.session_state.brand_voice)
                                 st.session_state.generated_img_url = ai_coach.generate_viral_image(topic, tone, niche)
-                                
-                                auth.track_ai_usage()
-                                add_xp(10)
-                                st.session_state.current_topic = topic
-                                st.rerun()
-                        else: st.error(f"🛑 Daglimiet bereikt ({auth.get_ai_usage_text()}).")
+                                auth.track_ai_usage(); add_xp(10); st.session_state.current_topic = topic; st.rerun()
+                        else: st.error(f"🛑 Daglimiet ({auth.get_ai_usage_text()})")
 
             # --- B. SALES SCRIPT (PRO LOCKED) ---
             with sub_conv:
@@ -849,33 +854,46 @@ if st.session_state.page == "settings":
         st.markdown("---")
         
         st.markdown("### 2. Jouw Schrijfstijl")
-        st.caption("Hoe moet de AI klinken als hij voor jou schrijft?")
         
-        # UITGEBREIDE LIJST MET STIJLEN
-        voice_options = [
-            "De Expert 🧠 (Betrouwbaar, feitelijk & professioneel)",
-            "De Beste Vriend(in) 💖 (Enthousiast, warm & toegankelijk)",
-            "De Grappenmaker 😂 (Humoristisch, luchtig & zelfspot)",
-            "De Motivator 💪 (Energiek, krachtig & actiegericht)",
-            "De Verhalenverteller 📚 (Rustig, meeslepend & beeldend)",
-            "De Trendwatcher 🚀 (Vlot, snel & 'Gen-Z' taalgebruik)",
-            "De Harde Waarheid 🔥 (Direct, confronterend & no-nonsense)",
-            "Custom (Mijn eigen stijl) 🤖"
-        ]
+        # 1. Definieer de stijlen en hun uitleg
+        voice_data = {
+            "De Expert 🧠": "Betrouwbaar, feitelijk & professioneel",
+            "De Beste Vriend(in) 💖": "Enthousiast, warm & toegankelijk",
+            "De Grappenmaker 😂": "Humoristisch, luchtig & zelfspot",
+            "De Motivator 💪": "Energiek, krachtig & actiegericht",
+            "De Verhalenverteller 📚": "Rustig, meeslepend & beeldend",
+            "De Trendwatcher 🚀": "Vlot, snel & 'Gen-Z' taalgebruik",
+            "De Harde Waarheid 🔥": "Direct, confronterend & no-nonsense",
+            "Custom (Mijn eigen stijl) 🤖": "Gebaseerd op jouw eigen teksten"
+        }
         
-        # Mapping om de huidige stem te vinden
+        # 2. Maak de tekst voor het vraagteken-icoontje (help)
+        help_text = "**Wat betekenen de stijlen?**\n\n"
+        for style, desc in voice_data.items():
+            help_text += f"- **{style.split(' ')[1]}**: {desc}\n"
+
+        # 3. Lijst voor het menu
+        options_list = list(voice_data.keys())
+        
+        # 4. Huidige selectie terugvinden
         current_voice = st.session_state.brand_voice
         idx = 0
-        for i, option in enumerate(voice_options):
-            parts = option.split(" ")
-            if len(parts) > 1:
-                first_word = parts[1] 
-                if first_word in current_voice:
-                    idx = i
-                    break
+        for i, option in enumerate(options_list):
+            core_word = option.split(" ")[1] if " " in option else option
+            if core_word in current_voice:
+                idx = i
+                break
         
-        voice_selection = st.selectbox("Kies een standaard stijl:", voice_options, index=idx)
-        clean_voice = voice_selection.split(" (")[0].strip()
+        # 5. De Dropdown (met de help tekst!)
+        voice_selection = st.selectbox(
+            "Kies je stem:", 
+            options=options_list, 
+            index=idx,
+            help=help_text 
+        )
+        
+        # 6. Schoonmaken voor de AI
+        clean_voice = voice_selection.split(" (")[0].replace("🧠", "").replace("💖", "").replace("😂", "").replace("💪", "").replace("📚", "").replace("🚀", "").replace("🔥", "").replace("🤖", "").strip()
         
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -916,7 +934,6 @@ if st.session_state.page == "settings":
             time.sleep(1)
             st.rerun()
 
-    # --- HIER GING HET FOUT BIJ DE VORIGE KEER (nu staat het goed uitgelijnd) ---
     if is_pro:
         st.success(f"🏆 Je bent een **PRO Creator** (Level {st.session_state.level})")
     else:
