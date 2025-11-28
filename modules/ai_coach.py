@@ -384,7 +384,7 @@ def analyze_writing_style(sample_text):
     return "Een authentieke, persoonlijke schrijfstijl."
 
 @st.cache_data(ttl=3600, show_spinner=False) # FIX: show_spinner=False toegevoegd
-def get_personalized_trend(niche):
+def get_personalized_trend(niche seed=0):
     """
     SLIMME TRENDS: Bedenkt een trend specifiek voor de niche.
     """

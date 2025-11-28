@@ -229,7 +229,7 @@ def inject_style_and_hacks(brand_color="#10b981"):
     """, height=0, width=0)
 
 def render_locked_section(feature_name, tease_text):
-    buy_link = "https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2"
+    buy_link = "https://postaiapp.lemonsqueezy.com/buy/baa2f4c9-6295-4b3d-bead-50e348fc80a2"
     st.markdown(f"""
     <div class="lock-wrapper">
         <div class="lock-overlay">

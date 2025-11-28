@@ -215,7 +215,7 @@ def send_login_email(to_email, name, license_key):
             <h2 style="color: #10b981;">Welkom bij PostAi, {name}! 👋</h2>
             <p>Leuk dat je de demo start! Je account is aangemaakt.</p>
             <div style="text-align: center; margin: 30px 0;">
-                <a href="{magic_link}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Direct Inloggen & Starten</a>
+                <a href="{magic_link}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Direct inloggen & starten</a>
             </div>
             <p>Of gebruik je code handmatig:</p>
             <div style="background: #f3f4f6; padding: 10px; text-align: center; font-family: monospace; font-size: 1.2em; border-radius: 5px;">{license_key}</div>
@@ -244,7 +244,7 @@ def render_landing_page():
     st.markdown("""
         <div style='text-align:center; padding-bottom: 10px; padding-top: 0px;'>
             <h1 style='color:#111827; margin-bottom:0; font-size: 2rem;'>🚀 PostAi</h1>
-            <p style='font-size:1rem; color:#6b7280; margin-top: 0px;'>Jouw persoonlijke AI TikTok Coach</p>
+            <p style='font-size:1rem; color:#6b7280; margin-top: 0px;'>Jouw persoonlijke AI TikTok coach</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -252,8 +252,8 @@ def render_landing_page():
     
     with c1:
         with st.container(border=True):
-            st.markdown("#### 👋 Start direct (Gratis)")
-            tab_signup, tab_login = st.tabs(["Nieuw Account", "Inloggen"])
+            st.markdown("#### 👋 Start direct (gratis)")
+            tab_signup, tab_login = st.tabs(["Nieuw account", "Inloggen"])
             
             def finish_signup():
                 name = st.session_state.get("reg_name", "")
@@ -272,10 +272,10 @@ def render_landing_page():
                     st.session_state.login_error = "Vul alsjeblieft je naam en een geldig emailadres in."
 
             with tab_signup:
-                st.write("Maak binnen 10 sec een account aan.")
+                st.write("Maak binnen 10 sec. een account aan.")
                 st.text_input("Voornaam", key="reg_name") 
                 st.text_input("Emailadres", key="reg_email")
-                st.button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
+                st.button("🚀 Start gratis demo", type="primary", use_container_width=True, on_click=finish_signup)
 
                 if "login_error" in st.session_state:
                     st.error(st.session_state.login_error)
@@ -283,7 +283,7 @@ def render_landing_page():
 
             with tab_login:
                 st.write("Welkom terug!")
-                val_key = st.text_input("Jouw Licentiecode:", type="password")
+                val_key = st.text_input("Jouw licentiecode:", type="password")
                 if st.button("Inloggen", type="secondary", use_container_width=True):
                     if val_key:
                         st.session_state.license_key = val_key
@@ -298,9 +298,9 @@ def render_landing_page():
         st.markdown("""
         PostAi automatiseert je hele workflow:
         *   ✅ **Nooit meer inspiratieloos**
-        *   ✅ **AI Vision Analyse**
-        *   ✅ **Teleprompter & Visuals**
-        *   ✅ **Clone My Voice**
+        *   ✅ **AI vision analyse**
+        *   ✅ **Teleprompter & visuals**
+        *   ✅ **Clone my voice**
         👇 **Probeer 14 dagen gratis**
         """)
 
