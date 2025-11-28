@@ -9,13 +9,6 @@ import base64
 import streamlit.components.v1 as components 
 from modules import analytics, ui, auth, ai_coach, data_loader
 
-# --- TIJDELIJKE DEBUG (Verwijder dit later!) ---
-try:
-    st.write("Secrets gevonden:", st.secrets["SMTP_EMAIL"])
-except Exception as e:
-    st.error(f"Kan secrets niet lezen: {e}")
-# -----------------------------------------------
-
 # --- 1. CONFIGURATIE ---
 st.set_page_config(page_title="PostAi - Jouw persoonlijke AI TikTok Coach", page_icon="assets/logo.png", layout="centered", initial_sidebar_state="collapsed")
 
