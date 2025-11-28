@@ -746,7 +746,7 @@ if st.session_state.page == "settings":
         """, unsafe_allow_html=True)
         
         # Buy Button (LemonSqueezy Link)
-        st.link_button("👉 Claim 25% Korting & Start Direct", "https://postai.lemonsqueezy.com/buy/fb9b229e-ff4a-4d3e-b3d3-a706ea6921a2", type="primary", use_container_width=True)
+        st.link_button("👉 Claim 25% Korting & Start Direct", "https://postaiapp.lemonsqueezy.com/buy/baa2f4c9-6295-4b3d-bead-50e348fc80a2", type="primary", use_container_width=True)
         st.caption("Je ontvangt direct je licentiecode per mail.")
         
         st.markdown("---")
