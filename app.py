@@ -805,7 +805,7 @@ if st.session_state.page == "settings":
 # ==========================
 # 📄 PRIVACY, VOORWAARDEN & CONTACT
 # ==========================
-if st.session_state.page == "Privacybeleid":
+if st.session_state.page == "privacy":
     if st.button("⬅️ Terug", type="secondary"): go_home(); st.rerun()
     st.markdown("## 🔒 Privacybeleid")
     st.markdown("Laatst bijgewerkt: 25 november 2025")
@@ -831,7 +831,7 @@ if st.session_state.page == "Privacybeleid":
     Voor vragen over je gegevens of om je account te verwijderen, kun je contact opnemen via support@postaiapp.nl.
     """)
 
-if st.session_state.page == "Algemene voorwaarden":
+if st.session_state.page == "terms":
     if st.button("⬅️ Terug", type="secondary"): go_home(); st.rerun()
     st.markdown("## 📜 Algemene voorwaarden & disclaimer")
     st.caption("Laatst gewijzigd: 25 november 2025")
@@ -860,7 +860,7 @@ if st.session_state.page == "Algemene voorwaarden":
     *   **Garantie:** Wij hanteren een 14-dagen 'niet-goed-geld-terug' garantie op de eerste betaling als de service niet aan de verwachtingen voldoet.
     """)
 
-if st.session_state.page == "Contact":
+if st.session_state.page == "contact":
     if st.button("⬅️ Terug", type="secondary"): go_home(); st.rerun()
     st.markdown("## 📬 Contact & support")
     
