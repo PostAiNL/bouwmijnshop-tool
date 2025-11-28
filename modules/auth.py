@@ -18,12 +18,18 @@ PRO_KEY_FIXED = "123-456-789"
 def init_supabase():
     # Hybride check: Eerst env (Render), dan secrets (Lokaal)
     url = os.getenv("SUPABASE_URL")
-    if not url and "supabase" in st.secrets:
-        url = st.secrets["supabase"]["url"]
+    if not url:
+        try:
+            url = st.secrets["supabase"]["url"]
+        except:
+            pass
         
     key = os.getenv("SUPABASE_KEY")
-    if not key and "supabase" in st.secrets:
-        key = st.secrets["supabase"]["key"]
+    if not key:
+        try:
+            key = st.secrets["supabase"]["key"]
+        except:
+            pass
         
     if not url or not key:
         return None
@@ -186,7 +192,6 @@ def send_login_email(to_email, name, license_key):
         except: return default
 
     smtp_server = get_conf("SMTP_SERVER", "smtp.strato.com")
-    # GEWIJZIGD: Standaard poort 465 voor SSL
     smtp_port = int(get_conf("SMTP_PORT", 465))
     smtp_user = get_conf("SMTP_EMAIL")
     smtp_password = get_conf("SMTP_PASSWORD")
@@ -221,12 +226,9 @@ def send_login_email(to_email, name, license_key):
     
     msg.attach(MIMEText(html_body, "html"))
 
-    # 3. Versturen via Strato (SSL) - STABIELE METHODE VOOR RENDER
+    # 3. Versturen via Strato (SSL)
     try:
-        # GEWIJZIGD: Directe SSL verbinding (beter voor Render)
         server = smtplib.SMTP_SSL(smtp_server, smtp_port)
-        # server.set_debuglevel(1) # Zet aan voor debuggen in logs
-        
         server.login(smtp_user, smtp_password)
         server.sendmail(smtp_user, to_email, msg.as_string())
         server.quit()
