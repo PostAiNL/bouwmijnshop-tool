@@ -1,4 +1,3 @@
-# --- FILE: auth.py ---
 import streamlit as st
 import os
 import json
@@ -6,23 +5,26 @@ import uuid
 import time
 import datetime
 import threading
-from datetime import datetime, timedelta
-from supabase import create_client, Client
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import os
+from datetime import datetime, timedelta
+from supabase import create_client, Client
 
 # CONFIG
 PRO_KEY_FIXED = "123-456-789"
 
 @st.cache_resource
 def init_supabase():
+    # Hybride check: Eerst env (Render), dan secrets (Lokaal)
     url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY")
     if not url and "supabase" in st.secrets:
         url = st.secrets["supabase"]["url"]
+        
+    key = os.getenv("SUPABASE_KEY")
+    if not key and "supabase" in st.secrets:
         key = st.secrets["supabase"]["key"]
+        
     if not url or not key:
         return None
     return create_client(url, key)
@@ -36,13 +38,13 @@ def load_progress():
     if not key: return {}
     supabase = init_supabase()
     try:
-        response = supabase.table("users").select("user_data").eq("license_key", key).execute()
-        if response.data and len(response.data) > 0:
-            data = response.data[0]["user_data"]
-            st.session_state.local_user_data = data
-            return data
-        else:
-            return {}
+        if supabase:
+            response = supabase.table("users").select("user_data").eq("license_key", key).execute()
+            if response.data and len(response.data) > 0:
+                data = response.data[0]["user_data"]
+                st.session_state.local_user_data = data
+                return data
+        return {}
     except Exception as e:
         print(f"❌ DB Load Error: {e}")
         return {}
@@ -57,12 +59,13 @@ def save_progress(**kwargs):
         st.session_state[k] = v 
     supabase = init_supabase()
     try:
-        data_payload = {
-            "license_key": key,
-            "user_data": st.session_state.local_user_data,
-            "updated_at": str(datetime.now())
-        }
-        supabase.table("users").upsert(data_payload).execute()
+        if supabase:
+            data_payload = {
+                "license_key": key,
+                "user_data": st.session_state.local_user_data,
+                "updated_at": str(datetime.now())
+            }
+            supabase.table("users").upsert(data_payload).execute()
     except Exception as e:
         print(f"❌ DB Save Error: {e}")
 
@@ -88,10 +91,15 @@ def is_pro():
 # --- HELPER FUNCTIES ---
 
 def get_secret(key, default=None):
+    # 1. Probeer Environment (Render)
     val = os.getenv(key)
     if val: return val
-    try: return st.secrets.get(key, default)
-    except: return default
+    # 2. Probeer Secrets (Lokaal)
+    try:
+        if key in st.secrets:
+            return st.secrets[key]
+    except: pass
+    return default
 
 def check_ai_limit():
     user_data = load_progress()
@@ -167,10 +175,10 @@ def save_script_to_library(topic, content):
     library.insert(0, {"id": str(uuid.uuid4()), "date": str(datetime.now().date()), "topic": topic, "content": content})
     save_progress(library=library)
 
+# --- MAIL FUNCTIE (HYBRIDE: RENDER + LOKAAL) ---
+
 def send_login_email(to_email, name, license_key):
-    # 1. Gegevens ophalen (Hybride: werkt op Render én Lokaal)
-    # Hij probeert eerst os.getenv (Render), anders st.secrets (Lokaal)
-    
+    # Helper om config op te halen (eerst Env, dan Secrets)
     def get_conf(key, default=None):
         val = os.getenv(key)
         if val: return val
@@ -192,7 +200,7 @@ def send_login_email(to_email, name, license_key):
     # 2. Email samenstellen
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"🚀 Jouw toegang tot PostAi"
-    msg["From"] = f"PostAi Support <{smtp_user}>" # Dit wordt: PostAi Support <support@postaiapp.nl>
+    msg["From"] = f"PostAi Support <{smtp_user}>"
     msg["To"] = to_email
 
     html_body = f"""
@@ -212,31 +220,24 @@ def send_login_email(to_email, name, license_key):
     
     msg.attach(MIMEText(html_body, "html"))
 
-    # 3. Versturen via Poort 587 (STARTTLS)
+    # 3. Versturen via Strato (STARTTLS)
     try:
-        # Let op: Hier gebruiken we .SMTP() in plaats van .SMTP_SSL()
         server = smtplib.SMTP(smtp_server, smtp_port)
-        server.set_debuglevel(0) # Zet op 1 als je foutmeldingen wilt zien in de logs
+        # server.set_debuglevel(1) # Zet aan voor debuggen
         
-        # De beveiligde verbinding starten
-        server.starttls() 
-        
-        # Inloggen
+        server.starttls()
         server.login(smtp_user, smtp_password)
-        
-        # Versturen
         server.sendmail(smtp_user, to_email, msg.as_string())
         server.quit()
             
-        print(f"✅ Mail verzonden via Strato (587) naar {to_email}")
+        print(f"✅ Mail verzonden via Strato naar {to_email}")
         return True
     except Exception as e:
         print(f"❌ SMTP Fout: {e}")
         return False
 
-# --- LANDING PAGE (VOLGORDE: FORMULIER EERST) ---
+# --- LANDING PAGE ---
 def render_landing_page():
-    # Compactere header
     st.markdown("""
         <div style='text-align:center; padding-bottom: 10px; padding-top: 0px;'>
             <h1 style='color:#111827; margin-bottom:0; font-size: 2rem;'>🚀 PostAi</h1>
@@ -244,14 +245,11 @@ def render_landing_page():
         </div>
     """, unsafe_allow_html=True)
 
-    # LET OP: We zetten c1 (Formulier) EERST in de lijst
     c1, c2 = st.columns([1, 1.2]) 
     
-    # 1. HET FORMULIER (In kolom c1, dus links/boven)
     with c1:
         with st.container(border=True):
             st.markdown("#### 👋 Start direct (Gratis)")
-            
             tab_signup, tab_login = st.tabs(["Nieuw Account", "Inloggen"])
             
             def finish_signup():
@@ -274,7 +272,6 @@ def render_landing_page():
                 st.write("Maak binnen 10 sec een account aan.")
                 st.text_input("Voornaam", key="reg_name") 
                 st.text_input("Emailadres", key="reg_email")
-                # Directe callback op de knop
                 st.button("🚀 Start Gratis Demo", type="primary", use_container_width=True, on_click=finish_signup)
 
                 if "login_error" in st.session_state:
@@ -292,21 +289,16 @@ def render_landing_page():
                             del st.session_state.local_user_data
                         st.rerun()
 
-    # 2. DE TEKST (In kolom c2, dus rechts/onder)
     with c2:
-        # Tip onderaan de tekst kolom
         st.info("💡 **Tip:** Nieuwe gebruikers krijgen direct toegang.")
-        
         st.markdown("### 📈 Stop met gokken.")
         st.markdown("""
         PostAi automatiseert je hele workflow:
-        
-        *   ✅ **Nooit meer inspiratieloos** (Dagelijkse trends)
-        *   ✅ **AI Vision Analyse** (Waarom flopt je video?)
+        *   ✅ **Nooit meer inspiratieloos**
+        *   ✅ **AI Vision Analyse**
         *   ✅ **Teleprompter & Visuals**
-        *   ✅ **Clone My Voice** (Jouw schrijfstijl)
-        
-        👇 **Probeer 14 dagen gratis, daarna €14,95/mnd**
+        *   ✅ **Clone My Voice**
+        👇 **Probeer 14 dagen gratis**
         """)
 
 def activate_pro(key_input):
@@ -320,19 +312,21 @@ def activate_pro(key_input):
 def save_feedback(text, approved):
     supabase = init_supabase()
     try:
-        key = st.session_state.get("license_key", "unknown")
-        status = "approved" if approved else "rejected"
-        supabase.table("feedback").insert({
-            "license_key": key,
-            "message": text,
-            "rating": status
-        }).execute()
-        if approved:
-            user_data = load_progress()
-            if user_data.get("has_given_feedback", False): return False 
-            current_tickets = user_data.get("golden_tickets", 0)
-            save_progress(golden_tickets=current_tickets + 1, has_given_feedback=True)
-            return True 
+        if supabase:
+            key = st.session_state.get("license_key", "unknown")
+            status = "approved" if approved else "rejected"
+            supabase.table("feedback").insert({
+                "license_key": key,
+                "message": text,
+                "rating": status
+            }).execute()
+            if approved:
+                user_data = load_progress()
+                if user_data.get("has_given_feedback", False): return False 
+                current_tickets = user_data.get("golden_tickets", 0)
+                save_progress(golden_tickets=current_tickets + 1, has_given_feedback=True)
+                return True 
+        return False
     except Exception as e:
         print(f"Feedback save error: {e}")
         return False
