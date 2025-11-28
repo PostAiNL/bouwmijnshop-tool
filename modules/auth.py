@@ -168,14 +168,22 @@ def save_script_to_library(topic, content):
     save_progress(library=library)
 
 def send_login_email(to_email, name, license_key):
-    # 1. Gegevens ophalen uit Render Environment Variables
-    smtp_server = os.getenv("SMTP_SERVER", "smtp.strato.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "587")) # Nu standaard op 587
-    smtp_user = os.getenv("SMTP_EMAIL")     # Hier komt dus support@postaiapp.nl
-    smtp_password = os.getenv("SMTP_PASSWORD")
+    # 1. Gegevens ophalen (Hybride: werkt op Render én Lokaal)
+    # Hij probeert eerst os.getenv (Render), anders st.secrets (Lokaal)
+    
+    def get_conf(key, default=None):
+        val = os.getenv(key)
+        if val: return val
+        try: return st.secrets.get(key, default)
+        except: return default
+
+    smtp_server = get_conf("SMTP_SERVER", "smtp.strato.com")
+    smtp_port = int(get_conf("SMTP_PORT", 587))
+    smtp_user = get_conf("SMTP_EMAIL")
+    smtp_password = get_conf("SMTP_PASSWORD")
 
     if not smtp_user or not smtp_password:
-        print("⚠️ SMTP gegevens ontbreken in Render settings!")
+        print("⚠️ SMTP gegevens ontbreken (Check Render Env of secrets.toml)!")
         return False
 
     base_url = os.getenv("APP_PUBLIC_URL") or "https://postaiapp.onrender.com"
