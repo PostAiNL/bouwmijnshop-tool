@@ -400,7 +400,7 @@ if st.session_state.page == "bootcamp":
             st.markdown(st.session_state.chal_script)
             st.markdown("---")
             st.caption("Heb je de video gepost? Plak de link om je XP te claimen!")
-            post_link = st.text_input("Link naar TikTok video", placeholder="https://tiktok.com/...")
+            post_link = st.text_input("Link naar TikTok video:", placeholder="https://tiktok.com/...")
             
             if st.button("✅ Ik heb gepost! (+50 XP)", use_container_width=True, type="primary"):
                 if post_link and "http" in post_link:
