@@ -141,13 +141,13 @@ def show_help_dialog():
     st.markdown("""
     Zo gebruik je hem als beste:
 
-    🔥 **Streakdagen**
+    🔥 **Streakdagen:**
     Log elke dag in om je vlammetje te houden. Mis je een dag? Dan begin je opnieuw.
     
-    🎁 **XP punten**
-    Maak scripts en verdien punten. Bij 100 XP ga je een **Level omhoog**!
+    🎁 **XP punten:**
+    Maak scripts en verdien punten. Bij 100 XP ga je een **level omhoog**!
     
-    🎫 **Golden tickets**
+    🎫 **Golden tickets:**
     Level omhoog? Dan krijg je een ticket. Daarmee mag je **PRO tools** 24 uur lang gratis gebruiken.
     """)
     if st.button("Begrepen! 🚀", type="primary"):
@@ -165,7 +165,7 @@ with col_head:
         <div class="header-logo"><img src="{logo_src}"></div>
         <div class="header-text">
             <div class="header-title">PostAi <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; vertical-align:middle; margin-left:12px; {badge_style}">{badge}</span></div>
-            <p class="header-subtitle">Jouw persoonlijke AI TikTok Coach</p>
+            <p class="header-subtitle">Jouw persoonlijke AI TikTok coach</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -240,7 +240,7 @@ if st.session_state.page == "home":
                 <div class="metric-val" style="color:#ef4444; font-size:1.2rem;">{st.session_state.streak}</div><div class="metric-lbl" style="font-size:0.7rem;">🔥 Streakdagen</div>
             </div>
             <div class="metric-card" style="padding: 8px;" title="Golden tickets: Zet in om PRO functies 24 uur te unlocken.">
-                <div class="metric-val" style="color:#f59e0b; font-size:1.2rem;">{st.session_state.golden_tickets}</div><div class="metric-lbl" style="font-size:0.7rem;">🎫 Golden tickets</div>
+                <div class="metric-val" style="color:#f59e0b; font-size:1.2rem;">{st.session_state.golden_tickets}</div><div class="metric-lbl" style="font-size:0.7rem;">🎫 Tickets</div>
             </div>
             <div class="metric-card" style="padding: 8px;" title="Verdien 100 XP voor een Level up + Gratis ticket!">
                 <div class="metric-val" style="color:#3b82f6; font-size:1.2rem;">{st.session_state.xp}</div><div class="metric-lbl" style="font-size:0.7rem;">🎁 XP punten</div>
@@ -295,7 +295,7 @@ if st.session_state.page == "home":
                 auth.track_ai_usage()
                 st.rerun()
             else:
-                 st.error("Op.")
+                 st.error("🛑 Daglimiet bereikt (10/10). Kom morgen terug of upgrade naar PRO!")
     with c_trend2:
         if st.button("✍️ Gebruik deze trend", use_container_width=True, type="primary"):
             st.session_state.last_script = f"**Video Concept: {trend.get('title')}**\n\n**Geluid:** {trend.get('sound')}\n\n**Visueel:** {trend.get('desc')}\n\n**Script:**\n(Jouw tekst hier...)"
@@ -330,7 +330,7 @@ if st.session_state.page == "bootcamp":
     if st.session_state.weekly_goal == 0:
         with st.container(border=True):
             st.markdown("### 🎯 Weekdoel")
-            goal = st.slider("Aantal video's", 1, 7, 3)
+            goal = st.slider("Aantal video's:", 1, 7, 3)
             if st.button("Ik beloof het! 🤝", use_container_width=True, type="primary"): 
                 st.session_state.weekly_goal = goal; auth.save_progress(weekly_goal=goal); st.rerun()
     else:
@@ -463,10 +463,10 @@ if st.session_state.page == "studio":
         with tab_viral:
             with st.form("viral_form"):
                 st.markdown("### 💡 Nieuw script")
-                template = st.selectbox("Template", ["✨ Eigen idee", "🚫 Mythe ontkrachten", "📚 How-to", "😲 Reactie"])
+                template = st.selectbox("Template:", ["✨ Eigen idee", "🚫 Mythe ontkrachten", "📚 How-to", "😲 Reactie"])
                 topic = st.text_input("Onderwerp:", placeholder="Waar moet het over gaan?")
                 tone = st.radio("Toon", ["⚡ Energiek", "😌 Rustig", "😂 Humor"], horizontal=True)
-                fmt = st.selectbox("Format", ["Talking Head", "Vlog", "Green Screen"])
+                fmt = st.selectbox("Format:", ["Talking Head", "Vlog", "Green Screen"])
                 
                 submitted = st.form_submit_button("✨ Schrijf viral script (+10 XP)", type="primary")
                 
@@ -488,8 +488,8 @@ if st.session_state.page == "studio":
         # --- TAB 2: CONVERSIE / SALES ---
         with tab_conv:
             with st.form("sales_form"):
-                prod = st.text_input("Product/Dienst")
-                pain = st.text_input("Probleem klant")
+                prod = st.text_input("Product/dienst:")
+                pain = st.text_input("Probleem klant:")
                 sales_submitted = st.form_submit_button("✍️ Schrijf story (+10 XP)", type="primary")
 
             if sales_submitted:
@@ -508,7 +508,7 @@ if st.session_state.page == "studio":
         with tab_hook:
             st.markdown("### 🪝 Viral hook tester")
             st.caption("Een goede hook is 80% van je succes.")
-            user_hook = st.text_input("Jouw openingszin:", placeholder="bv. Stop met scrollen als je...")
+            user_hook = st.text_input("Jouw openingszin:", placeholder="Bijvoorbeeld: Stop met scrollen als je...")
             
             if st.button("🚀 Test & verbeter", type="primary"):
                 if user_hook:
@@ -535,7 +535,7 @@ if st.session_state.page == "tools":
     
     # 1. BIO
     with st.expander("🧬 Bio optimalisator"):
-        st.info("💡 **Doel:** Maak van jouw bezoekers, echte volgers met een perfecte bio.")
+        st.info("💡 **Doel:** Maak van jouw bezoekers, echte volgers door een perfecte bio.")
         bio = st.text_input("Huidige bio:")
         if st.button("Verbeter bio", type="primary"): 
             if auth.check_ai_limit():
@@ -559,7 +559,7 @@ if st.session_state.page == "tools":
 
     # 3. REMIX
     with st.expander("🕵️ Viral remix tool (PRO)"):
-        st.info("💡 **Doel:** Maak een unieke kopie van een virale video.")
+        st.info("💡 **Doel:** Maak een eigen versie van een virale video")
         if check_feature_access("Viral remix"):
             other = st.text_area("Plak hier het script/tekst van de concurrent:")
             if st.button("🔀 Remix dit script", type="primary"): 
@@ -570,11 +570,11 @@ if st.session_state.page == "tools":
         else:
             if st.session_state.golden_tickets > 0:
                 if st.button("🎫 Unlock de remix tool (24u)", key="btn_remix"): use_golden_ticket("Viral remix")
-            ui.render_locked_section("Viral remix", "Kopie succescontent.")
+            ui.render_locked_section("Viral remix", "Maak eigen versie succescontent.")
 
     # 4. PASSIEF INKOMEN
-    with st.expander("📦 Passief Inkomen Bedenker (PRO)"):
-        st.info("💡 **Doel:** Bedenk een digitaal product om geld te verdienen met je volgers.")
+    with st.expander("📦 Passief inkomen bedenker (PRO)"):
+        st.info("💡 **Doel:** Bedenk een digitaal product om geld te verdienen.")
         if check_feature_access("Product bedenker"):
              tgt = st.text_input("Voor wie is het? (Doelgroep)")
              if st.button("Genereer Businessplan", type="primary"):
@@ -666,7 +666,7 @@ if st.session_state.page == "settings":
     st.markdown("## ⚙️ Instellingen")
     
     with st.container(border=True):
-        new_niche = st.text_input("Niche", value=niche)
+        new_niche = st.text_input("Niche:", value=niche)
         
         st.markdown("### 🗣️ Jouw stijl (brand voice)")
         
@@ -688,7 +688,7 @@ if st.session_state.page == "settings":
         # --- NIEUWE CLONE MY VOICE FUNCTIE ---
         with st.expander("🤖 Kloon mijn stem (beta)"):
             st.info("Plak hieronder 3 van je beste captions of scripts. De AI analyseert jouw unieke stijl.")
-            sample_text = st.text_area("Plak je teksten hier...", height=150)
+            sample_text = st.text_area("Plak je teksten hier:", height=150)
             
             if st.button("🧬 Analyseer & kloon Stijl"):
                 if sample_text and len(sample_text) > 50:
@@ -749,12 +749,12 @@ if st.session_state.page == "settings":
         st.markdown("---")
         
         with st.expander("Heb je al een licentiecode?"):
-            c = st.text_input("Vul je code in")
-            if st.button("Activeer Licentie", type="primary"): auth.activate_pro(c)
+            c = st.text_input("Vul je licentiecode in:")
+            if st.button("Activeer Licentiecode", type="primary"): auth.activate_pro(c)
             
     # --- NIEUW: HIER IS HET ACCOUNT BLOK NU ---
     st.markdown("<br>", unsafe_allow_html=True)
-    with st.expander("🔑 Account & licentie (gegevens)", expanded=False):
+    with st.expander("🔑 Account & licentiecode (gegevens)", expanded=False):
         st.caption("Dit is jouw unieke sleutel. Bewaar deze om later weer in te loggen.")
         st.code(st.session_state.license_key, language=None)
         st.info("Tip: Sla deze pagina op in je favorieten ⭐")
@@ -772,7 +772,7 @@ if st.session_state.page == "settings":
     
     with st.expander(expander_title, expanded=False):
         if already_done:
-            st.info("Bedankt voor je hulp! Je hebt je Golden ticket al ontvangen. Je kunt dit maar 1x doen.")
+            st.info("Bedankt voor je hulp! Je hebt je golden ticket al ontvangen. Je kunt dit maar 1x doen.")
             st.caption("Heb je meer feedback? Mail gerust naar support@postaiapp.nl")
         else:
             st.write("Heb je tips en/of tops? Geef je feedback en krijg een gratis **Golden Ticket** !")
@@ -817,15 +817,15 @@ if st.session_state.page == "privacy":
     Om de app te laten werken, slaan we minimale gegevens op:
     *   **Profiel:** Jouw niche, gekozen 'brand voice' en voortgang (XP, Level, Streak).
     *   **Inputs:** De onderwerpen, teksten en bio's die jij invoert om te verbeteren.
-    *   **Geüploade Media:** Screenshots van analytics worden tijdelijk verwerkt door onze AI om data uit te lezen en worden niet permanent op onze servers bewaard.
+    *   **Geüploade media:** Screenshots van analytics worden tijdelijk verwerkt door onze AI om data uit te lezen en worden niet permanent op onze servers bewaard.
 
     ### 2. Hoe gebruiken we AI (OpenAI)?
     Wij gebruiken de officiële API van OpenAI (GPT-4) om scripts en analyses te genereren. 
-    *   **Geen Training:** Data die via de API wordt verstuurd, wordt door OpenAI **niet** gebruikt om hun modellen te trainen (volgens hun Enterprise privacybeleid).
+    *   **Geen training:** Data die via de API wordt verstuurd, wordt door OpenAI **niet** gebruikt om hun modellen te trainen (volgens hun Enterprise privacybeleid).
     *   **Verwerking:** Jouw input wordt veilig verstuurd, verwerkt en het resultaat wordt teruggestuurd naar de app.
 
     ### 3. Opslag van gegevens
-    In deze versie van de app worden jouw voortgang en instellingen lokaal opgeslagen (in een database bestand gekoppeld aan jouw licentie) of in de browser-sessie. Wij verkopen jouw data nooit aan derden.
+    In deze versie van de app worden jouw voortgang en instellingen lokaal opgeslagen (in een database bestand gekoppeld aan jouw licentiecode) of in de browser-sessie. Wij verkopen jouw data nooit aan derden.
 
     ### 4. Contact
     Voor vragen over je gegevens of om je account te verwijderen, kun je contact opnemen via support@postaiapp.nl.
@@ -837,25 +837,25 @@ if st.session_state.page == "terms":
     st.caption("Laatst gewijzigd: 25 november 2025")
     
     st.markdown("""
-    ### 1. Aansprakelijkheid & Gebruik van AI
+    ### 1. Aansprakelijkheid & gebruik van AI
     PostAi is een hulpmiddel dat gebruikmaakt van Artificial Intelligence (OpenAI). 
     *   **Jouw verantwoordelijkheid:** De gegenereerde scripts en adviezen dienen als concept. Jij bent als gebruiker volledig eindverantwoordelijk voor de content die je publiceert. Controleer teksten altijd op feitelijke juistheden en toon.
     *   **Geen professioneel advies:** De output van de app is ter inspiratie en vervangt geen juridisch, medisch of financieel advies.
     *   **Fouten:** AI kan hallucineren (feitelijke onjuistheden produceren). PostAi is niet aansprakelijk voor enige schade die voortvloeit uit het gebruik van deze informatie.
 
-    ### 2. Garantie op Resultaten
+    ### 2. Garantie op resultaten
     *   **Geen succesgarantie:** Wij bieden tools om je kansen te vergroten, maar garanderen geen specifieke resultaten zoals het "viral gaan", groei in volgers of omzetstijging. Het succes op social media is afhankelijk van vele externe factoren en jouw eigen uitvoering.
 
-    ### 3. Fair Use Policy (Gebruikslimiet)
+    ### 3. Fair Use Policy (gebruikslimiet)
     Om de service stabiel en betaalbaar te houden, geldt er een 'Fair Use Policy':
     *   **Limieten:** Er zit een dagelijkse limiet op het aantal AI-generaties per gebruiker (zowel voor PRO als gratis accounts). Deze limiet is ruim voldoende voor normaal menselijk gebruik.
     *   **Misbruik:** Het is verboden om het systeem te manipuleren, te scrapen of te gebruiken via geautomatiseerde bots. Bij misbruik wordt het account direct opgeschort zonder restitutie.
 
-    ### 4. Intellectueel Eigendom
-    *   **Jouw Content:** De scripts en ideeën die jij genereert met PostAi zijn jouw eigendom. Je mag deze vrij gebruiken, aanpassen en commercieel inzetten.
+    ### 4. Intellectueel eigendom
+    *   **Jouw content:** De scripts en ideeën die jij genereert met PostAi zijn jouw eigendom. Je mag deze vrij gebruiken, aanpassen en commercieel inzetten.
     *   **Onze App:** De broncode, het ontwerp en de werking van de PostAi applicatie blijven eigendom van PostAi.
 
-    ### 5. Abonnement & Restitutie
+    ### 5. Abonnement & restitutie
     *   **Opzeggen:** Het PRO-abonnement is maandelijks opzegbaar. Na opzegging behoud je toegang tot het einde van de lopende periode.
     *   **Garantie:** Wij hanteren een 14-dagen 'niet-goed-geld-terug' garantie op de eerste betaling als de service niet aan de verwachtingen voldoet.
     """)
@@ -871,13 +871,13 @@ if st.session_state.page == "contact":
     
     with st.container(border=True):
         st.markdown("### ✍️ Stuur een bericht")
-        subject = st.text_input("Onderwerp", placeholder="Waar gaat het over?")
-        msg_body = st.text_area("Bericht", placeholder="Typ hier je vraag...")
+        subject = st.text_input("Onderwerp:", placeholder="Waar gaat het over?")
+        msg_body = st.text_area("Bericht:", placeholder="Typ hier je vraag...")
         
         # Omdat we geen backend mailserver hebben in de frontend, gebruiken we mailto
         mail_link = f"mailto:support@postaiapp.nl?subject={subject}&body={msg_body}"
         
-        st.link_button("📤 Verstuur via Mail", mail_link, type="primary", use_container_width=True)
+        st.link_button("📤 Verstuur via mail", mail_link, type="primary", use_container_width=True)
         st.caption("Dit opent je standaard mailprogramma.")
 
     st.markdown("---")
