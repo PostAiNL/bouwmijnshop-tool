@@ -35,10 +35,20 @@ def init_supabase():
 # --- DATA MANAGEMENT ---
 
 def load_progress():
-    if "local_user_data" in st.session_state and st.session_state.local_user_data:
-        return st.session_state.local_user_data
+    # 1. Haal de lokale data op (uit het geheugen)
+    local_data = st.session_state.get("local_user_data", {})
+    
+    # 2. SLIMME CHECK: Is de gebruiker volgens het geheugen al PRO?
+    # Zo ja: Prima, gebruik het geheugen (lekker snel).
+    if local_data and local_data.get("is_pro", False) == True:
+        return local_data
+
+    # 3. Is de gebruiker nog GEEN PRO (of is er geen data)? 
+    # Dan vertrouwen we het geheugen niet en checken we de database.
+    # Dit zorgt ervoor dat als iemand net betaald heeft, hij direct PRO wordt.
     key = st.session_state.get("license_key")
     if not key: return {}
+    
     supabase = init_supabase()
     try:
         if supabase:
