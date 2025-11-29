@@ -158,9 +158,15 @@ def show_help_dialog():
 col_head, col_set = st.columns([0.85, 0.15])
 with col_head:
     logo_src = load_logo() # Gebruik de gecachte versie
+    
+    # --- NIEUW: Activeer de mobiele app ervaring ---
+    ui.setup_mobile_app_experience(logo_src)
+    # -----------------------------------------------
+
     badge = "PRO" if is_pro else "DEMO"
     badge_style = "background:#dcfce7; color:#166534; border:1px solid #bbf7d0;" if is_pro else "background:#eff6ff; color:#1e40af; border:1px solid #dbeafe;"
     
+    # HIER GING HET MIS: DIT IS HET VOLLEDIGE BLOK
     st.markdown(f"""
     <div class="header-container">
         <div class="header-logo"><img src="{logo_src}"></div>
@@ -184,7 +190,7 @@ has_reward = user_data.get("unclaimed_reward", False)
 if has_reward and not is_pro:
     @st.dialog("🎁 Gefeliciteerd: 5 dagen streak!")
     def show_reward_popup():
-        st.markdown("""<div style="text-align:center;"><div style="font-size:3rem;">🔥</div><h3>Lekker bezig!</h3><p>Kies 1 PRO tool om <b>24 uur gratis</b> te gebruiken:</p></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style="text-align:center;"><div style="font-size:3rem;">&#128293;</div><h3>Lekker bezig!</h3><p>Kies 1 PRO tool om <b>24 uur gratis</b> te gebruiken:</p></div>""", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         end_time = (datetime.datetime.now() + datetime.timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
         with c1:
