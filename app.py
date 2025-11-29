@@ -365,7 +365,7 @@ if st.session_state.page == "bootcamp":
             chal_format = st.radio("Format", ["🎥 Video", "📸 Foto"], horizontal=True, label_visibility="collapsed")
             if st.button("✨ Schrijf script", use_container_width=True, type="primary"):
                 if auth.check_ai_limit():
-                    with st.spinner("🤖 De Coach schrijft jouw bootcamp script..."):
+                    with st.spinner("🥾 De Coach stippelt je route uit..."):
                         st.session_state.chal_script = ai_coach.generate_challenge_script(current_day, task_txt, niche, chal_format)
                         auth.track_ai_usage()
                         st.rerun()
@@ -690,7 +690,7 @@ if st.session_state.page == "tools":
             other = st.text_area("Plak hier het script/tekst van de concurrent:")
             if st.button("🔀 Remix dit script", type="primary"): 
                 if auth.check_ai_limit():
-                    with st.spinner("Herschrijven..."):
+                    with st.spinner("🧬 Het DNA van de video analyseren en herschrijven..."):
                         st.markdown(ai_coach.steal_format_and_rewrite(other, "Mijn Onderwerp", niche))
                         auth.track_ai_usage()
         else:
@@ -734,7 +734,7 @@ if st.session_state.page == "tools":
         if check_feature_access("Weekplanner"):
             if st.button("Plan mijn week", type="primary"):
                 if auth.check_ai_limit():
-                    with st.spinner("Plannen..."):
+                    with st.spinner("📅 Jouw hele week wordt nu ingepland..."):
                         st.markdown(ai_coach.generate_weekly_plan(niche))
                         auth.track_ai_usage()
         else:
@@ -859,7 +859,7 @@ if st.session_state.page == "settings":
             if st.button("🧬 Analyseer mijn schrijfstijl"):
                 if sample_text and len(sample_text) > 50:
                     if auth.check_ai_limit():
-                        with st.spinner("🔍 Jouw taalgebruik analyseren..."):
+                        with st.spinner("🧠 AI leert jouw brein en schrijfstijl kennen..."):
                             custom_style = ai_coach.analyze_writing_style(sample_text)
                             auth.track_ai_usage()
                             
