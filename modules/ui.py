@@ -267,3 +267,54 @@ def render_locked_section(feature_name, tease_text):
     """, unsafe_allow_html=True)
 
 def inject_chat_widget(server_url): pass
+
+# --- IN ui.py (helemaal onderaan toevoegen) ---
+
+def setup_mobile_app_experience(base64_icon):
+    """
+    Zorgt ervoor dat de app op mobiel:
+    1. Jouw logo gebruikt als icoon (Apple Touch Icon & Android).
+    2. De adresbalk verbergt (Full screen app experience).
+    """
+    
+    # We gebruiken Javascript om dit in de <head> te forceren
+    js_code = f"""
+    <script>
+        // 1. Zoek of maak de Apple Touch Icon (voor iPhone home screen)
+        var appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+        if (!appleIcon) {{
+            appleIcon = document.createElement('link');
+            appleIcon.rel = 'apple-touch-icon';
+            document.head.appendChild(appleIcon);
+        }}
+        appleIcon.href = '{base64_icon}';
+
+        // 2. Zoek of maak de Android/Browser icon
+        var linkIcon = document.querySelector('link[rel="icon"]');
+        if (!linkIcon) {{
+            linkIcon = document.createElement('link');
+            linkIcon.rel = 'icon';
+            document.head.appendChild(linkIcon);
+        }}
+        linkIcon.href = '{base64_icon}';
+
+        // 3. Maak het "App-like" (Verberg adresbalk als op homescreen)
+        var meta = document.querySelector('meta[name="apple-mobile-web-app-capable"]');
+        if (!meta) {{
+            meta = document.createElement('meta');
+            meta.name = 'apple-mobile-web-app-capable';
+            meta.content = 'yes';
+            document.head.appendChild(meta);
+        }}
+        
+        // 4. Status bar stijl (Zwart/Transparant)
+        var metaStatus = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+        if (!metaStatus) {{
+            metaStatus = document.createElement('meta');
+            metaStatus.name = 'apple-mobile-web-app-status-bar-style';
+            metaStatus.content = 'black-translucent';
+            document.head.appendChild(metaStatus);
+        }}
+    </script>
+    """
+    components.html(js_code, height=0, width=0)
