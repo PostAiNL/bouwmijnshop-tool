@@ -69,6 +69,7 @@ def save_progress(**kwargs):
             data_payload = {
                 "license_key": key,
                 "user_data": st.session_state.local_user_data,
+                "email": st.session_state.local_user_data.get("email"), # <--- DEZE REGEL TOEVOEGEN
                 "updated_at": str(datetime.now())
             }
             supabase.table("users").upsert(data_payload).execute()
