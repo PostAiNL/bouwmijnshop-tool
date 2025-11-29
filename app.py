@@ -532,7 +532,7 @@ if st.session_state.page == "studio":
             # --- A. VIRAL SCRIPT ---
             with t_viral:
                 with st.form("viral_form"):
-                    st.markdown("### 🎬 Script Generator")
+                    st.markdown("### 🎬 Script generator")
                     topic = st.text_input("Onderwerp:", placeholder="Waar gaat de video over?")
                     
                     # 5 Tonen
@@ -544,16 +544,16 @@ if st.session_state.page == "studio":
                     
                     # Formats met uitleg
                     format_data = {
-                        "Talking Head 🗣️": "Jij praat direct in de camera. Goed voor tips & verhalen.",
+                        "Talking head 🗣️": "Jij praat direct in de camera. Goed voor tips & verhalen.",
                         "Vlog 🤳": "Je neemt de kijker mee in je dag of proces.",
-                        "Green Screen 🖼️": "Je staat voor een screenshot (nieuws/tweet) en geeft commentaar."
+                        "Green screen 🖼️": "Je staat voor een screenshot (nieuws/tweet) en geeft commentaar."
                     }
                     help_fmt = "**Uitleg formats:**\n\n" + "\n".join([f"- {k}: {v}" for k,v in format_data.items()])
                     
                     fmt_selection = st.selectbox("Format:", list(format_data.keys()), help=help_fmt)
                     fmt_clean = fmt_selection.split(" ")[0] + " " + fmt_selection.split(" ")[1] 
                     
-                    if st.form_submit_button("Schrijf Script (+10 XP)", type="primary"):
+                    if st.form_submit_button("Schrijf script (+10 XP)", type="primary"):
                         if auth.check_ai_limit():
                             with st.spinner("✍️ Script schrijven..."):
                                 st.session_state.last_script = ai_coach.generate_script(topic, fmt_clean, tone, "Hook", "CTA", niche, st.session_state.brand_voice)
@@ -565,10 +565,10 @@ if st.session_state.page == "studio":
             with t_sales:
                 if check_feature_access("Sales Mode"):
                     with st.form("sales_form"):
-                        st.markdown("### 📈 Sales Script")
+                        st.markdown("### 📈 Sales script")
                         prod = st.text_input("Product:", placeholder="E-book, Dienst...")
                         pain = st.text_input("Pijnpunt:", placeholder="Geen tijd, te duur...")
-                        if st.form_submit_button("Maak Sales Script", type="primary"):
+                        if st.form_submit_button("Maak sales script", type="primary"):
                             if auth.check_ai_limit():
                                 with st.spinner("Verkopen..."):
                                     st.session_state.last_script = ai_coach.generate_sales_script(prod, pain, "Story", niche)
@@ -578,20 +578,20 @@ if st.session_state.page == "studio":
                 else:
                     if st.session_state.golden_tickets > 0:
                         st.info(f"Tickets: {st.session_state.golden_tickets}")
-                        if st.button("🎫 Zet Ticket in", key="tick_sale"): use_golden_ticket("Sales Mode")
-                    ui.render_locked_section("Sales Mode", "Psychologische scripts die verkopen.")
+                        if st.button("🎫 Zet ticket in", key="tick_sale"): use_golden_ticket("Sales mode")
+                    ui.render_locked_section("Sales mode", "Psychologische scripts die verkopen.")
 
             # --- C. VISUALS ---
             with t_vis:
-                if check_feature_access("Creative Visuals"):
-                    st.markdown("### 🎨 Visual Generator")
+                if check_feature_access("Creative visuals"):
+                    st.markdown("### 🎨 Visual generator")
                     v_prompt = st.text_input("Wat wil je zien?")
                     
                     # Stijlen met uitleg
                     style_data = {
                         "Fotorealistisch 📸": "Net een echte foto, hoge kwaliteit.",
                         "Cinematic 🎬": "Als een filmshot, met dramatische belichting.",
-                        "3D Render 🧊": "Strakke 3D computer graphics (Pixar/Blender stijl).",
+                        "3D render 🧊": "Strakke 3D computer graphics (Pixar/Blender stijl).",
                         "Anime 🌸": "Japanse tekenfilmstijl.",
                         "Minimalistisch ⚪": "Simpel, schoon, weinig details en rustig."
                     }
@@ -601,7 +601,7 @@ if st.session_state.page == "studio":
 
                     v_style = st.selectbox("Stijl", list(style_data.keys()), help=help_style)
                     
-                    if st.button("Genereer Visual (+5 XP)", type="primary"):
+                    if st.button("Genereer visual (+5 XP)", type="primary"):
                         if auth.check_ai_limit():
                             with st.spinner("Tekenen..."):
                                 url = ai_coach.generate_viral_image(v_prompt, v_style, niche)
@@ -610,14 +610,14 @@ if st.session_state.page == "studio":
                 else:
                     if st.session_state.golden_tickets > 0:
                         st.info(f"Tickets: {st.session_state.golden_tickets}")
-                        if st.button("🎫 Zet Ticket in", key="tick_vis"): use_golden_ticket("Creative Visuals")
+                        if st.button("🎫 Zet ticket in", key="tick_vis"): use_golden_ticket("Creative visuals")
                     ui.render_locked_section("Visuals", "Unieke AI afbeeldingen.")
 
             # --- D. HOOK TESTER ---
             with t_hook:
-                st.markdown("### 🪝 Hook Tester")
+                st.markdown("### 🪝 Hook tester")
                 h_in = st.text_input("Jouw openingszin:")
-                if st.button("Test Hook", type="primary"):
+                if st.button("Test hook", type="primary"):
                     if h_in and auth.check_ai_limit():
                         res = ai_coach.rate_user_hook(h_in, niche)
                         auth.track_ai_usage()
