@@ -274,7 +274,7 @@ def render_landing_page():
                 email = st.session_state.get("reg_email", "")
                 
                 if name and email and "@" in email:
-                    key = "DEMO-" + str(uuid.uuid4())[:8]
+                    key = "LID-" + str(uuid.uuid4())[:8]
                     st.session_state.license_key = key
                     st.session_state.local_user_data = {"name": name, "email": email}
                     st.query_params["license"] = key
