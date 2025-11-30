@@ -13,24 +13,30 @@ from modules import analytics, ui, auth, ai_coach, data_loader
 # --- 1. CONFIGURATIE ---
 st.set_page_config(page_title="PostAi - Jouw persoonlijke Ai TikTok coach", page_icon="assets/logo.png", layout="centered", initial_sidebar_state="collapsed")
 
-# --- IN app.py (Bovenaan) ---
+# --- IN app.py (Bovenaan, vervang het vorige blokje) ---
 
 # Check of de gebruiker terugkomt van een betaling
 if st.query_params.get("payment_success") == "true":
-    # Haal de parameter weg uit de URL (zodat hij niet blijft staan bij refreshen)
+    # 1. Haal de parameter weg (zodat hij niet blijft staan)
     st.query_params.clear()
     
-    # Toon feestelijke melding
+    # 2. Toon feestelijke melding
     st.balloons()
-    st.toast("🚀 Betaling geslaagd! Je PRO status wordt nu geactiveerd...", icon="✅")
     
-    # Forceer een reload van de data (zodat hij ziet dat hij nu PRO is)
-    if "local_user_data" in st.session_state:
-        del st.session_state.local_user_data
-    
-    # Herlaad de pagina om de nieuwe status te tonen
-    time.sleep(2)
-    st.rerun()
+    # 3. Situatie A: De gebruiker is nog ingelogd (Sessie is bewaard)
+    if auth.is_authenticated():
+        # Forceer herladen van data
+        if "local_user_data" in st.session_state:
+            del st.session_state.local_user_data
+        
+        st.toast("🚀 Betaling verwerkt! Je bent nu PRO.", icon="✅")
+        time.sleep(2)
+        st.rerun()
+        
+    # 4. Situatie B: De gebruiker is uitgelogd (Sessie is verloren)
+    else:
+        # We zetten een speciale variabele zodat de Landing Page weet: "Dit is een betaler!"
+        st.session_state.just_paid = True
 
 # Style laden
 ui.inject_style_and_hacks(brand_color="#10b981")
