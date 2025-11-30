@@ -35,26 +35,35 @@ def init_supabase():
 # --- DATA MANAGEMENT ---
 
 def load_progress():
-    # 1. Haal de lokale data op (uit het geheugen)
+    # 1. Check geheugen (snelle check)
     local_data = st.session_state.get("local_user_data", {})
     
-    # 2. SLIMME CHECK: Is de gebruiker volgens het geheugen al PRO?
-    # Zo ja: Prima, gebruik het geheugen (lekker snel).
+    # Als het geheugen zegt dat je PRO bent, geloven we dat direct.
     if local_data and local_data.get("is_pro", False) == True:
         return local_data
 
-    # 3. Is de gebruiker nog GEEN PRO (of is er geen data)? 
-    # Dan vertrouwen we het geheugen niet en checken we de database.
-    # Dit zorgt ervoor dat als iemand net betaald heeft, hij direct PRO wordt.
+    # 2. Check Database (De grondige check)
     key = st.session_state.get("license_key")
     if not key: return {}
     
     supabase = init_supabase()
     try:
         if supabase:
-            response = supabase.table("users").select("user_data").eq("license_key", key).execute()
+            # BELANGRIJK: We halen nu de JSON 'user_data' EN de kolom 'is_pro' op!
+            response = supabase.table("users").select("user_data, is_pro").eq("license_key", key).execute()
+            
             if response.data and len(response.data) > 0:
-                data = response.data[0]["user_data"]
+                row = response.data[0]       # Dit is de hele rij
+                data = row["user_data"]      # Dit is de JSON (instellingen, XP etc)
+                db_is_pro = row["is_pro"]    # Dit is het vinkje dat Make aanzet
+                
+                # DE CRUCIALE FIX:
+                # Als het vinkje in de database (door Make) op TRUE staat...
+                # ...dan forceren we de app ook op TRUE, ongeacht wat de JSON zegt.
+                if db_is_pro == True:
+                    data["is_pro"] = True
+                
+                # We slaan de geüpdatete status op in het geheugen
                 st.session_state.local_user_data = data
                 return data
         return {}
