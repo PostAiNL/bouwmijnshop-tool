@@ -13,6 +13,25 @@ from modules import analytics, ui, auth, ai_coach, data_loader
 # --- 1. CONFIGURATIE ---
 st.set_page_config(page_title="PostAi - Jouw persoonlijke Ai TikTok coach", page_icon="assets/logo.png", layout="centered", initial_sidebar_state="collapsed")
 
+# --- IN app.py (Bovenaan) ---
+
+# Check of de gebruiker terugkomt van een betaling
+if st.query_params.get("payment_success") == "true":
+    # Haal de parameter weg uit de URL (zodat hij niet blijft staan bij refreshen)
+    st.query_params.clear()
+    
+    # Toon feestelijke melding
+    st.balloons()
+    st.toast("🚀 Betaling geslaagd! Je PRO status wordt nu geactiveerd...", icon="✅")
+    
+    # Forceer een reload van de data (zodat hij ziet dat hij nu PRO is)
+    if "local_user_data" in st.session_state:
+        del st.session_state.local_user_data
+    
+    # Herlaad de pagina om de nieuwe status te tonen
+    time.sleep(2)
+    st.rerun()
+
 # Style laden
 ui.inject_style_and_hacks(brand_color="#10b981")
 
