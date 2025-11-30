@@ -352,11 +352,14 @@ def send_login_email(to_email, name, license_key):
         return False
 
 # --- LANDING PAGE ---
+# --- IN auth.py (Vervang de hele functie render_landing_page) ---
+
 def render_landing_page():
+    # Header
     st.markdown("""
         <div style='text-align:center; padding-bottom: 10px; padding-top: 0px;'>
             <h1 style='color:#111827; margin-bottom:0; font-size: 2rem;'>🚀 PostAi</h1>
-            <p style='font-size:1rem; color:#6b7280; margin-top: 0px;'>Jouw persoonlijke AI TikTok coach</p>
+            <p style='font-size:1rem; color:#6b7280; margin-top: 0px;'>Ga viral zonder stress: Jouw persoonlijke AI strateeg.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -364,14 +367,27 @@ def render_landing_page():
     
     with c1:
         with st.container(border=True):
-            st.markdown("#### 👋 Start direct (gratis)")
             
-            # CHECK VOOR SUCCES MELDING
-            if "signup_msg" in st.session_state and st.session_state.signup_msg:
-                 st.success(st.session_state.signup_msg)
+            # --- NIEUW: Check of iemand net betaald heeft ---
+            if st.session_state.get("just_paid", False):
+                st.success("✅ Betaling ontvangen! Log in om je PRO status te activeren.")
+                default_tab = 1 # Open direct het 'Inloggen' tabblad
+                # Reset de status zodat het niet blijft staan
+                st.session_state.just_paid = False
+            else:
+                st.markdown("#### 👋 Start je groei (Gratis)")
+                default_tab = 0 # Standaard op 'Nieuw account'
 
+                # Check voor signup succes melding
+                if "signup_msg" in st.session_state and st.session_state.signup_msg:
+                     st.success(st.session_state.signup_msg)
+
+            # Tabs aanmaken
             tab_signup, tab_login = st.tabs(["Nieuw account", "Inloggen"])
             
+            # (Hieronder volgt de standaard logica, maar we zorgen dat we de juiste tab selecteren is lastig in Streamlit, 
+            # dus we leiden de gebruiker visueel)
+
             def finish_signup():
                 name = st.session_state.get("reg_name", "")
                 email = st.session_state.get("reg_email", "")
@@ -386,13 +402,16 @@ def render_landing_page():
                     email_thread = threading.Thread(target=send_login_email, args=(email, name, key))
                     email_thread.start()
                     
-                    # SET SUCCES MESSAGE VOOR UI
                     st.session_state.signup_msg = f"✅ De email is verzonden naar {email}! Check je inbox (en spam)."
                 else:
                     st.session_state.login_error = "Vul alsjeblieft je naam en een geldig emailadres in."
 
             with tab_signup:
-                st.write("👇 Start hier je eerste viral video (10 sec)")
+                if default_tab == 1:
+                    st.caption("👈 Klik op 'Inloggen' hierboven.")
+                else:
+                    st.write("👇 Start hier je eerste viral video (10 sec)")
+                
                 st.text_input("Voornaam", key="reg_name") 
                 st.text_input("Emailadres", key="reg_email")
                 st.button("🚀 Claim mijn gratis toegang", type="primary", use_container_width=True, on_click=finish_signup)
@@ -405,9 +424,7 @@ def render_landing_page():
                 st.write("Welkom terug!")
                 val_key = st.text_input("Jouw licentiecode:", type="password")
                 
-                # --- HULPTEKST VOOR CODE KWIJT ---
                 st.caption("🔑 Code kwijt? Zoek in je mail op 'PostAi' of mail naar support@postaiapp.nl")
-                # ---------------------------------
 
                 if st.button("Inloggen", type="secondary", use_container_width=True):
                     if val_key:
@@ -418,16 +435,16 @@ def render_landing_page():
                         st.rerun()
 
     with c2:
-        st.info("🔥 **HOT:** 150+ creators gingen je deze week voor.")
-        st.markdown("### 📈 Stop met gokken. Start met groeien.")
+        st.info("💡 **Tip:** Geen creditcard nodig om te starten.")
+        st.markdown("### 📈 Stop met gokken.")
         st.markdown("""
-        PostAi automatiseert je hele workflow:
-        *   ✅ Elke dag 3 virale ideeën op maat
-        *   ✅ Weet precies waar je kijkers afhaken
-        *   ✅ Film in 1 take (zonder tekst te vergeten)
-        *   ✅ Scripts die klinken als JIJ (niet als een robot)
-
-        👈 **Probeer nu 14 dagen gratis**
+        PostAi automatiseert het saaie werk, jij doet de rest:
+        *   🧠 **Elke dag virale ideeën** (Nooit meer vastlopen)
+        *   🕵️ **Slimme analyse** (Weet waarom je views stoppen)
+        *   🎥 **Teleprompter** (Film je video in 1 take)
+        *   🧬 **Jouw schrijfstijl** (Scripts die klinken als JIJ)
+        
+        👇 **Probeer 14 dagen gratis**
         """)
 
 def activate_pro(key_input):
