@@ -357,11 +357,11 @@ def send_login_email(to_email, name, license_key):
 # --- IN auth.py ---
 
 def render_landing_page():
-    # 1. De Hoofdkop: Pakkend en belooft resultaat
+    # 1. De Hoofdkop (Zoals gevraagd)
     st.markdown("""
         <div style='text-align:center; padding-bottom: 10px; padding-top: 0px;'>
             <h1 style='color:#111827; margin-bottom:0; font-size: 2rem;'>🚀 PostAi</h1>
-            <p style='font-size:1rem; color:#6b7280; margin-top: 0px;'>Jouw geheime wapen voor meer views & volgers op TikTok.</p>
+            <p style='font-size:1rem; color:#6b7280; margin-top: 0px;'>Jouw persoonlijke Ai TikTokcoach.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -375,7 +375,7 @@ def render_landing_page():
                 st.success("✅ Betaling geslaagd! Log in om je PRO tools te ontgrendelen.")
                 st.session_state.just_paid = False
             
-            # Tabbladen: Duidelijk en uitnodigend
+            # Tabbladen
             st.markdown("#### 👋 Start jouw groei (Gratis)")
             
             if "signup_msg" in st.session_state and st.session_state.signup_msg:
@@ -429,21 +429,23 @@ def render_landing_page():
 
     with c2:
         # Social Proof & Urgentie
-        st.info("💡 **Tip:** Geen creditcard nodig. 100% vrijblijvend.")
+        st.info("🔥 **HOT:** Het geheime wapen dat 350+ creators al gebruiken.")
         
-        # De Verkooptekst: Focus op het PROBLEEM en de OPLOSSING
-        st.markdown("### 📈 Van '0 views' naar Viral.")
+        # De Verkooptekst
+        st.markdown("### 📈 Stop met gokken. Start met groeien.")
+        
+        # De pijnpunten oplossen
         st.markdown("""
-        PostAi automatiseert het saaie werk, zodat jij kan knallen:
+        PostAi automatiseert het saaie werk, zodat jij viral kan gaan:
         
-        *   🧠 **Nooit meer vastlopen**  
-            *Elke dag 3 frisse, virale script-ideeën.*
-        *   🕵️ **Weet wat werkt**  
-            *AI analyseert waarom je video's wel/niet scoren.*
-        *   🎥 **Film in 1 take**  
-            *Ingebouwde teleprompter, dus nooit meer tekst vergeten.*
-        *   🧬 **Jouw eigen stijl**  
-            *Scripts die klinken als JIJ (niet als ChatGPT).*
+        *   🧠 **Nooit meer inspiratieloos**  
+            *Elke ochtend 3 nieuwe, virale script-ideeën klaarstaan.*
+        *   🕵️ **Hack het algoritme**  
+            *Snap eindelijk waarom je views stoppen (en hoe je dat fixt).*
+        *   🎥 **Opnemen zonder stress**  
+            *Dankzij de teleprompter film je alles in 1 take.*
+        *   🧬 **100% Authentiek**  
+            *AI die schrijft zoals JIJ praat (geen saaie robot-taal).*
         
         👇 **Probeer het nu 14 dagen gratis**
         """)
