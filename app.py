@@ -466,11 +466,11 @@ if st.session_state.page == "studio":
     has_active_script = "last_script" in st.session_state
     has_active_visual = "current_visual" in st.session_state and not has_active_script
 
-    # ========================================================
+# ========================================================
     # SCENARIO A: SCRIPT BEWERKEN
     # ========================================================
     if has_active_script:
-        tab_editor, tab_prompter, tab_lib = st.tabs(["📝 Huidig Script", "🎬 Teleprompter", "📚 Bibliotheek"])
+        tab_editor, tab_prompter, tab_lib = st.tabs(["📝 Huidig script", "🎬 Teleprompter", "📚 Bibliotheek"])
         
         with tab_editor:
             if "generated_img_url" in st.session_state and st.session_state.generated_img_url:
@@ -480,9 +480,14 @@ if st.session_state.page == "studio":
             st.markdown(f"""<div style="background:white; padding:20px; border-radius:10px; border:1px solid #e5e7eb; color:black; margin-bottom: 20px;">{st.session_state.last_script.replace(chr(10), '<br>')}</div>""", unsafe_allow_html=True)
 
             c_save, c_copy = st.columns(2)
+            
+            # --- OPSLAAN LOGICA ---
             with c_save:
-                if st.button("💾 Opslaan in bieb", type="primary", use_container_width=True):
-                    if is_pro:
+                # We kijken of de gebruiker toegang heeft (PRO of Tijdelijk)
+                has_save_access = is_pro or check_feature_access("Library Save")
+                
+                if has_save_access:
+                    if st.button("💾 Opslaan in bieb", type="primary", use_container_width=True):
                         topic_name = st.session_state.get("current_topic", f"Script {datetime.datetime.now().strftime('%d-%m')}")
                         script_data = {
                             "id": str(uuid.uuid4()), 
@@ -492,9 +497,51 @@ if st.session_state.page == "studio":
                             "type": "script",
                             "img": st.session_state.get("generated_img_url", "")
                         }
-                        auth.save_progress(library=[script_data] + saved_library)
+                        # Huidige bieb ophalen (veiligheidshalve)
+                        current_lib = user_data.get("library", [])
+                        auth.save_progress(library=[script_data] + current_lib)
                         st.balloons(); st.toast("✅ Opgeslagen!"); time.sleep(1); st.rerun()
-                    else: st.error("🔒 Opslaan is een PRO functie.")
+                
+                else:
+                    # GEEN TOEGANG - TOON UNLOCK OPTIES
+                    if st.session_state.golden_tickets > 0:
+                        # Optie 1: Gebruik Ticket (als ze die hebben)
+                        if st.button(f"🎫 Unlock & opslaan (1 ticket)", type="primary", use_container_width=True, help=f"Je hebt {st.session_state.golden_tickets} tickets"):
+                            # 1. Ticket afschrijven & Feature aanzetten
+                            st.session_state.golden_tickets -= 1
+                            end_time = (datetime.datetime.now() + datetime.timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+                            
+                            # 2. DIRECT OPSLAAN
+                            topic_name = st.session_state.get("current_topic", f"Script {datetime.datetime.now().strftime('%d-%m')}")
+                            script_data = {
+                                "id": str(uuid.uuid4()), 
+                                "date": str(datetime.datetime.now().date()), 
+                                "topic": topic_name, 
+                                "content": st.session_state.last_script,
+                                "type": "script",
+                                "img": st.session_state.get("generated_img_url", "")
+                            }
+                            current_lib = user_data.get("library", [])
+                            
+                            auth.save_progress(
+                                golden_tickets=st.session_state.golden_tickets,
+                                active_trial_feature="Library Save",
+                                trial_end_time=end_time,
+                                library=[script_data] + current_lib
+                            )
+                            
+                            st.balloons()
+                            st.success("🔓 Geopend & opgeslagen!")
+                            time.sleep(1.5)
+                            st.rerun()
+                    else:
+                        # Optie 2: Geen tickets -> DIRECTE BETAALLINK
+                        # We bouwen de persoonlijke link
+                        current_key = st.session_state.get("license_key", "unknown")
+                        pay_link = f"https://www.paypro.nl/product/PostAi_PRO_-_Maandelijks/125181?custom={current_key}"
+                        
+                        # Dit opent een nieuw tabblad naar PayPro
+                        st.link_button("🔒 Upgrade naar PRO & opslaan", pay_link, type="primary", use_container_width=True)
             
             with c_copy:
                 st.code(st.session_state.last_script, language=None)
@@ -510,10 +557,15 @@ if st.session_state.page == "studio":
             
         with tab_lib:
             st.write("📂 Je opgeslagen items:")
+            saved_library = user_data.get("library", [])
+            
+            if not saved_library:
+                st.info("Nog geen scripts opgeslagen.")
+            
             for item in saved_library:
                 if item.get('type') == 'script':
                     with st.expander(f"📝 {item.get('topic', 'Script')}"):
-                        st.text(item.get('content')[:100])
+                        st.text(item.get('content')[:100] + "...")
                         if st.button("Laden", key=f"l_{item['id']}"):
                             st.session_state.last_script = item.get('content')
                             st.rerun()
