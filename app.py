@@ -1135,9 +1135,7 @@ if st.session_state.page == "contact":
     st.markdown("### 🏢 Bedrijfsgegevens")
     st.info("""
     **Bouwmijnshop.nl (PostAi)**    
-    
-    **KVK:** 95665293
-    **BTW:** NL005168650B28  
+     
     **Email:** support@postaiapp.nl
     """)
 
