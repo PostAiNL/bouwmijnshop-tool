@@ -1,486 +1,198 @@
-import random
-import time
-import pandas as pd
-import datetime
-import os
 import streamlit as st
-import re # Nodig om scores uit tekst te vissen
+import json
+import requests
 import base64
+import warnings
+from openai import OpenAI
 
-# Probeer OpenAI te importeren
-try:
-    from openai import OpenAI
-    HAS_OPENAI = True
-except ImportError:
-    HAS_OPENAI = False
+warnings.simplefilter("ignore")
 
-client = None
 
 def init_ai():
-    """Initialiseert OpenAI direct vanuit de server secrets."""
-    global client
-    # Check of de secret bestaat in .streamlit/secrets.toml
-    if HAS_OPENAI and "OPENAI_API_KEY" in st.secrets:
-        try:
-            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-        except Exception as e:
-            print(f"AI Connectie Fout: {e}")
-            client = None
-    else:
-        # print("Geen OpenAI Key gevonden in secrets.toml")
-        client = None
+    """Initialiseert de OpenAI client met de key uit secrets."""
+    if "OPENAI_API_KEY" in st.secrets:
+        return OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    return None
 
-def call_llm(system_prompt, user_prompt):
-    """Centrale functie voor AI calls. Valt terug op None als het mislukt."""
-    if not HAS_OPENAI or not client:
-        return None
-    
+def call_llm(system_prompt, user_prompt, model="gpt-4o-mini", json_mode=False):
+    """Generieke helper om de LLM aan te roepen."""
+    client = init_ai()
+    if not client: return None
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini", # Snel, slim en goedkoop
-            messages=[
+        kwargs = {
+            "model": model, 
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.7
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        print(f"AI Error: {e}")
-        return None
-
-# ==========================================
-# 1. CORE SCRIPTS (Studio & Panic)
-# ==========================================
-
-def generate_script(topic, format_type, tone, hook, cta, niche, brand_voice="Expert"):
-    # 1. VERTAAL DE STIJL NAAR EEN INSTRUCTIE
-    # Hier bepalen we HOE de AI zich gedraagt per stijl
-    voice_instructions = {
-        "De Expert": "Je bent een autoriteit. Gebruik vakjargon waar nodig, wees feitelijk, rustig en betrouwbaar. Geen overdreven emoji's.",
-        "De Beste Vriend(in)": "Je bent super relatable en enthousiast. Gebruik 'jij en ik' taal, veel emoji's en klink alsof je tegen je beste vriend praat op WhatsApp.",
-        "De Grappenmaker": "Neem jezelf niet te serieus. Gebruik droge humor, zelfspot en misschien een sarcastische ondertoon. Maak het entertainend.",
-        "De Motivator": "Gebruik korte, krachtige zinnen. Gebruik HOOFDLETTERS voor nadruk. Je bent een coach die de kijker in actie wil krijgen. High energy!",
-        "De Verhalenverteller": "Begin rustig. Bouw spanning op. Gebruik beeldende woorden ('stel je voor...'). Focus op emotie en de reis van de held.",
-        "De Trendwatcher": "Gebruik snelle taal, Engelse termen (slang) die nu populair zijn op TikTok. Klink jong, vlot en 'in the know'.",
-        "De Harde Waarheid": "Wind er geen doekjes om. Wees direct, een beetje pijnlijk eerlijk en confronterend. Dit werkt goed voor controversiële topics."
-    }
-    
-    # Als de gebruiker een Custom stijl heeft (via de kloon functie), gebruiken we die tekst.
-    # Anders zoeken we de instructie op in de lijst hierboven.
-    persona_instruction = voice_instructions.get(brand_voice, brand_voice)
-
-    # 2. DE PROMPT
-    ai_system = f"""
-    Je bent een wereldklasse TikTok scriptwriter voor de niche '{niche}'. 
-    
-    JOUW PERSONA & SCHRIJFSTIJL:
-    {persona_instruction}
-    
-    Extra toonaard instructie: {tone}.
-    Doel: Maximale retentie (kijkers vasthouden).
-    """
-    
-    ai_user = f"""
-    Schrijf een TikTok script over: '{topic}'.
-    Format: {format_type}.
-    De Hook moet inspelen op: {hook}.
-    Eindig met deze CTA: {cta}.
-    
-    Output formaat:
-    - **TITEL** (Clickbait waardig)
-    - **VISUELE HOOK (0-3s)**: Wat zien we? (Wees specifiek)
-    - **AUDIO HOOK**: De eerste zin (MOET de aandacht grijpen).
-    - **BODY**: De kernboodschap.
-    - **CTA**: De afsluiter.
-    """
-    
-    llm_out = call_llm(ai_system, ai_user)
-    if llm_out: return llm_out
-    
-    # Fallback
-    time.sleep(1)
-    return f"**⚠️ AI Offline:** Kan script over {topic} niet genereren. Check je internet of API key."
-
-def generate_instant_script(niche):
-    ai_sys = f"Je bent een 'Panic Button' script generator. De gebruiker heeft NU inspiratie nodig voor niche: {niche}. Geef 1 briljant, makkelijk uit te voeren idee."
-    llm_out = call_llm(ai_sys, "Geef me een script. Kort. Krachtig. Nu.")
-    if llm_out: return llm_out
-    
-    return f"**🚨 NOOD SCRIPT**\n\n**HOOK:** 'Ik moet dit kwijt...'\n**KERN:** 'Iedereen doet moeilijk over {niche}, maar het is simpel.'\n**CTA:** 'Wat vind jij?'"
-
-def generate_challenge_script(day, task, niche, format_type):
-    ai_sys = f"Je bent een strenge maar rechtvaardige TikTok coach. Het is bootcamp dag {day}. De taak is: {task}. Niche: {niche}. Format: {format_type}."
-    llm_out = call_llm(ai_sys, "Schrijf het script voor vandaag.")
-    if llm_out: return llm_out
-    
-    return f"**📅 Bootcamp Dag {day}**\n*Opdracht: {task}*\n\nProbeer de AI opnieuw te activeren."
-
-def generate_sales_script(product, pain, angle, niche):
-    ai_sys = f"Je bent een conversie-expert en copywriter voor {niche}. Je gebruikt psychologische triggers (PAS: Pain, Agitation, Solution)."
-    ai_user = f"Verkoop het product '{product}'. De pijn van de klant is '{pain}'. Format: TikTok Story."
-    llm_out = call_llm(ai_sys, ai_user)
-    if llm_out: return llm_out
-    
-    return f"**🚀 Sales: {product}**\n\nAI is even niet beschikbaar."
-
-# ==========================================
-# 2. INTELLIGENTE TOOLS (100% AI)
-# ==========================================
-
-def check_viral_potential(idea, niche):
-    """Beoordeelt een idee met een score 0-100 en feedback."""
-    ai_sys = f"Je bent een kritisch TikTok algoritme. Je beoordeelt video-ideeën voor de niche '{niche}'."
-    ai_user = f"Beoordeel dit idee: '{idea}'. Geef een score van 0 tot 100 en 1 zin keiharde, eerlijke feedback. Begin je antwoord met 'Score: [getal]'. "
-    
-    llm_out = call_llm(ai_sys, ai_user)
-    
-    if llm_out:
-        # Probeer het getal uit de tekst te vissen met Regex
-        score_match = re.search(r'Score:\s*(\d+)', llm_out)
-        if score_match:
-            score = int(score_match.group(1))
-            verdict = llm_out.replace(score_match.group(0), "").strip()
-        else:
-            # Als AI geen "Score:" format volgt, gokken we op het eerste getal of een default
-            first_num = re.search(r'\d+', llm_out)
-            score = int(first_num.group(0)) if first_num else 50
-            verdict = llm_out
-
-        return {"score": score, "verdict": verdict}
-    
-    return {"score": 0, "verdict": "Kon AI niet bereiken."}
-
-@st.cache_data(ttl=3600, show_spinner=False) # FIX: Spinner uitgeschakeld om dubbele tekst te voorkomen
-def generate_weekly_plan(niche):
-    """Maakt een unieke contentkalender voor de niche."""
-    ai_sys = f"Je bent een content strateeg voor {niche}. Maak een strategische weekplanning (Maandag t/m Zondag)."
-    ai_user = "Geef me een weekplanning. Gebruik bulletpoints/emoji's. Voor elke dag: 1 Thema + 1 Concrete Hook. Zorg voor afwisseling (viral vs sales)."
-    
-    if not HAS_OPENAI or not client: return "AI Fout: Kon geen uniek schema maken."
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "system", "content": ai_sys}, {"role": "user", "content": ai_user}],
-            temperature=0.7
-        )
-        return response.choices[0].message.content
-    except:
-        return "AI Fout: Kon geen uniek schema maken."
-
-def generate_digital_product_plan(niche, target):
-    """Bedenkt een digitaal product + mini business plan."""
-    ai_sys = f"Je bent een business coach voor creators in {niche}. Bedenk een winstgevend digitaal product voor doelgroep: {target}."
-    ai_user = """
-    Schrijf een mini-businessplan:
-    1. **Titel van het product** (Catchy & Sellable)
-    2. **Het Concept** (E-book, Cursus, Template?)
-    3. **Prijsstrategie** (Wat vraag je en waarom?)
-    4. **Inhoudsopgave**: 3 Hoofdstukken/Modules die erin moeten.
-    """
-    
-    llm_out = call_llm(ai_sys, ai_user)
-    if llm_out: return llm_out
-    
-    return f"**Masterplan {niche}:** Kon geen plan genereren."
-
-def generate_series_ideas(topic, niche):
-    """Bedenkt een 5-delige serie."""
-    ai_sys = f"Je bent een content strateeg voor {niche}. Bedenk een 5-delige TikTok serie over '{topic}' die mensen dwingt om te blijven kijken (binge-waardig)."
-    llm_out = call_llm(ai_sys, "Geef de titels en korte inhoud voor deel 1 t/m 5. Maak de titels clickbait-waardig.")
-    if llm_out: return llm_out
-
-    return f"**Serie {topic}:** AI niet beschikbaar."
-
-def rate_user_hook(user_hook, niche):
-    """Geeft feedback én 3 betere alternatieven in JSON."""
-    import json
-    
-    ai_sys = f"Je bent een virale TikTok expert voor de niche '{niche}'. Beoordeel de hook."
-    ai_user = f"""
-    Analyseer deze hook: '{user_hook}'.
-    
-    Geef antwoord in JSON formaat met de volgende velden:
-    - score (getal 1-10)
-    - feedback (1 pittige zin waarom het goed/slecht is)
-    - alternatives (een lijst met 3 véél betere, virale variaties op deze hook)
-    """
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": ai_sys},
-                {"role": "user", "content": ai_user}
-            ],
-            response_format={ "type": "json_object" }
-        )
-        content = response.choices[0].message.content
-        return json.loads(content)
-    except Exception as e:
-        print(f"Hook Error: {e}")
-        return {
-            "score": 5, 
-            "feedback": "Kon AI niet bereiken, maar let op dat je 'je' gebruikt.",
-            "alternatives": ["Alternatief 1", "Alternatief 2", "Alternatief 3"]
+            ], 
+            "temperature": 0.7
         }
-
-@st.cache_data(ttl=3600, show_spinner=False) # FIX: Spinner uitgeschakeld om dubbele tekst te voorkomen
-def generate_bio_options(bio, niche):
-    """Herschrijft de bio."""
-    ai_sys = f"Je bent een profile optimizer voor {niche}. Herschrijf deze bio om meer volgers en kliks te krijgen. Geef 3 opties."
-    
-    if not HAS_OPENAI or not client: return f"**Bio Optie:** 🏆 {niche} Expert | 🚀 Tips | 👇 Start hier"
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "system", "content": ai_sys}, {"role": "user", "content": f"Huidige bio: {bio}"}],
-            temperature=0.7
-        )
+        if json_mode: kwargs["response_format"] = { "type": "json_object" }
+        response = client.chat.completions.create(**kwargs)
         return response.choices[0].message.content
-    except:
-        return f"**Bio Optie:** 🏆 {niche} Expert | 🚀 Tips | 👇 Start hier"
+    except: return None
 
-def steal_format_and_rewrite(other_script, my_topic, niche):
-    """Remixed een script."""
-    ai_sys = f"Je bent een remix expert. Analyseer de *structuur* (niet de inhoud) van het gegeven script. Schrijf een NIEUW script over '{my_topic}' voor de niche '{niche}' dat exact die succesvolle structuur volgt."
-    llm_out = call_llm(ai_sys, f"Script om te analyseren: {other_script}")
-    if llm_out: return llm_out
-    return "**Remix:** AI offline."
+# --- NIEUWE UPGRADES: VISION & CFO ---
 
-# ==========================================
-# 3. HELPERS & DATA (Statisch / Simulatie)
-# ==========================================
+def get_cfo_advice(revenue, spend, cogs):
+    """De CFO Bot: Analyseert winstgevendheid en geeft direct actie-advies."""
+    profit = revenue - spend - cogs
+    roas = revenue / spend if spend > 0 else 0
+    
+    prompt = f"Omzet: €{revenue}, Ads: €{spend}, Inkoop: €{cogs}, Winst: €{profit}, ROAS: {roas}. Geef 1 kort advies (max 25 woorden) voor groei of besparing."
+    return call_llm("Je bent een agressieve E-com CFO die focust op netto winst.", prompt) or "Blijf je marges bewaken."
 
-def get_weekly_trend():
-    """
-    Geeft een hardcoded 'Viral Pick' terug. 
-    (We doen dit niet via AI om de homepage snel te houden).
-    """
-    trends = [
-        {"title": "De 'Wes Anderson' Stijl", "desc": "Symmetrisch, stilstaand beeld, vrolijke muziek.", "sound": "Obituary - Alexandre Desplat"},
-        {"title": "Photo Swipe Challenge", "desc": "Snel achter elkaar foto's op de beat.", "sound": "Any fast Phonk beat"},
-        {"title": "Silent Review", "desc": "Producten reviewen door alleen gezichtsuitdrukkingen.", "sound": "ASMR sounds"},
-        {"title": "POV: You found...", "desc": "Camera standpunt vanuit de ogen van de kijker.", "sound": "Trending Pop Song"}
-    ]
-    return random.choice(trends)
-
-def get_challenge_tasks():
-    return {
-        1: "De 'Wie ben ik' video (maar dan niet saai)", 
-        2: "De grootste fout in jouw niche", 
-        3: "Een snelle, waardevolle tip (Green Screen)", 
-        4: "Reageer op een nieuwsbericht in je markt", 
-        5: "Behind the Scenes (zonder woorden)", 
-        6: "Beantwoord de meest gestelde vraag", 
-        7: "Ontkracht een hardnekkige mythe", 
-        8: "Persoonlijk verhaal (Storytelling)", 
-        9: "How-to tutorial (stap voor stap)", 
-        10: "Klantresultaat / Case Study"
-    }
-
-def analyze_analytics_screenshot(uploaded_file):
-    """
-    ECHTE ANALYSE: Stuurt het plaatje naar GPT-4o voor feedback.
-    Versie 3.0: Met extra foutopsporing en fallback.
-    """
-    import base64
-    import json
-
-    if not HAS_OPENAI or not client:
-        return {"advies": "AI niet verbonden (Check API Key).", "beste_video": "-", "totaal_views": 0}
-
+def analyze_ad_screenshot(image_file):
+    """AI Vision: Analyseert advertentie screenshots op conversie-punten."""
+    client = init_ai()
+    if not client: return "Vision AI niet beschikbaar (Check API Key)."
+    
+    # Encode image naar base64
+    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+    
     try:
-        # 1. Zet plaatje om naar base64
-        uploaded_file.seek(0) 
-        bytes_data = uploaded_file.getvalue()
-        base64_image = base64.b64encode(bytes_data).decode('utf-8')
-
-        # 2. De Prompt naar GPT-4o
         response = client.chat.completions.create(
-            model="gpt-4o", 
+            model="gpt-4o",
             messages=[
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Je bent een TikTok expert. Analyseer deze screenshot. Geef JSON antwoord met keys: 'totaal_views' (getal of schatting), 'beste_video' (korte tekst), 'advies' (2 zinnen concreet advies waarom de views stoppen). Als je het niet kan lezen, zet null."},
+                        {"type": "text", "text": "Analyseer deze advertentie voor een webshop. Geef 3 kritische punten voor betere conversie (visuals/copy). Hou het kort en direct."},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                     ],
                 }
             ],
-            max_tokens=400,
-            response_format={ "type": "json_object" } 
+            max_tokens=300,
         )
+        return response.choices[0].message.content
+    except Exception as e: 
+        return f"Analyse mislukt: {e}"
+
+# --- LOGO GENERATIE (CLEAN VECTOR STYLE) ---
+
+def generate_logo(brand_name, niche, style, colors):
+    """Genereert een logo met Ideogram (Beter met tekst)."""
+    # Check of de key is ingevuld
+    if "PLAK_HIER" in IDEOGRAM_API_KEY:
+        return f"https://placehold.co/1024x1024/2563EB/FFFFFF/png?text={brand_name}"
+
+    url = "https://api.ideogram.ai/generate"
+
+    # 1. Bepaal de 'Vibe'
+    style_prompt = ""
+    if style == "Minimalistisch":
+        style_prompt = "minimalist, flat line art, apple style, less is more"
+    elif style == "Modern & strak":
+        style_prompt = "modern, tech, geometric, bold sans-serif"
+    elif style == "Vintage":
+        style_prompt = "retro badge, 2d stamp style, classic serif"
+    elif style == "Luxe":
+        style_prompt = "luxury fashion, elegant thin lines, high-end serif"
+    elif style == "Speels":
+        style_prompt = "playful, bold shapes, mascot, vibrant"
+    else:
+        style_prompt = "professional corporate, clean vector"
+
+    # 2. De 'Anti-Mockup' Prompt
+    # We gebruiken termen als 'sticker', 'vector file' en 'white background' om 3D effecten te doden.
+    prompt = (
+        f"A single, isolated, flat vector logo for the brand '{brand_name}'. "
+        f"Strict design requirements: "
+        f"1. NO MOCKUPS. Do not show the logo on a wall, paper, or screen. "
+        f"2. NO 3D EFFECTS. No shadows, no gradients, no realism. Completely flat 2D design. "
+        f"3. LAYOUT: An abstract {niche} icon on top, with the text '{brand_name}' directly below it. "
+        f"4. TYPOGRAPHY: {style_prompt}. Correct spelling is mandatory. "
+        f"5. COLORS: {colors}. Use a solid, pure white background (#FFFFFF). "
+        f"The result must look like an SVG file ready for print."
+    )
+
+    payload = {
+        "image_request": {
+            "prompt": prompt,
+            "aspect_ratio": "ASPECT_1_1",
+            "model": "V_2",
+            "magic_prompt": "AUTO" 
+        }
+    }
+    
+    headers = {
+        "Api-Key": IDEOGRAM_API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
         
-        # 3. Verwerk antwoord
-        result_text = response.choices[0].message.content
-        
-        if result_text:
-            clean_text = result_text.replace("```json", "").replace("```", "").strip()
-            data = json.loads(clean_text)
+        if response.status_code == 200:
+            data = response.json()
+            if 'data' in data and len(data['data']) > 0:
+                return data['data'][0]['url']
+        else:
+            print(f"Ideogram Error: {response.text}")
             
-            # Veiligheid: Als een key ontbreekt, vul een standaardwaarde in
-            return {
-                "totaal_views": data.get("totaal_views", "Niet gevonden"),
-                "beste_video": data.get("beste_video", "Onbekend"),
-                "advies": data.get("advies", "De AI kon geen specifiek advies genereren uit deze screenshot.")
-            }
-
-        return {"advies": "Geen tekst teruggekregen van AI.", "beste_video": "-", "totaal_views": 0}
-
     except Exception as e:
-        print(f"❌ Vision Error: {e}")
-        return {
-            "totaal_views": 0,
-            "beste_video": "Fout",
-            "advies": f"Er ging iets mis bij de analyse: {str(e)}"
-        }
+        print(f"Fout bij verbinden met Ideogram: {e}")
 
-def create_ics_file(niche):
-    now = datetime.datetime.now()
-    ics_content = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//PostAi//NONSGML v1.0//EN\n"
-    days = ["Maandag: Mythe", "Dinsdag: Vlog", "Woensdag: Tip", "Donderdag: Story", "Vrijdag: Sales"]
-    for i, task in enumerate(days):
-        dt_start = (now + datetime.timedelta(days=i+1)).strftime('%Y%m%dT090000')
-        dt_end = (now + datetime.timedelta(days=i+1)).strftime('%Y%m%dT093000')
-        ics_content += f"BEGIN:VEVENT\nDTSTART:{dt_start}\nDTEND:{dt_end}\nSUMMARY:PostAi Content - {task} ({niche})\nDESCRIPTION:Tijd om te filmen! Opdracht: {task}\nEND:VEVENT\n"
-    ics_content += "END:VCALENDAR"
-    return ics_content
+    # Fallback
+    return f"https://placehold.co/1024x1024/2563EB/FFFFFF/png?text={brand_name}"
 
-def get_leaderboard(niche, xp):
-    return pd.DataFrame({
-        "Rank": [1, 2, 3, 4], 
-        "Naam": ["Pro Creator", "Jij", "Starter", "Newbie"], 
-        "XP": [5000, xp, 200, 50]
-    })
+# --- TEXT & PRODUCT TOOLS ---
 
-def generate_viral_image(topic, style, niche):
-    """
-    Genereert een realistisch TikTok-shot concept.
-    """
-    if not HAS_OPENAI or not client:
-        return None
+def generate_product_description(product_name):
+    """Schrijft een verkopende AIDA-beschrijving."""
+    return call_llm("Je bent een expert copywriter.", f"Schrijf een conversie-gerichte productbeschrijving (NL) voor: {product_name}. Gebruik bullets.")
 
+def generate_influencer_dm(product_name):
+    """Schrijft een DM script voor influencer outreach."""
+    return call_llm("Marketeer", f"Schrijf een korte, informele DM (NL) voor een influencer samenwerking voor: {product_name}.")
+
+def find_real_winning_products(niche, filter_type="Viral"):
+    """Zoekt viral productideeën met links naar onderzoek."""
+    tiktok_url = f"https://www.tiktok.com/search?q={niche.replace(' ', '+')}+must+have"
+    aliexpress_url = f"https://www.aliexpress.com/wholesale?SearchText={niche.replace(' ', '+')}"
+    
+    prompt = f"Geef 3 viral dropshipping producten voor de niche: {niche}. Output JSON: {{'suggestions': [{{'title': '...', 'hook': '...', 'price': '...'}}]}}"
+    res = call_llm("Product Researcher", prompt, json_mode=True)
+    
+    results = []
     try:
-        # Een veel slimmere prompt:
-        prompt = f"""
-        A high-quality, vertical (9:16 aspect ratio) photo acting as a TikTok thumbnail for the niche: '{niche}'.
-        Topic of the video: '{topic}'.
-        
-        Visual Style: {style}.
-        Camera Angle: POV (Point of View) or Close-up shot taken with an iPhone 15 Pro.
-        Lighting: Bright, natural lighting or Ring light studio setup.
-        Atmosphere: Authentic User Generated Content (UGC), not too cartoony.
-        
-        No text overlays, just the visual scene.
-        """
-        
-        response = client.images.generate(
-            model="dall-e-3",
-            prompt=prompt,
-            size="1024x1792", # DALL-E 3 ondersteunt staand formaat!
-            quality="standard",
-            n=1,
-        )
-        
-        return response.data[0].url
-    except Exception as e:
-        print(f"DALL-E Error: {e}")
-        return None
-
-def analyze_writing_style(sample_text):
-    """
-    CLONE MY VOICE: Analyseert tekst en maakt een persona beschrijving.
-    """
-    ai_sys = "Je bent een linguïstisch expert. Analyseer de schrijfstijl van deze tekst. Let op: Toon, zinslengte, gebruik van emoji's, humor, jargon en formatterig."
-    ai_user = f"Beschrijf de schrijfstijl van deze tekst in 1 korte zin zodat ik het als instructie aan een AI kan geven (bv: 'Schrijf als...'). Tekst: {sample_text}"
-    
-    llm_out = call_llm(ai_sys, ai_user)
-    if llm_out: return llm_out
-    return "Een authentieke, persoonlijke schrijfstijl."
-
-# --- HIER IS DE AANPASSING GEMAAKT: show_spinner=False ---
-@st.cache_data(ttl=3600, show_spinner=False) 
-def get_personalized_trend(niche, seed):
-    """
-    SLIMME TRENDS: Bedenkt een trend specifiek voor de niche.
-    De 'seed' zorgt voor variatie.
-    """
-    import json
-    
-    # Check of AI beschikbaar is
-    if not HAS_OPENAI or not client:
-         return {
-            "title": f"De {niche} Fout", 
-            "desc": "Laat zien wat iedereen fout doet en hoe jij het oplost.", 
-            "sound": "Trending Audio"
-        }
-
-    sys_prompt = f"Je bent een virale trendwatcher voor de niche '{niche}'."
-    
-    # We gebruiken de seed in de prompt om de AI te dwingen iets nieuws te verzinnen
-    # Bijv: "Verzin optie 1", "Verzin optie 2", etc.
-    user_prompt = f"""
-    Geef mij Viral Trend Optie #{seed} voor deze niche.
-    Het MOET een ander format zijn dan de vorige keer.
-    Geef 1 actueel, concreet video-format dat NU zou werken.
-    
-    Geef antwoord in JSON:
-    {{
-        "title": "Korte pakkende titel",
-        "desc": "Korte uitleg wat je moet doen (1 zin)",
-        "sound": "Suggestie voor muziek/audio"
-    }}
-    """
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=1.0, # Zet temperatuur op MAXimaal voor meeste variatie
-            response_format={ "type": "json_object" }
-        )
-        content = response.choices[0].message.content
-        return json.loads(content)
-    except Exception as e:
-        print(f"Trend Error: {e}")
-        return {
-            "title": f"De {niche} Analyse", 
-            "desc": "Film je scherm terwijl je een veelgemaakte fout analyseert.", 
-            "sound": "Suspense Music"
-        }
-
-def check_feedback_quality(text):
-    """
-    Checkt of feedback nuttig is of spam.
-    Geeft True terug als het goedgekeurd is, anders False.
-    """
-    if len(text) < 10: return False # Te kort is altijd spam
-    
-    import json
-    ai_sys = "Je bent een moderator. Beoordeel of deze gebruikersfeedback nuttig/constructief is of onzin/spam."
-    ai_user = f"""
-    Feedback: "{text}"
-    
-    Antwoord in JSON:
-    - is_valid: (true/false) - Is het een echte zin/mening? (Geen 'asdf', geen gescheld).
-    """
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": ai_sys},
-                {"role": "user", "content": ai_user}
-            ],
-            response_format={ "type": "json_object" }
-        )
-        res = json.loads(response.choices[0].message.content)
-        return res.get("is_valid", False)
+        data = json.loads(res).get('suggestions', [])
+        for item in data:
+            item["search_links"] = {"tiktok": tiktok_url, "ali": aliexpress_url}
+            results.append(item)
     except:
-        return True
+        results = [{"title": f"{niche} Concept", "hook": "Check de links hieronder.", "price": "29.95", "search_links": {"tiktok": tiktok_url, "ali": aliexpress_url}}]
+    return results
+
+def generate_viral_scripts(product, benefits, platform="TikTok"):
+    """Maakt virale video scripts."""
+    prompt = f"Maak een viral {platform} script voor {product}. Voordelen: {benefits}. Output JSON: {{'hooks': [], 'full_script': '', 'creator_brief': ''}}"
+    res = call_llm("Viral Video Expert", prompt, json_mode=True)
+    try: return json.loads(res)
+    except: return {"hooks": ["Hook 1"], "full_script": "Script...", "creator_brief": "Brief..."}
+
+def validate_feedback(text):
+    """Checkt of feedback serieus is voor beloningen."""
+    res = call_llm("Spam Filter. Antwoord alleen TRUE of FALSE.", f"Is dit serieuze feedback (meer dan 2 woorden): '{text}'?")
+    return "TRUE" in str(res).upper()
+
+def analyze_store_audit(store_data):
+    """
+    Geeft een conversie-audit op basis van gescrapte tekst.
+    """
+    prompt = f"""
+    Je bent een E-commerce Conversion Rate Expert. Beoordeel deze webshop op basis van de tekst.
+    
+    Titel: {store_data['title']}
+    Beschrijving: {store_data['description']}
+    Homepage Tekst: {store_data['content']}
+    
+    Geef een kritisch rapport (Nederlands):
+    1. Geef een cijfer (1-10) voor vertrouwen en duidelijkheid.
+    2. Noem 3 sterke punten.
+    3. Noem 3 kritische fouten of gemiste kansen (bijv. ontbrekende waardepropositie, vage teksten).
+    4. Geef 1 "Golden Tip" om direct meer sales te krijgen.
+    
+    Houd het kort, krachtig en direct. Gebruik emojis.
+    """
+    return call_llm("Senior E-com Audit Specialist", prompt) or "AI Audit mislukt."
