@@ -367,6 +367,60 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- PLAATS DIT DIRECT NA st.set_page_config EN DE CSS STYLE BLOKKEN ---
+
+# Check of we op de bedankt-pagina zitten (via URL ?page=bedankt)
+if "page" in st.query_params and st.query_params["page"] == "bedankt":
+    
+    # 1. DE FACEBOOK PIXEL TRUC (Onzichtbaar)
+    # Dit stuurt het signaal naar Meta dat er een account is aangemaakt
+    # Vervang 'JOUW-PIXEL-ID' door je echte ID (bijv. 123456789)
+    pixel_code = """
+    <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    
+    fbq('init', 'JOUW-PIXEL-ID'); 
+    fbq('track', 'CompleteRegistration'); // <--- DIT IS HET BELANGRIJKSTE
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=JOUW-PIXEL-ID&ev=CompleteRegistration&noscript=1"
+    /></noscript>
+    """
+    components.html(pixel_code, height=0, width=0)
+
+    # 2. HET BEDANKT SCHERM (Feestelijk)
+    st.balloons()
+    
+    st.markdown("""
+    <div style="text-align: center; padding: 50px 20px; max-width: 600px; margin: 0 auto;">
+        <div style="font-size: 80px;">🎉</div>
+        <h1 style="color: #0F172A; font-weight: 800; margin-bottom: 10px;">Welkom bij de Club!</h1>
+        <p style="font-size: 1.1rem; color: #64748B; margin-bottom: 30px;">
+            Je account is succesvol aangemaakt. Je hebt nu toegang tot de tools die anderen geld kosten.
+        </p>
+        <div style="background: #F0F9FF; border: 1px solid #BAE6FD; padding: 20px; border-radius: 12px; margin-bottom: 30px;">
+            <p style="margin:0; color: #0369A1; font-weight: 600;">🚀 Tip: Begin direct met de 'Producten Zoeken' tool.</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Grote knop om écht de app in te gaan
+    _, c_btn, _ = st.columns([1, 2, 1])
+    if c_btn.button("🚀 Naar mijn Dashboard", type="primary", use_container_width=True):
+        # We halen de ?page=bedankt weg uit de URL en herladen
+        st.query_params.clear()
+        st.rerun()
+    
+    # BELANGRIJK: Stop hier, zodat de rest van de app (landingspagina/dashboard) niet laadt op de achtergrond
+    st.stop()
+
 # --- 2. COOKIE MANAGER & AUTHENTICATIE ---
 cookie_manager = stx.CookieManager()
 
@@ -509,9 +563,12 @@ def render_auth_footer(key_suffix):
                             
                             auth.login_or_register(r_email, ref_code_input=ref_code, name_input=r_name)
                             cookie_manager.set("rmecom_user_email", r_email, expires_at=datetime.now() + timedelta(days=30), path="/")
-                            st.balloons()
-                            time.sleep(1)
+                            
+                            # === HIER IS DE WIJZIGING ===
+                            # In plaats van st.rerun(), sturen we ze naar de bedankt pagina
+                            st.query_params["page"] = "bedankt"
                             st.rerun()
+                            # ============================
                         else:
                             st.error("Er ging iets mis met de database.")
                 else:
